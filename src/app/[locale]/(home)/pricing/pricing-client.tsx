@@ -1,0 +1,87 @@
+'use client';
+
+import { MoneyPriceInteractive } from '@windrun-huaiin/third-ui/main/money-price';
+import type { InitUserContext, MoneyPriceConfig, MoneyPriceData } from '@windrun-huaiin/third-ui/main/money-price';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+
+interface PricingClientProps {
+  data: MoneyPriceData;
+  config: MoneyPriceConfig;
+  checkoutApiEndpoint: string;
+  customerPortalApiEndpoint: string;
+  enableClerkModal: boolean;
+  enabledBillingTypes: string[];
+  enableSubscriptionUpgrade: boolean;
+}
+
+export function PricingClient({
+  data,
+  config,
+  checkoutApiEndpoint,
+  customerPortalApiEndpoint,
+  enableClerkModal,
+  enabledBillingTypes,
+  enableSubscriptionUpgrade
+}: PricingClientProps) {
+  const searchParams = useSearchParams();
+  const [initUserContext, setInitUserContext] = useState<InitUserContext>({
+    fingerprintId: null,
+    xUser: null,
+    xCredit: null,
+    xSubscription: null,
+    isClerkAuthenticated: false,
+  });
+  const [isPricingContextLoading, setIsPricingContextLoading] = useState(true);
+  const initialBillingType = searchParams.get('initialBillingType') ?? undefined;
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadPricingContext() {
+      try {
+        const response = await fetch('/api/user/pricing-context', {
+          credentials: 'same-origin',
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const nextContext = (await response.json()) as InitUserContext;
+        if (!controller.signal.aborted) {
+          setInitUserContext(nextContext);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.warn('[Pricing] Failed to load user pricing context', error);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsPricingContextLoading(false);
+        }
+      }
+    }
+
+    loadPricingContext();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  return (
+    <MoneyPriceInteractive
+      data={data}
+      config={config}
+      checkoutApiEndpoint={checkoutApiEndpoint}
+      customerPortalApiEndpoint={customerPortalApiEndpoint}
+      enableClerkModal={enableClerkModal}
+      enabledBillingTypes={enabledBillingTypes}
+      enableSubscriptionUpgrade={enableSubscriptionUpgrade}
+      initialBillingType={initialBillingType}
+      initUserContext={initUserContext}
+      isInitLoading={isPricingContextLoading}
+    />
+  );
+}

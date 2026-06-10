@@ -1,0 +1,71 @@
+import type { ReactNode } from 'react';
+import { baseOptions } from '@/app/[locale]/layout.config';
+import { levelNavLinks, primaryNavLinks } from '@/app/[locale]/layout.nav';
+import { showBanner, localePrefixAsNeeded, defaultLocale, github } from '@/lib/appConfig';
+import { i18n } from '@/lib/i18n-base';
+import { siteDocs } from '@/lib/site-docs';
+import { SiteDocsLayout } from '@windrun-huaiin/third-ui/fuma/base/site-docs-layout';
+import { SiteHomeLayout, type SiteHomeLayoutConfig } from '@windrun-huaiin/third-ui/fuma/base/site-home-layout';
+import { fingerprintConfig } from '@windrun-huaiin/backend-core/config/fingerprint';
+import { FingerprintProvider } from '@windrun-huaiin/third-ui/fingerprint';
+
+async function contentOptions(locale: string): Promise<SiteHomeLayoutConfig> {
+  return {
+    ...(await baseOptions(locale)),
+    links: [
+      ...(await primaryNavLinks(locale)),
+      ...(await levelNavLinks(locale)),
+    ],
+  };
+}
+
+export default async function Layout({
+  params,
+  children,
+}: {
+  params: Promise<{ locale: string }>;
+  children: ReactNode;
+}) {
+  const { locale } = await params;
+  const blogSource = await siteDocs.getContentSource('blog');
+  const contentLayoutOptions = await contentOptions(locale);
+  const homeLayoutOptions: SiteHomeLayoutConfig = {
+    ...contentLayoutOptions,
+    i18n,
+    githubUrl: github,
+    searchToggle: {
+      enabled: false,
+    },
+  };
+
+  return (
+    <FingerprintProvider config={fingerprintConfig}>
+      <SiteHomeLayout
+        locale={locale}
+        config={{
+          ...homeLayoutOptions,
+          localePrefixAsNeeded,
+          defaultLocale,
+          showBanner,
+          showFooter: false,
+          floatingNav: true,
+          actionOrders: {
+            desktop: ['search', 'theme', 'github', 'i18n', 'secondary'],
+            mobileBar: ['search', 'pinned', 'menu'],
+            mobileMenu: ['theme', 'i18n', 'separator', 'secondary', 'github'],
+          },
+        }}
+      >
+        <SiteDocsLayout
+          config={{
+            tree: blogSource.getPageTree(locale),
+            sidebar: { enabled: false },
+            searchToggle: { enabled: false },
+          }}
+        >
+          {children}
+        </SiteDocsLayout>
+      </SiteHomeLayout>
+    </FingerprintProvider>
+  );
+}
