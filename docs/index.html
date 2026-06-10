@@ -1,0 +1,2032 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Image Creation Flow Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fdfdfc;
+      --bg-studio: #f9f9f7;
+      --panel: rgba(255, 255, 255, 0.8);
+      --panel-solid: #ffffff;
+      --panel-soft: #f4f4f2;
+      --ink: #1a1a1a;
+      --muted: #737373;
+      --muted-light: #a3a3a3;
+      --line: rgba(0, 0, 0, 0.08);
+      --line-strong: rgba(0, 0, 0, 0.15);
+      --accent: #1a1a1a;
+      --accent-purple: #635bff;
+      --accent-blue: #0ea5e9;
+      --accent-cyan: #0f9f8f;
+      --accent-amber: #f59e0b;
+      --danger: #ef4444;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.12);
+      --radius-sm: 8px;
+      --radius-md: 8px;
+      --radius-lg: 8px;
+      --radius-full: 999px;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    button, input, textarea, select {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel-solid);
+      color: var(--ink);
+      min-height: 40px;
+      padding: 0 16px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    button:hover {
+      border-color: var(--line-strong);
+      background: var(--panel-soft);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    button.primary:hover {
+      background: #000;
+      border-color: #000;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    button.ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--muted);
+    }
+
+    button.ghost:hover {
+      background: var(--line);
+      color: var(--ink);
+    }
+
+    button.icon {
+      width: 40px;
+      padding: 0;
+    }
+
+    button.selected {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    textarea, input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--panel-solid);
+      color: var(--ink);
+      padding: 14px 18px;
+      transition: all 0.2s;
+    }
+
+    textarea:focus, input:focus {
+      outline: none;
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    }
+
+    .app-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background:
+        radial-gradient(circle at 72% 28%, rgba(255,255,255,.9) 0 9%, transparent 10%),
+        linear-gradient(135deg, #1a1a1a 0 52%, var(--accent-purple) 53% 100%);
+      box-shadow: 0 4px 12px rgba(99, 91, 255, 0.24);
+    }
+
+    .nav {
+      display: flex;
+      gap: 4px;
+      background: var(--panel-soft);
+      padding: 4px;
+      border-radius: var(--radius-full);
+    }
+
+    .nav button {
+      min-height: 36px;
+      border: none;
+      background: transparent;
+      border-radius: var(--radius-full);
+      font-size: 0.9rem;
+      padding: 0 20px;
+      color: var(--muted);
+    }
+
+    .nav button:hover {
+      background: rgba(0, 0, 0, 0.05);
+      transform: none;
+      box-shadow: none;
+    }
+
+    .nav button.selected {
+      background: var(--panel-solid);
+      color: var(--ink);
+      box-shadow: var(--shadow-sm);
+    }
+
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 48px 24px 120px;
+      width: 100%;
+    }
+
+    .page {
+      display: none;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    .section-title {
+      margin: 0 0 12px;
+      font-size: 3.4rem;
+      font-weight: 850;
+      letter-spacing: 0;
+      line-height: 1;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 1.1rem;
+      max-width: 600px;
+    }
+
+    .panel {
+      background: var(--panel-solid);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+    }
+
+    .panel-pad {
+      padding: 32px;
+    }
+
+    .compact-title {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      background: var(--panel-soft);
+      border-radius: var(--radius-full);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    /* Creator Capsule Redesign - Refined Action Bar */
+    .creation-panel {
+      margin: 60px auto;
+      max-width: 960px;
+      width: 100%;
+    }
+
+    .creator-shell {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Permanent Assistant Action Bar */
+    .creator-top-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-start;
+      padding-left: 12px;
+    }
+
+    .tool-pill {
+      min-height: 40px;
+      border-radius: var(--radius-full);
+      background: var(--panel-solid);
+      border: 1px solid var(--line);
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 0 16px;
+      color: var(--muted);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .tool-pill:hover {
+      background: #fff;
+      border-color: var(--accent-purple);
+      color: var(--ink);
+      transform: translateY(-1px);
+    }
+
+    .tool-pill .tool-icon {
+      font-size: 1.1rem;
+      margin-right: 6px;
+      opacity: 0.7;
+    }
+
+    /* The Main Capsule */
+    .composer {
+      background: var(--panel-solid);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+      background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+    }
+
+    .composer-main {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+
+    .reference-tile {
+      width: 90px;
+      height: 120px;
+      border: 2px dashed var(--line-strong);
+      border-radius: var(--radius-md);
+      background: var(--panel-soft);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      color: var(--muted-light);
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+
+    .reference-tile:hover {
+      border-color: var(--accent-purple);
+      color: var(--accent-purple);
+      background: #fff;
+      transform: rotate(-2deg);
+    }
+
+    .prompt-input {
+      border: none;
+      background: transparent;
+      padding: 0;
+      font-size: 1.4rem;
+      font-weight: 500;
+      line-height: 1.4;
+      min-height: 110px;
+      resize: none;
+      width: 100%;
+      color: var(--ink);
+    }
+
+    .prompt-input::placeholder {
+      color: var(--muted-light);
+      font-weight: 400;
+    }
+
+    .prompt-input:focus {
+      box-shadow: none;
+    }
+
+    /* Assistant Roll-out Drawer */
+    .assistant-output {
+      display: none;
+      padding: 20px;
+      background: rgba(99, 102, 241, 0.03);
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(99, 102, 241, 0.1);
+      margin-top: 0;
+      border-top: 1px solid var(--line);
+      animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .assistant-output.active {
+      display: block;
+    }
+
+    .meta-row,
+    .button-row,
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .meta-row {
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .button-row {
+      gap: 10px;
+    }
+
+    .chip-row {
+      gap: 6px;
+    }
+
+    .assistant-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .context-pill,
+    .notice {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 5px 10px;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(15, 159, 143, 0.24);
+      background: rgba(15, 159, 143, 0.08);
+      color: #087267;
+      font-size: 0.82rem;
+      font-weight: 650;
+    }
+
+    .notice {
+      display: block;
+      border-radius: var(--radius-sm);
+      line-height: 1.45;
+    }
+
+    .field-label,
+    .setting-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--ink);
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+
+    .status-line {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .assistant-box,
+    .idea {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .assistant-box {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .idea {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      margin-top: 10px;
+    }
+
+    .idea strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .settings-drawer,
+    .inline-output {
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--panel-solid);
+      box-shadow: var(--shadow-sm);
+      padding: 16px;
+    }
+
+    .settings-drawer.active,
+    .inline-output.active {
+      display: grid;
+      gap: 14px;
+    }
+
+    .setting-group {
+      display: grid;
+      gap: 8px;
+    }
+
+    .segmented {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .composer-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+    }
+
+    .composer-controls {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .control-pill {
+      height: 36px;
+      border-radius: var(--radius-full);
+      background: var(--panel-soft);
+      border: 1px solid transparent;
+      padding: 0 14px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .control-pill:hover {
+      background: var(--line);
+      color: var(--ink);
+    }
+
+    .generate-pill {
+      height: 48px;
+      padding: 0 28px;
+      border-radius: var(--radius-full);
+      font-size: 1rem;
+      font-weight: 700;
+      background: var(--ink);
+      color: #fff;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      border: none;
+    }
+
+    .generate-pill:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+      background: #000;
+    }
+
+    /* Home Hero Poster - High Impact */
+    .home-theme-panel {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 60px;
+      align-items: center;
+      padding: 40px 0;
+    }
+
+    .theme-poster-content .section-title {
+      font-size: 4.2rem;
+      line-height: 0.85;
+      margin: 20px 0;
+      letter-spacing: 0;
+    }
+
+    .hero-stack {
+      position: relative;
+      height: 440px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-stack .art {
+      position: absolute;
+      width: 280px;
+      height: 360px;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      border: 6px solid #fff;
+      transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+      background-size: cover;
+      background-position: center;
+    }
+
+    .hero-stack .art:nth-child(1) { transform: rotate(-8deg) translateX(-50px); z-index: 3; }
+    .hero-stack .art:nth-child(2) { transform: rotate(5deg) translateX(50px) translateY(30px); z-index: 2; opacity: 0.9; }
+    .hero-stack .art:nth-child(3) { transform: rotate(-3deg) translateY(-40px); z-index: 1; opacity: 0.7; }
+
+    .hero-stack:hover .art:nth-child(1) { transform: rotate(-2deg) translateX(-100px) translateY(-10px); }
+    .hero-stack:hover .art:nth-child(2) { transform: rotate(2deg) translateX(100px) translateY(10px); }
+    .hero-stack:hover .art:nth-child(3) { transform: rotate(0deg) translateY(-60px) scale(1.05); opacity: 0.9; }
+
+    .theme-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .theme-card {
+      display: grid;
+      gap: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--panel-solid);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    }
+
+    .theme-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--line-strong);
+      box-shadow: var(--shadow-md);
+    }
+
+    .mini-gallery {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      grid-template-rows: repeat(2, minmax(72px, 1fr));
+      gap: 8px;
+      min-height: 160px;
+      padding: 0 24px;
+    }
+
+    .mini-gallery .art {
+      position: relative;
+      width: auto;
+      height: auto;
+      min-height: 0;
+      border: 0;
+      border-radius: var(--radius-sm);
+      box-shadow: none;
+      transform: none;
+    }
+
+    .mini-gallery .art:first-child {
+      grid-row: 1 / span 2;
+    }
+
+    /* Dropdown Menus */
+    .select-wrap {
+      position: relative;
+    }
+
+    .select-menu {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 8px);
+      z-index: 200;
+      min-width: 190px;
+      padding: 8px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-md);
+      background: #fff;
+      box-shadow: var(--shadow-lg);
+      display: none;
+    }
+
+    .select-wrap.open .select-menu {
+      display: grid;
+      gap: 4px;
+    }
+
+    .select-option {
+      width: 100%;
+      justify-content: flex-start;
+      border: 1px solid transparent;
+      background: transparent;
+      text-align: left;
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+    }
+
+    .select-option.selected {
+      border-color: var(--accent-purple);
+      background: rgba(99, 102, 241, 0.05);
+      color: var(--accent-purple);
+    }
+
+    /* Modals */
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+    }
+
+    .modal.active {
+      display: grid;
+    }
+
+    .modal-card {
+      width: min(900px, 100%);
+      background: #fffdf8;
+      border-radius: var(--radius-lg);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.4);
+      overflow: hidden;
+      max-height: 90vh;
+    }
+
+    .modal-head {
+      padding: 24px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .split-modal {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    /* Centered Workspace */
+    .workspace-centered {
+      max-width: 1000px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .hero-intro {
+      margin-bottom: 40px;
+    }
+
+    .hero-intro .section-title {
+      margin-bottom: 16px;
+    }
+
+    /* Grid & Cards */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 32px;
+    }
+
+    .image-card {
+      border-radius: var(--radius-md);
+      background: #fff;
+      border: 1px solid var(--line);
+      transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .image-card > .art:only-child {
+      display: block;
+      min-height: 0;
+    }
+
+    .image-card:hover {
+      transform: translateY(-12px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--line-strong);
+    }
+
+    .art {
+      aspect-ratio: 1 / 1;
+      background: #f0f0f0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .art::before,
+    .art::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .art.silence {
+      background:
+        linear-gradient(180deg, #d8d8d5 0 42%, #787d79 43% 100%);
+    }
+
+    .art.silence::before {
+      inset: 18% 25% 18% 25%;
+      border: 8px solid rgba(255, 255, 255, 0.58);
+      border-bottom-width: 28px;
+      box-shadow: inset 0 0 34px rgba(0, 0, 0, 0.08);
+    }
+
+    .art.silence::after {
+      top: 66%;
+      left: 34%;
+      width: 32%;
+      height: 7%;
+      border-radius: var(--radius-full);
+      background: rgba(26, 26, 26, 0.46);
+      box-shadow: 0 18px 34px rgba(0, 0, 0, 0.18);
+    }
+
+    .art.rain {
+      background:
+        radial-gradient(circle at 72% 18%, rgba(14, 165, 233, 0.58), transparent 18%),
+        linear-gradient(180deg, #111827, #29364f 52%, #6b6882);
+    }
+
+    .art.rain::before {
+      background:
+        repeating-linear-gradient(100deg, transparent 0 18px, rgba(185, 241, 255, 0.75) 19px 21px, transparent 22px 42px);
+      transform: rotate(180deg) translateY(-20px);
+      opacity: 0.82;
+    }
+
+    .art.rain::after {
+      left: 22%;
+      right: 22%;
+      bottom: 0;
+      height: 52%;
+      clip-path: polygon(0 100%, 12% 25%, 25% 100%, 38% 12%, 52% 100%, 70% 32%, 86% 100%, 100% 40%, 100% 100%);
+      background: rgba(10, 13, 21, 0.82);
+    }
+
+    .art.lonely {
+      background:
+        linear-gradient(90deg, #f2ece0 0 18%, #6f7670 18% 20%, #d8ded8 20% 100%);
+    }
+
+    .art.lonely::before {
+      left: 54%;
+      top: 18%;
+      width: 12%;
+      height: 44%;
+      background: rgba(26, 26, 26, 0.68);
+      border-radius: var(--radius-full) var(--radius-full) 4px 4px;
+    }
+
+    .art.lonely::after {
+      left: 26%;
+      bottom: 18%;
+      width: 44%;
+      height: 15%;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.58);
+      box-shadow: 28px 20px 0 rgba(38, 42, 38, 0.24);
+    }
+
+    .art.poster {
+      background:
+        linear-gradient(145deg, #f8e8b6 0 38%, var(--accent-cyan) 38% 62%, #222222 62%);
+    }
+
+    .art.poster::before {
+      left: 15%;
+      top: 15%;
+      width: 70%;
+      height: 70%;
+      border: 10px solid rgba(255, 255, 255, 0.78);
+      border-radius: 50%;
+    }
+
+    .art.poster::after {
+      left: 27%;
+      top: 46%;
+      width: 46%;
+      height: 9%;
+      background: #fff;
+      border-radius: var(--radius-full);
+    }
+
+    .card-body {
+      padding: 24px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .prompt-preview {
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .tabs,
+    .explore-grid,
+    .workspace {
+      display: grid;
+      gap: 16px;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .explore-grid {
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .workspace {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .theme-picker-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .theme-picker-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--panel-soft);
+    }
+
+    /* Theme Detail Hero */
+    .theme-hero {
+      padding: 80px 0;
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .theme-hero h1 {
+      font-size: 4.8rem;
+      letter-spacing: 0;
+      line-height: 0.9;
+      margin: 24px 0;
+    }
+
+    @media (max-width: 900px) {
+      .home-theme-panel { grid-template-columns: 1fr; gap: 40px; text-align: center; }
+      .hero-stack { height: 350px; }
+      .hero-stack .art { width: 220px; height: 280px; }
+      .theme-poster-content { order: 2; }
+      .hero-stack { order: 1; }
+      .theme-strip { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .topbar-inner {
+        height: auto;
+        padding: 12px;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .nav {
+        width: 100%;
+        overflow-x: auto;
+      }
+
+      .nav button {
+        white-space: nowrap;
+      }
+
+      main {
+        padding: 28px 14px 72px;
+      }
+
+      .home-theme-panel { grid-template-columns: 1fr; gap: 32px; }
+      .section-title { font-size: 2.5rem; }
+      .theme-hero h1 { font-size: 3.25rem; }
+      .theme-poster-content .section-title { font-size: 3rem; }
+      .creation-panel { margin: 20px 0; }
+      .composer-main { flex-direction: column; }
+      .reference-tile { width: 100%; height: 80px; }
+      .composer-bottom {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .composer-controls {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+      }
+      .control-pill {
+        white-space: nowrap;
+      }
+      .generate-pill {
+        width: 100%;
+      }
+      .assistant-head,
+      .idea,
+      .theme-picker-item,
+      .split-modal {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .image-grid,
+      .explore-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <span>Daily Image Lab</span>
+        </div>
+        <nav class="nav" aria-label="Primary">
+          <button class="selected" data-nav="home">Home</button>
+          <button data-nav="theme">Theme Detail</button>
+          <button data-nav="explore">Explore</button>
+          <button data-nav="studio">My Studio</button>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section id="home" class="page active">
+        <div class="workspace-centered">
+          <div class="hero-intro">
+            <h1 class="section-title">AI Art Generator for Creative Ideas</h1>
+            <p class="subtle">Turn rough ideas into structured prompts and polished AI-generated art. Start with an idea or get inspired by the daily theme.</p>
+          </div>
+          
+          <div id="home-creator" class="creation-panel"></div>
+        </div>
+
+        <div class="panel panel-pad" style="margin-top: 80px; border: none; background: transparent; box-shadow: none;">
+          <div class="home-theme-panel">
+            <div class="theme-poster-content">
+              <div class="chip">Today's theme</div>
+              <h2 class="section-title">Show Silence</h2>
+              <p class="subtle" style="font-size: 1.25rem;">Create a scene where quiet becomes visible. Explore the beauty of absence and the weight of stillness.</p>
+              <div class="meta-row" style="margin-top: 24px;"><span class="chip">126 creations</span><span class="chip">42 creators</span></div>
+              <div class="button-row" style="margin-top: 32px;">
+                <button class="primary" style="height: 52px; padding: 0 32px;" data-nav-target="theme">View theme gallery</button>
+              </div>
+            </div>
+            <div class="hero-stack">
+              <div class="art silence"></div>
+              <div class="art lonely"></div>
+              <div class="art poster"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 120px;">
+          <h3 class="compact-title" style="margin-bottom: 32px; font-size: 1.5rem;">Recent Challenges</h3>
+          <div class="theme-strip">
+            <article class="theme-card">
+              <div class="card-body">
+                <div class="chip">Yesterday</div>
+                <h2 class="compact-title" style="margin-top: 12px; font-size: 1.5rem;">A City Where the Rain Falls Upward</h2>
+                <p class="subtle">Gravity breaks in public, and nobody agrees whether it is beautiful or wrong.</p>
+              </div>
+              <div class="mini-gallery">
+                <div class="art rain"></div>
+                <div class="art poster"></div>
+                <div class="art silence"></div>
+              </div>
+              <div class="card-body" style="padding-top: 0;">
+                <button class="ghost" data-nav-target="theme">View gallery →</button>
+              </div>
+            </article>
+            <article class="theme-card">
+              <div class="card-body">
+                <div class="chip">Two days ago</div>
+                <h2 class="compact-title" style="margin-top: 12px; font-size: 1.5rem;">The Architecture of Loneliness</h2>
+                <p class="subtle">Use buildings, rooms, or streets to express isolation.</p>
+              </div>
+              <div class="mini-gallery">
+                <div class="art lonely"></div>
+                <div class="art silence"></div>
+                <div class="art rain"></div>
+              </div>
+              <div class="card-body" style="padding-top: 0;">
+                <button class="ghost" data-nav-target="theme">View gallery →</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="theme" class="page">
+        <div class="theme-hero">
+          <div class="chip">Jun 9, 2026</div>
+          <h1 class="section-title">Show Silence</h1>
+          <p class="subtle" style="margin: 0 auto;">Create a scene where silence is felt through absence, body language, space, or visual metaphor.</p>
+          <div class="meta-row" style="justify-content: center; margin-top: 24px;">
+            <span>126 creations</span><span>42 creators</span><span>18 featured</span>
+          </div>
+          <div class="button-row" style="justify-content: center; margin-top: 32px;">
+            <button class="primary" style="height: 52px; padding: 0 32px;" data-scroll-to="theme-creator">Create your version</button>
+            <button style="height: 52px; padding: 0 32px;" data-scroll-to="featured-images">Explore gallery</button>
+          </div>
+        </div>
+
+        <div id="theme-creator" class="creation-panel"></div>
+
+        <div id="theme-results-panel" class="hidden" style="margin-top: 64px;">
+          <div class="assistant-head" style="margin-bottom: 24px;">
+            <h2 class="compact-title">Your results</h2>
+            <span id="theme-result-status" class="status-line">Ready</span>
+          </div>
+          <div id="theme-results" class="image-grid"></div>
+        </div>
+
+        <section id="featured-images" style="margin-top: 120px;">
+          <div class="assistant-head" style="margin-bottom: 32px;">
+            <h2 class="section-title" style="font-size: 2rem;">Gallery</h2>
+            <div class="nav">
+              <button class="selected">Featured</button>
+              <button>Most liked</button>
+              <button>Newest</button>
+            </div>
+          </div>
+          <div id="theme-gallery" class="image-grid"></div>
+        </section>
+      </section>
+
+      <section id="explore" class="page">
+        <div class="assistant-head">
+          <div>
+            <h1 class="section-title">Explore</h1>
+            <p class="subtle">Browse daily themes first, or switch to images for visual inspiration.</p>
+          </div>
+          <div class="tabs" style="margin: 0;">
+            <button class="selected" data-explore-tab="themes">Themes</button>
+            <button data-explore-tab="images">Images</button>
+          </div>
+        </div>
+
+        <div class="panel panel-pad" style="margin-top: 16px;">
+          <div class="button-row">
+            <input style="max-width: 340px;" placeholder="Search themes or prompts...">
+            <button class="selected">Latest</button>
+            <button>Popular</button>
+            <button>Cinematic</button>
+            <button>Surreal</button>
+          </div>
+        </div>
+
+        <div id="explore-themes" class="explore-grid" style="margin-top: 16px;"></div>
+        <div id="explore-images" class="explore-grid hidden" style="margin-top: 16px;"></div>
+      </section>
+
+      <section id="studio" class="page">
+        <h1 class="section-title">My Studio</h1>
+        <p class="subtle">A personal workspace for creating images, editing drafts, and tracking submission status.</p>
+        <div class="workspace" style="margin-top: 16px;">
+          <div id="studio-creator" class="creation-panel"></div>
+          <div class="panel panel-pad">
+            <div class="assistant-head">
+              <h2 class="compact-title">My images</h2>
+              <button data-action="open-theme-picker">Get ideas from a theme</button>
+            </div>
+            <div class="tabs" style="margin-top: 14px;">
+              <button class="selected" data-studio-tab="All">All</button>
+              <button data-studio-tab="Generated">Generated</button>
+              <button data-studio-tab="Submitted">Submitted</button>
+              <button data-studio-tab="Under review">Under review</button>
+              <button data-studio-tab="Published">Published</button>
+              <button data-studio-tab="Rejected">Rejected</button>
+            </div>
+            <div id="studio-gallery" class="image-grid"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="submit-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="submit-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="submit-title" class="compact-title">Submit image</h2>
+        <button class="icon" data-close-modal="submit-modal" aria-label="Close">x</button>
+      </div>
+      <div class="modal-body">
+        <div class="split-modal">
+          <div id="submit-preview" class="art silence"></div>
+          <div>
+            <div class="field-label">Theme</div>
+            <div id="submit-theme" class="notice">Show Silence</div>
+            <div class="field-label" style="margin-top: 14px;">Prompt</div>
+            <textarea id="submit-prompt" rows="5"></textarea>
+            <div class="field-label" style="margin-top: 14px;">Creation note optional</div>
+            <textarea rows="4" placeholder="Share your creative thinking behind this image..."></textarea>
+            <p class="subtle">Your image, prompt, and creation note will be public if approved.</p>
+            <div class="button-row">
+              <button class="primary" data-action="confirm-submit">Submit</button>
+              <button data-close-modal="submit-modal">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="image-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="image-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="image-title" class="compact-title">Image detail</h2>
+        <button class="icon" data-close-modal="image-modal" aria-label="Close">x</button>
+      </div>
+      <div class="modal-body">
+        <div class="split-modal">
+          <div id="detail-art" class="art rain"></div>
+          <div>
+            <div class="meta-row"><span id="detail-author">@mira</span><span id="detail-theme">Show Silence</span></div>
+            <div class="field-label" style="margin-top: 12px;">Prompt</div>
+            <p id="detail-prompt" class="prompt-preview"></p>
+            <div class="field-label">Creation note</div>
+            <p class="subtle">I wanted the scene to feel quiet before the viewer understands why.</p>
+            <div class="chip-row">
+              <span class="chip">Flux Pro</span>
+              <span class="chip">Cinematic</span>
+              <span class="chip">4:5</span>
+            </div>
+            <div class="button-row" style="margin-top: 14px;">
+              <button class="primary" data-action="detail-inspiration">Use as inspiration</button>
+              <button data-action="detail-use-prompt">Use prompt</button>
+              <button data-action="copy-detail-prompt">Copy prompt</button>
+              <button>Like</button>
+              <button>Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="theme-picker-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="theme-picker-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="theme-picker-title" class="compact-title">Get ideas from a theme</h2>
+        <button class="icon" data-close-modal="theme-picker-modal" aria-label="Close">x</button>
+      </div>
+      <div class="modal-body">
+        <input placeholder="Search themes...">
+        <div class="theme-picker-list">
+          <div class="theme-picker-item">
+            <div><strong>Today's theme</strong><div class="subtle">Show Silence</div></div>
+            <button data-pick-theme="Show Silence">Use theme</button>
+          </div>
+          <div class="theme-picker-item">
+            <div><strong>Recent theme</strong><div class="subtle">The Architecture of Loneliness</div></div>
+            <button data-pick-theme="The Architecture of Loneliness">Use theme</button>
+          </div>
+          <div class="theme-picker-item">
+            <div><strong>Recent theme</strong><div class="subtle">A City Where the Rain Falls Upward</div></div>
+            <button data-pick-theme="A City Where the Rain Falls Upward">Use theme</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const themes = [
+      {
+        title: "Show Silence",
+        date: "Jun 9, 2026",
+        brief: "Create an image where quiet becomes visible through absence, space, or body language.",
+        art: "silence",
+        stats: "126 creations · 42 creators · 18 featured"
+      },
+      {
+        title: "A City Where the Rain Falls Upward",
+        date: "Jun 8, 2026",
+        brief: "Imagine a place where gravity forgot the rain.",
+        art: "rain",
+        stats: "348 creations · 72 creators · 24 featured"
+      },
+      {
+        title: "The Architecture of Loneliness",
+        date: "Jun 7, 2026",
+        brief: "Use buildings, rooms, or streets to express isolation.",
+        art: "lonely",
+        stats: "214 creations · 58 creators · 19 featured"
+      }
+    ];
+
+    const galleryImages = [
+      {
+        art: "silence",
+        author: "@mira",
+        theme: "Show Silence",
+        prompt: "An empty dinner table in a dim apartment after an argument, untouched plates, two chairs slightly turned away from each other, heavy stillness in the air, muted colors, cinematic lighting.",
+        tags: ["cinematic", "quiet", "interior"]
+      },
+      {
+        art: "lonely",
+        author: "@ren",
+        theme: "The Architecture of Loneliness",
+        prompt: "A narrow concrete apartment tower with one lit window, a single figure visible from far away, foggy dawn, restrained geometry, architectural solitude.",
+        tags: ["realistic", "lonely", "urban"]
+      },
+      {
+        art: "rain",
+        author: "@sato",
+        theme: "A City Where the Rain Falls Upward",
+        prompt: "A neon train station where rain rises from the tracks into the night sky, commuters standing still under broken lights, surreal cinematic city scene.",
+        tags: ["surreal", "neon", "cinematic"]
+      },
+      {
+        art: "poster",
+        author: "@lina",
+        theme: "Show Silence",
+        prompt: "A minimal poster-style image of a white sound wave becoming an empty circle, restrained design, muted color blocks, visual metaphor for silence.",
+        tags: ["poster", "minimal", "design"]
+      }
+    ];
+
+    const studioImages = [
+      { art: "silence", status: "Generated", theme: "No theme", model: "GPT Image" },
+      { art: "rain", status: "Under review", theme: "A City Where the Rain Falls Upward", model: "Flux Pro" },
+      { art: "lonely", status: "Published", theme: "The Architecture of Loneliness", model: "Ideogram" },
+      { art: "poster", status: "Rejected", theme: "Show Silence", model: "Recraft" }
+    ];
+
+    const creators = {
+      home: {
+        title: "",
+        context: "free",
+        theme: "Show Silence",
+        placeholder: "Describe anything you want to create...",
+        ideaLabel: "Get ideas about today's theme",
+        submitLabel: "Submit to today's theme",
+        prompt: "",
+        model: "GPT Image",
+        style: "Auto",
+        ratio: "1:1",
+        count: "2",
+        negativePrompt: "",
+        selectedTheme: null
+      },
+      theme: {
+        title: "Create for this theme",
+        context: "theme",
+        theme: "Show Silence",
+        placeholder: "Describe your interpretation...",
+        ideaLabel: "Get ideas about this theme",
+        submitLabel: "Submit to this theme",
+        prompt: "",
+        model: "GPT Image",
+        style: "Auto",
+        ratio: "1:1",
+        count: "2",
+        negativePrompt: "",
+        selectedTheme: "Show Silence"
+      },
+      studio: {
+        title: "Create",
+        context: "studio",
+        theme: null,
+        placeholder: "Describe anything you want to create...",
+        ideaLabel: "Get ideas from a theme",
+        submitLabel: "Submit",
+        prompt: "",
+        model: "GPT Image",
+        style: "Auto",
+        ratio: "1:1",
+        count: "1",
+        negativePrompt: "",
+        selectedTheme: null
+      }
+    };
+
+    const options = {
+      model: ["GPT Image", "Flux Pro", "Ideogram", "Recraft", "Stable Diffusion"],
+      style: ["Auto", "Cinematic", "Realistic", "Anime", "Illustration"],
+      ratio: ["1:1", "4:5", "9:16", "16:9"],
+      count: ["1", "2", "4"]
+    };
+
+    let activeDetail = galleryImages[0];
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[char]));
+    }
+
+    function promptFromIdea(idea, theme) {
+      const themeLine = theme ? `, connected to the theme "${theme}" through visual metaphor` : "";
+      return `${idea}, clear subject, thoughtful composition, rich scene details, coherent lighting, balanced color palette${themeLine}, ready for high-quality AI image generation.`;
+    }
+
+    function renderCreator(id) {
+      const state = creators[id];
+      const el = document.getElementById(`${id}-creator`);
+      const themeContext = state.selectedTheme
+        ? `<span class="context-pill">Theme: ${escapeHtml(state.selectedTheme)}</span>`
+        : "";
+      const creatorHeader = id === "home" ? "" : `
+          <div class="assistant-head">
+            <div>
+              <h2 class="compact-title">${escapeHtml(state.title)}</h2>
+              <p class="subtle">${state.context === "theme" ? "Theme context guides assistant suggestions and later submission." : "Create, edit, and manage images from your personal studio."}</p>
+            </div>
+            ${themeContext}
+          </div>
+      `;
+
+      el.innerHTML = `
+        <div class="creator-shell">
+          ${creatorHeader}
+
+          <div class="creator-top-actions">
+            <button class="tool-pill" data-action="ideas" data-panel="${id}"><span class="tool-icon">□</span>${escapeHtml(state.ideaLabel)}</button>
+            <button class="tool-pill" data-action="improve" data-panel="${id}"><span class="tool-icon">◇</span>Improve prompt</button>
+            <button class="tool-pill" data-action="ask" data-panel="${id}"><span class="tool-icon">◌</span>Ask assistant</button>
+          </div>
+
+          <div class="composer">
+            <div class="composer-main">
+              <button class="reference-tile" aria-label="Add reference image">+</button>
+              <textarea id="${id}-prompt" class="prompt-input" rows="5" placeholder="${escapeHtml(state.placeholder)}">${escapeHtml(state.prompt)}</textarea>
+            </div>
+
+            <div id="${id}-assistant" class="assistant-output"></div>
+
+            <div class="composer-bottom">
+              <div class="composer-controls">
+                ${dropdownControl(id, "model", "◉", state.model)}
+                ${dropdownControl(id, "style", "◈", `Style: ${state.style}`)}
+                ${dropdownControl(id, "count", "◷", imageCountLabel(state.count))}
+                ${dropdownControl(id, "ratio", "▭", state.ratio)}
+                <button class="control-pill settings-trigger" data-action="toggle-settings" data-panel="${id}" aria-label="Open settings">☷</button>
+              </div>
+              <button class="primary generate-pill" data-action="generate" data-panel="${id}"><span>✦</span>Generate <span class="status-line" style="color: rgba(255,255,255,.75);">${escapeHtml(costLabel(state.count))}</span></button>
+            </div>
+            <span id="${id}-safety" class="status-line">Safety check runs before generation</span>
+          </div>
+
+          <div id="${id}-settings" class="settings-drawer">
+            <div class="setting-group">
+              <div class="setting-label">Negative prompt</div>
+              <textarea id="${id}-negative-prompt" rows="2" placeholder="Optional: things to avoid, e.g. blurry hands, text, watermark">${escapeHtml(state.negativePrompt || "")}</textarea>
+              <span class="status-line">Optional. Useful for excluding specific artifacts or subjects.</span>
+            </div>
+          </div>
+          ${state.context === "free" ? `
+            <div id="${id}-inline-output" class="inline-output">
+              <div class="assistant-head">
+                <h3 class="compact-title">Latest output</h3>
+                <span id="${id}-inline-status" class="status-line">Ready</span>
+              </div>
+              <div id="${id}-inline-results" class="image-grid"></div>
+            </div>
+          ` : ""}
+        </div>
+      `;
+    }
+
+    function dropdownControl(id, key, icon, label) {
+      const stateValue = creators[id][key];
+      return `
+        <div class="select-wrap" data-menu-wrap="${id}-${key}">
+          <button class="control-pill" data-action="toggle-select" data-panel="${id}" data-select-key="${key}">
+            <span>${icon}</span><span>${escapeHtml(label)}</span><span>⌄</span>
+          </button>
+          <div class="select-menu">
+            ${options[key].map(item => `
+              <button class="select-option ${item === stateValue ? "selected" : ""}" data-select-setting="${key}" data-value="${escapeHtml(item)}" data-panel="${id}">
+                ${escapeHtml(key === "count" ? imageCountLabel(item) : item)}
+              </button>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function nextOption(key, current) {
+      const list = options[key];
+      const index = list.indexOf(current);
+      return list[(index + 1) % list.length];
+    }
+
+    function imageCountLabel(count) {
+      return `${count} img`;
+    }
+
+    function costLabel(count) {
+      return `${Number(count) * 5}`;
+    }
+
+    function settingGroup(id, key, label) {
+      const selected = creators[id][key];
+      return `
+        <div class="setting-group">
+          <div class="setting-label">${label}</div>
+          <div class="segmented">
+            ${options[key].map(item => `
+              <button class="${item === selected ? "selected" : ""}" data-setting="${key}" data-value="${escapeHtml(item)}" data-panel="${id}">${escapeHtml(item)}</button>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function syncPrompt(id) {
+      const input = document.getElementById(`${id}-prompt`);
+      if (input) creators[id].prompt = input.value;
+    }
+
+    function showIdeas(id, seed) {
+      syncPrompt(id);
+      if (id === "studio" && !creators.studio.selectedTheme) {
+        openModal("theme-picker-modal");
+        return;
+      }
+      const state = creators[id];
+      const theme = state.selectedTheme || state.theme || "today's theme";
+      const baseIdeas = seed ? [
+        `Change the main subject while keeping the emotional distance from ${seed}`,
+        `Make a quieter and more abstract version of ${seed}`,
+        `Keep the theme but shift the composition to a wider environmental scene`
+      ] : [
+        `An empty dinner table after an argument`,
+        `A subway platform where everyone avoids speaking`,
+        `A child holding a glass bell around a sleeping city`
+      ];
+      const output = document.getElementById(`${id}-assistant`);
+      output.classList.add("active");
+      output.innerHTML = `
+        <strong>Try one</strong>
+        ${baseIdeas.map((idea, index) => `
+          <div class="idea">
+            <div>
+              <strong>${index + 1}. ${escapeHtml(idea)}</strong>
+              <span class="subtle">Assistant will rewrite this as a complete prompt before filling the input.</span>
+            </div>
+            <div class="button-row">
+              <button class="primary" data-use-idea="${escapeHtml(idea)}" data-panel="${id}">Use</button>
+              <button class="ghost" data-more-like="${escapeHtml(idea)}" data-panel="${id}">More like this</button>
+            </div>
+          </div>
+        `).join("")}
+        <div class="button-row">
+          <button class="ghost" data-action="ideas" data-panel="${id}">More ideas</button>
+          <button class="ghost" data-action="close-assistant" data-panel="${id}">Close</button>
+        </div>
+        <p class="subtle">Ideas are based on ${escapeHtml(theme)}, but generation still waits for the user to click Generate.</p>
+      `;
+    }
+
+    function showImprove(id) {
+      syncPrompt(id);
+      const original = creators[id].prompt.trim();
+      const output = document.getElementById(`${id}-assistant`);
+      output.classList.add("active");
+
+      if (!original) {
+        output.innerHTML = `
+          <strong>Add a starting idea first</strong>
+          <p class="subtle">Improve prompt needs an existing phrase, even a rough one like "a lonely room".</p>
+        `;
+        return;
+      }
+
+      const improved = promptFromIdea(original, creators[id].selectedTheme);
+      output.innerHTML = `
+        <strong>Assistant improved your prompt</strong>
+        <div class="idea">
+          <div>
+            <strong>Original</strong>
+            <span class="subtle">${escapeHtml(original)}</span>
+          </div>
+        </div>
+        <div class="idea">
+          <div>
+            <strong>Improved</strong>
+            <span class="subtle">${escapeHtml(improved)}</span>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="primary" data-replace-prompt="${escapeHtml(improved)}" data-panel="${id}">Replace prompt</button>
+          <button data-append-prompt="${escapeHtml(improved)}" data-panel="${id}">Append details</button>
+          <button class="ghost" data-action="improve" data-panel="${id}">Try another version</button>
+        </div>
+      `;
+    }
+
+    function showAsk(id) {
+      syncPrompt(id);
+      creators[id].askMessages = creators[id].askMessages || [];
+      const output = document.getElementById(`${id}-assistant`);
+      output.classList.add("active");
+      output.innerHTML = `
+        <strong>Ask assistant</strong>
+        <p class="subtle">Describe the image direction or ask for changes to the current prompt. The assistant will keep turning it back into usable image directions.</p>
+        <textarea id="${id}-ask-input" rows="3" placeholder="Tell the assistant what you want to create or change..."></textarea>
+        <div class="button-row">
+          <button class="primary" data-action="send-ask" data-panel="${id}">Send</button>
+          <button class="ghost" data-action="close-assistant" data-panel="${id}">Close</button>
+        </div>
+      `;
+    }
+
+    function sendAsk(id) {
+      const input = document.getElementById(`${id}-ask-input`);
+      const ask = input && input.value.trim() ? input.value.trim() : "something lonely and futuristic";
+      creators[id].askMessages = creators[id].askMessages || [];
+      creators[id].askMessages.push({ role: "user", text: ask });
+      const ideas = askDirections(id, ask);
+      creators[id].askMessages.push({ role: "assistant", text: "Choose a direction or keep refining it.", ideas });
+      renderAskThread(id);
+    }
+
+    function askDirections(id, ask) {
+      const state = creators[id];
+      const currentPrompt = state.prompt.trim();
+      const theme = state.selectedTheme || state.theme;
+      const themeHint = theme ? `, with a subtle connection to ${theme}` : "";
+      const base = currentPrompt
+        ? `a variation of "${currentPrompt.slice(0, 72)}"`
+        : ask;
+      return [
+        `${base}, focused on one clear subject, ${ask}, cinematic composition${themeHint}`,
+        `${base}, more abstract and symbolic, ${ask}, restrained color palette${themeHint}`,
+        `${base}, wider environmental scene, ${ask}, strong mood and readable visual metaphor${themeHint}`
+      ];
+    }
+
+    function renderAskThread(id) {
+      const output = document.getElementById(`${id}-assistant`);
+      const messages = creators[id].askMessages || [];
+      const lastAssistant = [...messages].reverse().find(message => message.role === "assistant");
+      const ideas = lastAssistant ? lastAssistant.ideas : [];
+      output.classList.add("active");
+      output.innerHTML = `
+        <strong>Ask assistant</strong>
+        <div class="assistant-box">
+          ${messages.map(message => `
+            <div>
+              <strong>${message.role === "user" ? "You" : "Assistant"}</strong>
+              <p class="subtle" style="margin: 4px 0 0;">${escapeHtml(message.text)}</p>
+            </div>
+          `).join("")}
+        </div>
+        ${ideas.length ? `
+          <strong>Choose a direction</strong>
+          ${ideas.map((idea, index) => `
+            <div class="idea">
+              <div>
+                <strong>${index + 1}. ${escapeHtml(idea)}</strong>
+                <span class="subtle">Use fills the prompt. More like this keeps the assistant focused on this direction.</span>
+              </div>
+              <div class="button-row">
+                <button class="primary" data-use-idea="${escapeHtml(idea)}" data-panel="${id}">Use</button>
+                <button class="ghost" data-ask-more-like="${escapeHtml(idea)}" data-panel="${id}">More like this</button>
+              </div>
+            </div>
+          `).join("")}
+          <div class="button-row">
+            <button class="ghost" data-ask-followup="Make it warmer" data-panel="${id}">Warmer</button>
+            <button class="ghost" data-ask-followup="Make it stranger and less literal" data-panel="${id}">Stranger</button>
+            <button class="ghost" data-ask-followup="Remove people and make it more atmospheric" data-panel="${id}">No people</button>
+          </div>
+        ` : ""}
+        <textarea id="${id}-ask-input" rows="2" placeholder="Ask for changes, e.g. more surreal, fewer people, poster style..."></textarea>
+        <div class="button-row">
+          <button class="primary" data-action="send-ask" data-panel="${id}">Send</button>
+          <button class="ghost" data-action="close-assistant" data-panel="${id}">Close</button>
+        </div>
+      `;
+    }
+
+    function continueAsk(id, ask) {
+      creators[id].askMessages = creators[id].askMessages || [];
+      creators[id].askMessages.push({ role: "user", text: ask });
+      const ideas = [
+        `${ask}, keep the strongest subject but change the mood and lighting`,
+        `${ask}, push the idea into a more specific image with a clear focal point`,
+        `${ask}, turn it into a more polished prompt-ready composition`
+      ];
+      creators[id].askMessages.push({ role: "assistant", text: "Here are adjusted directions.", ideas });
+      renderAskThread(id);
+    }
+
+    function usePrompt(id, prompt) {
+      creators[id].prompt = prompt;
+      const input = document.getElementById(`${id}-prompt`);
+      if (input) input.value = prompt;
+      const output = document.getElementById(`${id}-assistant`);
+      if (output) {
+        output.classList.add("active");
+        output.innerHTML = `<div class="notice">Prompt filled. Edit it if needed, then click Generate.</div>`;
+      }
+    }
+
+    function generateImages(id) {
+      syncPrompt(id);
+      const state = creators[id];
+      const prompt = state.prompt.trim() || "A quiet empty room with a single chair near a window, soft morning light, muted colors, subtle dust in the air, a feeling of waiting and absence.";
+      const count = Number(state.count);
+      const status = document.getElementById(`${id}-result-status`);
+      const safety = document.getElementById(`${id}-safety`);
+      const results = document.getElementById(`${id}-results`);
+      const empty = document.getElementById(`${id}-empty`);
+      const resultsPanel = document.getElementById(`${id}-results-panel`);
+
+      if (safety) safety.textContent = "Safety check passed";
+      if (id === "studio") {
+        studioImages.unshift({
+          art: creators.studio.selectedTheme ? "silence" : "poster",
+          status: "Generated",
+          theme: creators.studio.selectedTheme || "No theme",
+          model: state.model
+        });
+        renderStudio("All");
+        document.querySelectorAll("[data-studio-tab]").forEach(button => {
+          button.classList.toggle("selected", button.dataset.studioTab === "All");
+        });
+        if (safety) safety.textContent = "Mock image added to My images";
+        return;
+      }
+      if (!results) {
+        const inlineOutput = document.getElementById(`${id}-inline-output`);
+        const inlineStatus = document.getElementById(`${id}-inline-status`);
+        const inlineResults = document.getElementById(`${id}-inline-results`);
+        if (inlineOutput && inlineResults) {
+          const arts = ["silence", "rain", "lonely", "poster"];
+          inlineOutput.classList.add("active");
+          if (inlineStatus) inlineStatus.textContent = `${count} mock image${count > 1 ? "s" : ""} generated`;
+          inlineResults.innerHTML = Array.from({ length: count }, (_, index) => resultCard({
+            art: arts[index % arts.length],
+            prompt,
+            model: state.model,
+            style: state.style,
+            ratio: state.ratio,
+            submitLabel: "Submit to today's theme",
+            panel: id
+          })).join("");
+        }
+        if (safety) safety.textContent = "Mock generation complete";
+        return;
+      }
+      if (status) status.textContent = "Generating mock images...";
+      if (resultsPanel) resultsPanel.classList.remove("hidden");
+      if (empty) empty.classList.add("hidden");
+      results.innerHTML = "";
+
+      setTimeout(() => {
+        if (status) status.textContent = `${count} mock image${count > 1 ? "s" : ""} generated`;
+        const arts = ["silence", "rain", "lonely", "poster"];
+        results.innerHTML = Array.from({ length: count }, (_, index) => resultCard({
+          art: arts[index % arts.length],
+          prompt,
+          model: state.model,
+          style: state.style,
+          ratio: state.ratio,
+          submitLabel: state.context === "studio" && !state.selectedTheme ? "Submit to today's theme" : state.submitLabel,
+          panel: id
+        })).join("");
+      }, 420);
+    }
+
+    function resultCard(item) {
+      return `
+        <article class="image-card">
+          <div class="art ${item.art}"></div>
+          <div class="card-body">
+            <div class="prompt-preview"><strong>Prompt used:</strong> ${escapeHtml(item.prompt)}</div>
+            <div class="chip-row">
+              <span class="chip">${escapeHtml(item.model)}</span>
+              <span class="chip">${escapeHtml(item.style)}</span>
+              <span class="chip">${escapeHtml(item.ratio)}</span>
+            </div>
+            <div class="button-row">
+              <button class="ghost">Download</button>
+              <button>Edit</button>
+              <button>Variations</button>
+              <button class="primary" data-submit="${escapeHtml(item.prompt)}" data-submit-label="${escapeHtml(item.submitLabel)}" data-art="${item.art}" data-panel="${item.panel}">${escapeHtml(item.submitLabel)}</button>
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderThemeGallery() {
+      document.getElementById("theme-gallery").innerHTML = galleryImages.map(imageCard).join("");
+    }
+
+    function renderExplore() {
+      document.getElementById("explore-themes").innerHTML = themes.map(theme => `
+        <article class="theme-card">
+          <div class="chip">${escapeHtml(theme.date)}</div>
+          <h2 class="compact-title">${escapeHtml(theme.title)}</h2>
+          <p class="subtle">${escapeHtml(theme.brief)}</p>
+          <div class="mini-gallery">
+            <div class="art ${theme.art}"></div>
+            <div class="art poster"></div>
+            <div class="art lonely"></div>
+          </div>
+          <div class="meta-row"><span>${escapeHtml(theme.stats)}</span></div>
+          <div class="chip-row">
+            <span class="chip">cinematic</span><span class="chip">surreal</span><span class="chip">quiet</span>
+          </div>
+          <div class="button-row">
+            <button data-nav-target="theme">View theme</button>
+            <button data-nav-target="theme">Create from this theme</button>
+          </div>
+        </article>
+      `).join("");
+      document.getElementById("explore-images").innerHTML = galleryImages.map(imageCard).join("");
+    }
+
+    function imageCard(image) {
+      return `
+        <article class="image-card">
+          <button class="art ${image.art}" style="width: 100%; border: 0; border-radius: 0;" data-open-image="${galleryImages.indexOf(image)}" aria-label="Open image detail"></button>
+        </article>
+      `;
+    }
+
+    function renderStudio(filter = "All") {
+      const images = filter === "All" ? studioImages : studioImages.filter(item => item.status === filter);
+      document.getElementById("studio-gallery").innerHTML = images.map(item => `
+        <article class="image-card">
+          <div class="art ${item.art}"></div>
+          <div class="card-body">
+            <div class="chip-row">
+              <span class="chip">${escapeHtml(item.status)}</span>
+              <span class="chip">${escapeHtml(item.model)}</span>
+            </div>
+            <p class="prompt-preview">Theme: ${escapeHtml(item.theme)}</p>
+            <div class="button-row">
+              <button>View prompt</button>
+              <button>Edit</button>
+              <button class="primary">Submit</button>
+            </div>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add("active");
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove("active");
+    }
+
+    function closeSelectMenus(exceptWrap) {
+      document.querySelectorAll(".select-wrap.open").forEach(wrap => {
+        if (wrap !== exceptWrap) wrap.classList.remove("open");
+      });
+    }
+
+    function navigate(page) {
+      document.querySelectorAll(".page").forEach(el => el.classList.remove("active"));
+      document.getElementById(page).classList.add("active");
+      document.querySelectorAll("[data-nav]").forEach(button => {
+        button.classList.toggle("selected", button.dataset.nav === page);
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function openImageDetail(index) {
+      activeDetail = galleryImages[index] || galleryImages[0];
+      document.getElementById("detail-art").className = `art ${activeDetail.art}`;
+      document.getElementById("detail-author").textContent = activeDetail.author;
+      document.getElementById("detail-theme").textContent = activeDetail.theme;
+      document.getElementById("detail-prompt").textContent = activeDetail.prompt;
+      openModal("image-modal");
+    }
+
+    document.addEventListener("click", event => {
+      const target = event.target.closest("button");
+      if (!target) return;
+
+      if (target.dataset.nav) navigate(target.dataset.nav);
+      if (target.dataset.navTarget) navigate(target.dataset.navTarget);
+      if (target.dataset.closeModal) closeModal(target.dataset.closeModal);
+      if (target.dataset.scrollTo) document.getElementById(target.dataset.scrollTo).scrollIntoView({ behavior: "smooth", block: "start" });
+
+      if (target.dataset.setting) {
+        creators[target.dataset.panel][target.dataset.setting] = target.dataset.value;
+        renderCreator(target.dataset.panel);
+      }
+
+      if (target.dataset.action === "ideas") showIdeas(target.dataset.panel);
+      if (target.dataset.action === "improve") showImprove(target.dataset.panel);
+      if (target.dataset.action === "ask") showAsk(target.dataset.panel);
+      if (target.dataset.action === "send-ask") sendAsk(target.dataset.panel);
+      if (target.dataset.action === "generate") generateImages(target.dataset.panel);
+      if (target.dataset.action === "toggle-select") {
+        const wrap = target.closest(".select-wrap");
+        const willOpen = !wrap.classList.contains("open");
+        closeSelectMenus(wrap);
+        wrap.classList.toggle("open", willOpen);
+      }
+      if (target.dataset.selectSetting) {
+        creators[target.dataset.panel][target.dataset.selectSetting] = target.dataset.value;
+        closeSelectMenus();
+        renderCreator(target.dataset.panel);
+      }
+      if (target.dataset.action === "toggle-settings") {
+        document.getElementById(`${target.dataset.panel}-settings`).classList.toggle("active");
+      }
+      if (target.dataset.action === "close-assistant") {
+        document.getElementById(`${target.dataset.panel}-assistant`).classList.remove("active");
+      }
+      if (target.dataset.action === "open-theme-picker") openModal("theme-picker-modal");
+      if (target.dataset.action === "confirm-submit") {
+        closeModal("submit-modal");
+        alert("Mock submission created: status is Under review.");
+      }
+      if (target.dataset.action === "detail-inspiration") {
+        closeModal("image-modal");
+        navigate("theme");
+        showIdeas("theme", activeDetail.prompt.slice(0, 48));
+      }
+      if (target.dataset.action === "detail-use-prompt") {
+        closeModal("image-modal");
+        navigate("theme");
+        usePrompt("theme", activeDetail.prompt);
+      }
+      if (target.dataset.action === "copy-detail-prompt") {
+        navigator.clipboard?.writeText(activeDetail.prompt);
+        target.textContent = "Copied";
+      }
+
+      if (target.dataset.useIdea) {
+        const id = target.dataset.panel;
+        usePrompt(id, promptFromIdea(target.dataset.useIdea, creators[id].selectedTheme));
+      }
+
+      if (target.dataset.moreLike) showIdeas(target.dataset.panel, target.dataset.moreLike);
+      if (target.dataset.askMoreLike) continueAsk(target.dataset.panel, `More like this: ${target.dataset.askMoreLike}`);
+      if (target.dataset.askFollowup) continueAsk(target.dataset.panel, target.dataset.askFollowup);
+      if (target.dataset.replacePrompt) usePrompt(target.dataset.panel, target.dataset.replacePrompt);
+      if (target.dataset.appendPrompt) {
+        const id = target.dataset.panel;
+        syncPrompt(id);
+        usePrompt(id, `${creators[id].prompt}\n\n${target.dataset.appendPrompt}`);
+      }
+      if (target.dataset.usePrompt) {
+        usePrompt(target.dataset.targetPanel, target.dataset.usePrompt);
+        document.getElementById(`${target.dataset.targetPanel}-creator`).scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      if (target.dataset.submit) {
+        const label = target.dataset.submitLabel || "Submit image";
+        const panel = target.dataset.panel;
+        const theme = creators[panel].selectedTheme || "Show Silence";
+        document.getElementById("submit-title").textContent = label;
+        document.getElementById("submit-theme").textContent = theme;
+        document.getElementById("submit-prompt").value = target.dataset.submit;
+        document.getElementById("submit-preview").className = `art ${target.dataset.art}`;
+        openModal("submit-modal");
+      }
+      if (target.dataset.openImage) openImageDetail(Number(target.dataset.openImage));
+      if (target.dataset.inspireIndex) {
+        const image = galleryImages[Number(target.dataset.inspireIndex)];
+        navigate("theme");
+        showIdeas("theme", image.prompt.slice(0, 48));
+      }
+      if (target.dataset.pickTheme) {
+        creators.studio.selectedTheme = target.dataset.pickTheme;
+        closeModal("theme-picker-modal");
+        renderCreator("studio");
+        showIdeas("studio");
+      }
+      if (target.dataset.exploreTab) {
+        document.querySelectorAll("[data-explore-tab]").forEach(button => button.classList.remove("selected"));
+        target.classList.add("selected");
+        document.getElementById("explore-themes").classList.toggle("hidden", target.dataset.exploreTab !== "themes");
+        document.getElementById("explore-images").classList.toggle("hidden", target.dataset.exploreTab !== "images");
+      }
+      if (target.dataset.studioTab) {
+        document.querySelectorAll("[data-studio-tab]").forEach(button => button.classList.remove("selected"));
+        target.classList.add("selected");
+        renderStudio(target.dataset.studioTab);
+      }
+    });
+
+    document.addEventListener("input", event => {
+      if (event.target.id && event.target.id.endsWith("-prompt")) {
+        const id = event.target.id.replace("-prompt", "");
+        creators[id].prompt = event.target.value;
+      }
+      if (event.target.id && event.target.id.endsWith("-negative-prompt")) {
+        const id = event.target.id.replace("-negative-prompt", "");
+        creators[id].negativePrompt = event.target.value;
+      }
+    });
+
+    ["home", "theme", "studio"].forEach(renderCreator);
+    renderThemeGallery();
+    renderExplore();
+    renderStudio();
+  </script>
+</body>
+</html>
