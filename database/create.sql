@@ -1,5 +1,5 @@
 -- USER
-CREATE TABLE IF NOT EXISTS ai-image-creative.users (
+CREATE TABLE IF NOT EXISTS monica_ai.users (
     id                BIGSERIAL PRIMARY KEY,
     user_id           UUID           NOT NULL DEFAULT gen_random_uuid(),
     status            VARCHAR(50)    NOT NULL DEFAULT 'anonymous',
@@ -16,17 +16,17 @@ CREATE TABLE IF NOT EXISTS ai-image-creative.users (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_clerk_user_id_key 
-ON ai-image-creative.users (clerk_user_id) 
+ON monica_ai.users (clerk_user_id) 
 WHERE status <> 'deleted'; 
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_stripe_cus_id_key 
-ON ai-image-creative.users (stripe_cus_id) 
+ON monica_ai.users (stripe_cus_id) 
 WHERE status <> 'deleted';
 
-CREATE INDEX IF NOT EXISTS idx_users_fingerprint_id ON ai-image-creative.users (fingerprint_id);
+CREATE INDEX IF NOT EXISTS idx_users_fingerprint_id ON monica_ai.users (fingerprint_id);
 
 -- SUBSCRIPTIONS
-CREATE TABLE IF NOT EXISTS ai-image-creative.subscriptions (
+CREATE TABLE IF NOT EXISTS monica_ai.subscriptions (
     id                   BIGSERIAL PRIMARY KEY,
     user_id              UUID        NOT NULL,
     status               VARCHAR(50) NOT NULL DEFAULT 'incomplete',
@@ -45,12 +45,12 @@ CREATE TABLE IF NOT EXISTS ai-image-creative.subscriptions (
     CONSTRAINT transactions_deleted_check CHECK (deleted = ANY (ARRAY[0, 1]))
 );
 
-CREATE INDEX IF NOT EXISTS idx_subscriptions_pay_subscription_id ON ai-image-creative.subscriptions (pay_subscription_id);
-CREATE INDEX IF NOT EXISTS idx_subscriptions_order_id ON ai-image-creative.subscriptions (order_id);
-CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON ai-image-creative.subscriptions (user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_pay_subscription_id ON monica_ai.subscriptions (pay_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_order_id ON monica_ai.subscriptions (order_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON monica_ai.subscriptions (user_id);
 
 -- CREDITS
-CREATE TABLE IF NOT EXISTS ai-image-creative.credits (
+CREATE TABLE IF NOT EXISTS monica_ai.credits (
     id                        BIGSERIAL PRIMARY KEY,
     user_id                   UUID        NOT NULL,
     balance_free              INTEGER     NOT NULL DEFAULT 0,
@@ -70,10 +70,10 @@ CREATE TABLE IF NOT EXISTS ai-image-creative.credits (
     CONSTRAINT credits_user_id_key UNIQUE (user_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_credits_user_id ON ai-image-creative.credits (user_id);
+CREATE INDEX IF NOT EXISTS idx_credits_user_id ON monica_ai.credits (user_id);
 
 -- ORDER
-CREATE TABLE IF NOT EXISTS ai-image-creative.transactions (
+CREATE TABLE IF NOT EXISTS monica_ai.transactions (
     id                   BIGSERIAL PRIMARY KEY,
     user_id              UUID         NOT NULL,
     order_id             VARCHAR(255) NOT NULL,
@@ -116,13 +116,13 @@ CREATE TABLE IF NOT EXISTS ai-image-creative.transactions (
     CONSTRAINT transactions_deleted_check CHECK (deleted = ANY (ARRAY[0, 1]))
 );
 
-CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON ai-image-creative.transactions (order_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_pay_subscription_id ON ai-image-creative.transactions (pay_subscription_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON ai-image-creative.transactions (user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON monica_ai.transactions (order_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_pay_subscription_id ON monica_ai.transactions (pay_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON monica_ai.transactions (user_id);
 
 
 -- AUDIT_LOG
-CREATE TABLE IF NOT EXISTS ai-image-creative.credit_audit_log (
+CREATE TABLE IF NOT EXISTS monica_ai.credit_audit_log (
     id               BIGSERIAL PRIMARY KEY,
     user_id          UUID         NOT NULL,
     credits_change     INTEGER      NOT NULL,
@@ -135,13 +135,13 @@ CREATE TABLE IF NOT EXISTS ai-image-creative.credit_audit_log (
     CONSTRAINT credit_audit_log_deleted_check CHECK (deleted = ANY (ARRAY[0, 1]))
 );
 
-CREATE INDEX IF NOT EXISTS idx_credit_audit_log_credit_type ON ai-image-creative.credit_audit_log (credit_type);
-CREATE INDEX IF NOT EXISTS idx_credit_audit_log_operation_type ON ai-image-creative.credit_audit_log (operation_type);
-CREATE INDEX IF NOT EXISTS idx_credit_audit_log_user_id ON ai-image-creative.credit_audit_log (user_id);
+CREATE INDEX IF NOT EXISTS idx_credit_audit_log_credit_type ON monica_ai.credit_audit_log (credit_type);
+CREATE INDEX IF NOT EXISTS idx_credit_audit_log_operation_type ON monica_ai.credit_audit_log (operation_type);
+CREATE INDEX IF NOT EXISTS idx_credit_audit_log_user_id ON monica_ai.credit_audit_log (user_id);
 
 
 -- USER_BACKUP
-CREATE TABLE IF NOT EXISTS ai-image-creative.user_backup (
+CREATE TABLE IF NOT EXISTS monica_ai.user_backup (
     id                BIGSERIAL PRIMARY KEY,
     original_user_id  UUID         NOT NULL,
     status            VARCHAR(50),
@@ -157,14 +157,14 @@ CREATE TABLE IF NOT EXISTS ai-image-creative.user_backup (
     CONSTRAINT user_backup_deleted_check CHECK (deleted = ANY (ARRAY[0, 1]))
 );
 
-CREATE INDEX IF NOT EXISTS idx_user_backup_clerk_user_id ON ai-image-creative.user_backup (clerk_user_id);
-CREATE INDEX IF NOT EXISTS idx_user_backup_email ON ai-image-creative.user_backup (email);
-CREATE INDEX IF NOT EXISTS idx_user_backup_fingerprint_id ON ai-image-creative.user_backup (fingerprint_id);
-CREATE INDEX IF NOT EXISTS idx_user_backup_original_user_id ON ai-image-creative.user_backup (original_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_backup_clerk_user_id ON monica_ai.user_backup (clerk_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_backup_email ON monica_ai.user_backup (email);
+CREATE INDEX IF NOT EXISTS idx_user_backup_fingerprint_id ON monica_ai.user_backup (fingerprint_id);
+CREATE INDEX IF NOT EXISTS idx_user_backup_original_user_id ON monica_ai.user_backup (original_user_id);
 
 
 -- API_LOG
-CREATE TABLE IF NOT EXISTS ai-image-creative.apilog (
+CREATE TABLE IF NOT EXISTS monica_ai.apilog (
     id            BIGSERIAL PRIMARY KEY,
     api_type      VARCHAR(100)  NOT NULL,
     method_name   VARCHAR(255) NOT NULL,
@@ -174,3 +174,12 @@ CREATE TABLE IF NOT EXISTS ai-image-creative.apilog (
     created_at    TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Re-grant explicit privileges after table rebuild.
+-- Notes:
+-- 1. Tables recreated via DROP/CREATE are new objects and will not inherit prior grants.
+-- 2. Table creation uses various privileged accounts; default owner privileges are unreliable.
+-- Append privilege statements to guarantee monica_ai_app persistent access to objects in schema monica_ai.
+GRANT USAGE ON SCHEMA monica_ai TO monica_ai_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA monica_ai TO monica_ai_app;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA monica_ai TO monica_ai_app;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA monica_ai TO monica_ai_app;

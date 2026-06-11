@@ -1,0 +1,1638 @@
+---
+title: Monica AI 后端技术方案
+description: Monica AI 后端模块、数据模型、接口鉴权、状态机、积分和异步任务设计
+date: 2026-06-11
+---
+
+## 1. 设计边界
+
+本文基于 [Monica-AI.md](./Monica-AI.md) 输出后端技术方案，覆盖：
+
+- 后端模块划分。
+- 新增业务数据 Model。
+- API 职责、鉴权和权限边界。
+- 生成任务、投稿审核、Studio、Explore 的状态流转。
+- 与现有用户、积分、订单系统的集成方式。
+
+不覆盖：
+
+- AI prompt 模板、模型调用参数、供应商 SDK 细节。
+- i18n 方案。
+- 前端组件设计和样式。
+- 管理后台完整交互设计。
+
+AI 调用相关逻辑在本文中只保留接口占位。
+
+## 2. 现有基础能力
+
+当前项目已经存在以下基础 Model：
+
+- `User`
+- `Credit`
+- `CreditAuditLog`
+- `Subscription`
+- `Transaction`
+- `UserBackup`
+- `Apilog`
+
+这些 Model 不重新设计。
+
+业务功能需要复用现有能力：
+
+- 用户身份：使用 `User.userId` 作为业务外键。
+- 登录鉴权：使用 `ApiAuthUtils`。
+- 积分余额：使用现有 `Credit`。
+- 积分流水：使用现有 `CreditAuditLog`。
+- 订单和订阅：使用现有 `Transaction` / `Subscription`。
+
+API Route 中鉴权统一使用：
+
+```ts
+import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
+
+const authUtils = new ApiAuthUtils(request);
+const { user } = await authUtils.requireAuthWithUser();
+```
+
+可选登录态使用：
+
+```ts
+const authUtils = new ApiAuthUtils(request);
+const auth = await authUtils.getUser();
+```
+
+## 3. 总体架构
+
+### 3.1 模块分层
+
+```text
+src/app/api
+  -> route handler
+  -> request validation
+  -> ApiAuthUtils auth
+  -> application service
+  -> domain service
+  -> prisma repository
+  -> external provider adapter
+```
+
+推荐目录：
+
+```text
+src/server/monica/
+  constants/
+    creation.ts
+    generation.ts
+    review.ts
+  repositories/
+    theme-submission.repository.ts
+    theme.repository.ts
+    creation-session.repository.ts
+    generation.repository.ts
+    image.repository.ts
+    submission.repository.ts
+  services/
+    theme-submission.service.ts
+    theme.service.ts
+    assistant.service.ts
+    generation.service.ts
+    image.service.ts
+    submission.service.ts
+    explore.service.ts
+    studio.service.ts
+    safety.service.ts
+    credit.service.ts
+  ai/
+    ai-provider.types.ts
+    image-generation-provider.ts
+    image-derivative-provider.ts
+    assistant-provider.ts
+  validators/
+    theme.validator.ts
+    assistant.validator.ts
+    generation.validator.ts
+    submission.validator.ts
+```
+
+`src/app/api` 中只放路由入口，不放复杂业务逻辑。
+
+### 3.2 核心链路
+
+<Mermaid
+  title="3.2 核心链路"
+  chart={`
+flowchart TD
+  A[API Route] --> B[鉴权/可选鉴权]
+  B --> C[参数校验]
+  C --> D[业务 Service]
+  D --> E[Prisma Transaction]
+  E --> F[业务表]
+  E --> G[现有 Credit/CreditAuditLog]
+  D --> H[AI Provider Placeholder]
+  H --> I[回写任务状态和图片]
+`}
+/>
+
+### 3.3 AI 调用边界
+
+AI 相关能力抽象为 Provider，不在业务服务中直接写供应商调用。
+
+占位接口：
+
+```ts
+export interface AssistantProvider {
+  getIdeas(input: unknown): Promise<unknown>;
+  moreLikeThis(input: unknown): Promise<unknown>;
+  improvePrompt(input: unknown): Promise<unknown>;
+  ask(input: unknown): Promise<unknown>;
+}
+
+export interface ImageGenerationProvider {
+  createGeneration(input: unknown): Promise<unknown>;
+  getGenerationResult(input: unknown): Promise<unknown>;
+}
+
+export interface ImageDerivativeProvider {
+  createVariation(input: unknown): Promise<unknown>;
+  createEdit(input: unknown): Promise<unknown>;
+}
+```
+
+具体 prompt、参数映射、供应商选择逻辑后续补充。
+
+## 4. 新增数据 Model 设计
+
+### 4.1 命名原则
+
+- 业务表全部放在 `monica-ai` schema。
+- 主键使用 `BigInt @id @default(autoincrement())`，延续现有风格。
+- 对外暴露使用 `xxxId String @db.Uuid`，默认 `gen_random_uuid()`。
+- 与现有用户关联统一使用 `userId String @db.Uuid`，引用 `User.userId`。
+- 状态字段使用 `String @db.VarChar(50)`，不使用 Prisma enum，保持和现有 `User.status`、`Transaction.orderStatus` 一致。
+- 复杂供应商响应、审核详情、生成参数使用 `Json?`。
+- 删除优先使用 `deleted Int @default(0)` 或状态隐藏，不物理删除业务关键记录。
+
+### 4.2 Model 总览
+
+新增 Model：
+
+- `ThemeSubmission`
+- `Theme`
+- `CreationSession`
+- `PromptLog`
+- `ReferenceImage`
+- `GenerationJob`
+- `GeneratedImage`
+- `ImageSubmission`
+- `ReviewRecord`
+- `PublicImage`
+- `ImageLike`
+- `ImageSave`
+
+不新增：
+
+- `CreditLedger`：使用现有 `CreditAuditLog`。
+- `Order`：使用现有 `Transaction`。
+- `Author`：使用现有 `User`。
+- `ImageEdit`：不单独建表。图片编辑/变体先作为一种 `GenerationJob.generationType`，通过 `sourceImageId` 追溯来源图。
+
+### 4.3 Model 建立理由
+
+<CheetTable title="Model 建立理由">
+
+| Model | 建立理由 |
+| --- | --- |
+| `ThemeSubmission` | 统一承接普通用户和管理员提交主题想法，保存原始提交、审核状态、编辑后版本、采纳结果和积分奖励依据 |
+| `Theme` | 表示正式主题，用于今日主题、主题详情、主题创作上下文、Theme Gallery 和投稿目标 |
+| `CreationSession` | 串联一次创作过程，记录来源页面、主题上下文、Assistant 行为和生成任务，便于排查和分析 |
+| `PromptLog` | 记录 Assistant 的 Get Ideas、Improve Prompt、Ask Assistant 输入输出；这是内部日志，不是用户可见版本历史 |
+| `ReferenceImage` | 保存用户上传的参考图输入，负责归属、安全审核和被生成任务引用 |
+| `GenerationJob` | 记录图片生成/变体/编辑任务，支撑异步状态、积分消耗、供应商任务、失败退款和结果回写 |
+| `GeneratedImage` | 保存 AI 生成出的用户私有图片资产，是 My Studio、下载、投稿和后续编辑/变体的核心 |
+| `ImageSubmission` | 表示用户将私有生成图提交到某个主题的审核记录，支撑 Under review、Published、Rejected |
+| `ReviewRecord` | 记录自动审核和人工审核历史，支撑安全追溯、拒绝原因和管理端审计 |
+| `PublicImage` | 表示已发布图片的公开展示投影，单独承载点赞数、收藏数、精选分、公开状态等展示层数据 |
+| `ImageLike` | 记录用户点赞关系，支持取消点赞、当前用户 liked 状态和排序统计 |
+| `ImageSave` | 记录用户收藏关系，支持取消收藏、当前用户 saved 状态和个人收藏扩展 |
+
+</CheetTable>
+
+### 4.4 图片类 Model 边界
+
+图片相关数据不应该混成一张大表。当前设计中有 3 个和图片直接相关的 Model：
+
+<CheetTable title="图片类 Model 边界">
+
+| Model | 是否存储图片资产 | 来源 | 主要用途 |
+| --- | --- | --- | --- |
+| `ReferenceImage` | 是 | 用户本地上传 | 作为生成参考图，归属于用户和创作会话，需要安全审核 |
+| `GeneratedImage` | 是 | AI 生成结果 | 用户私有图片资产，服务 My Studio、下载、投稿、后续编辑/变体 |
+| `PublicImage` | 否，不重复存图 | `GeneratedImage` 投稿审核通过后创建 | 公开展示投影，服务 Explore、Theme Gallery、点赞、收藏、精选排序 |
+
+</CheetTable>
+
+关键规则：
+
+- `ReferenceImage` 是输入素材，不是作品，不进入 Studio Gallery，也不能直接投稿。
+- `GeneratedImage` 是生成结果，是 Studio 的核心图片资产。
+- `PublicImage` 不是另一份图片文件，它引用 `GeneratedImage.imageId`，只保存公开展示层需要的数据，如 `likeCount`、`saveCount`、`featuredScore`、`promptPublic`。
+- 用户自己本地上传的图片如果只是参考图，进入 `ReferenceImage`。
+- 后续如果支持“用户上传自己的作品参与投稿”，再单独讨论是否新增 `UploadedImage` 或让 `GeneratedImage` 扩展 `sourceType = uploaded`。当前产品原型是 AI 图片创作，投稿对象默认来自 AI 生成结果。
+
+### 4.5 Prisma Schema 草案
+
+以下为建议追加到 `prisma/schema.prisma` 的业务 Model 草案。字段不是最终迁移脚本，但已经按当前项目 Prisma 风格设计。
+
+```prisma
+model ThemeSubmission {
+  id              BigInt    @id @default(autoincrement())
+  themeSubmissionId String  @unique @default(dbgenerated("gen_random_uuid()")) @map("theme_submission_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  status          String    @default("under_review") @db.VarChar(50)
+  rawTitle        String    @map("raw_title") @db.VarChar(255)
+  rawDescription  String?   @map("raw_description") @db.Text
+  triggerType     String?   @map("trigger_type") @db.VarChar(100)
+  editedTitle     String?   @map("edited_title") @db.VarChar(255)
+  editedBrief     String?   @map("edited_brief") @db.Text
+  editedDescription String? @map("edited_description") @db.Text
+  acceptedThemeId String?   @map("accepted_theme_id") @db.Uuid
+  reviewedByUserId String?  @map("reviewed_by_user_id") @db.Uuid
+  reviewReason    String?   @map("review_reason") @db.Text
+  sourceType      String    @default("user") @map("source_type") @db.VarChar(50)
+  submittedAt     DateTime? @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt      DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  selectedAt      DateTime? @map("selected_at") @db.Timestamptz(6)
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted         Int       @default(0)
+
+  user          User   @relation("ThemeSubmissionUser", fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  reviewedBy    User?  @relation("ThemeSubmissionReviewer", fields: [reviewedByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  acceptedTheme Theme? @relation("AcceptedThemeSubmission", fields: [acceptedThemeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId, submittedAt], map: "idx_theme_submissions_user_submitted_at")
+  @@index([status, submittedAt], map: "idx_theme_submissions_status_submitted_at")
+  @@index([acceptedThemeId], map: "idx_theme_submissions_accepted_theme_id")
+  @@map("theme_submissions")
+  @@schema("monica_ai")
+}
+
+model Theme {
+  id              BigInt    @id @default(autoincrement())
+  themeId         String    @unique @default(dbgenerated("gen_random_uuid()")) @map("theme_id") @db.Uuid
+  title           String    @db.VarChar(255)
+  brief           String?   @db.Text
+  description     String?   @db.Text
+  status          String    @default("draft") @db.VarChar(50)
+  publishDate     DateTime? @map("publish_date") @db.Date
+  coverImageUrl   String?   @map("cover_image_url") @db.Text
+  tags            Json?
+  stats           Json?
+  sourceType      String?   @map("source_type") @db.VarChar(50)
+  sourceRef       Json?     @map("source_ref")
+  sortOrder       Int       @default(0) @map("sort_order")
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted         Int       @default(0)
+
+  creationSessions CreationSession[]
+  promptLogs       PromptLog[]
+  generationJobs   GenerationJob[]
+  generatedImages  GeneratedImage[]
+  submissions      ImageSubmission[]
+  publicImages     PublicImage[]
+  acceptedSubmissions ThemeSubmission[] @relation("AcceptedThemeSubmission")
+
+  @@index([status, publishDate], map: "idx_themes_status_publish_date")
+  @@index([publishDate], map: "idx_themes_publish_date")
+  @@map("themes")
+  @@schema("monica_ai")
+}
+
+model CreationSession {
+  id             BigInt    @id @default(autoincrement())
+  sessionId      String    @unique @default(dbgenerated("gen_random_uuid()")) @map("session_id") @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  themeId        String?   @map("theme_id") @db.Uuid
+  sourcePage     String    @map("source_page") @db.VarChar(50)
+  status         String    @default("active") @db.VarChar(50)
+  selectedModel  String?   @map("selected_model") @db.VarChar(100)
+  selectedStyle  String?   @map("selected_style") @db.VarChar(100)
+  selectedRatio  String?   @map("selected_ratio") @db.VarChar(50)
+  selectedCount  Int?      @map("selected_count")
+  context        Json?
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted        Int       @default(0)
+
+  user            User?             @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  theme           Theme?            @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+  promptLogs      PromptLog[]
+  referenceImages ReferenceImage[]
+  generationJobs  GenerationJob[]
+
+  @@index([userId, createdAt], map: "idx_creation_sessions_user_created_at")
+  @@index([themeId], map: "idx_creation_sessions_theme_id")
+  @@index([sourcePage], map: "idx_creation_sessions_source_page")
+  @@map("creation_sessions")
+  @@schema("monica_ai")
+}
+
+model PromptLog {
+  id             BigInt    @id @default(autoincrement())
+  promptLogId    String    @unique @default(dbgenerated("gen_random_uuid()")) @map("prompt_log_id") @db.Uuid
+  sessionId      String?   @map("session_id") @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  themeId        String?   @map("theme_id") @db.Uuid
+  actionType     String    @map("action_type") @db.VarChar(50)
+  inputPrompt    String?   @map("input_prompt") @db.Text
+  outputPrompt   String?   @map("output_prompt") @db.Text
+  inputPayload   Json?     @map("input_payload")
+  outputPayload  Json?     @map("output_payload")
+  provider       String?   @db.VarChar(100)
+  providerModel  String?   @map("provider_model") @db.VarChar(100)
+  usedForGeneration Boolean @default(false) @map("used_for_generation")
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  deleted        Int       @default(0)
+
+  session CreationSession? @relation(fields: [sessionId], references: [sessionId], onDelete: NoAction, onUpdate: NoAction)
+  user    User?            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  theme   Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([sessionId, createdAt], map: "idx_prompt_logs_session_created_at")
+  @@index([userId, createdAt], map: "idx_prompt_logs_user_created_at")
+  @@index([actionType], map: "idx_prompt_logs_action_type")
+  @@map("prompt_logs")
+  @@schema("monica_ai")
+}
+
+model ReferenceImage {
+  id             BigInt    @id @default(autoincrement())
+  referenceId    String    @unique @default(dbgenerated("gen_random_uuid()")) @map("reference_id") @db.Uuid
+  sessionId      String?   @map("session_id") @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  storageKey     String    @map("storage_key") @db.Text
+  url            String?   @db.Text
+  mimeType       String?   @map("mime_type") @db.VarChar(100)
+  width          Int?
+  height         Int?
+  status         String    @default("uploaded") @db.VarChar(50)
+  safetyStatus   String    @default("pending") @map("safety_status") @db.VarChar(50)
+  safetyResult   Json?     @map("safety_result")
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  deleted        Int       @default(0)
+
+  session CreationSession? @relation(fields: [sessionId], references: [sessionId], onDelete: NoAction, onUpdate: NoAction)
+  user    User?            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  generationJobs GenerationJob[]
+
+  @@index([userId, createdAt], map: "idx_reference_images_user_created_at")
+  @@index([sessionId], map: "idx_reference_images_session_id")
+  @@map("reference_images")
+  @@schema("monica_ai")
+}
+
+model GenerationJob {
+  id                BigInt    @id @default(autoincrement())
+  jobId             String    @unique @default(dbgenerated("gen_random_uuid()")) @map("job_id") @db.Uuid
+  sessionId         String?   @map("session_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  themeId           String?   @map("theme_id") @db.Uuid
+  referenceId       String?   @map("reference_id") @db.Uuid
+  sourceImageId     String?   @map("source_image_id") @db.Uuid
+  status            String    @default("pending") @db.VarChar(50)
+  sourcePage        String?   @map("source_page") @db.VarChar(50)
+  generationType    String    @default("text_to_image") @map("generation_type") @db.VarChar(50)
+  prompt            String    @db.Text
+  negativePrompt    String?   @map("negative_prompt") @db.Text
+  editInstruction   String?   @map("edit_instruction") @db.Text
+  model             String    @db.VarChar(100)
+  style             String?   @db.VarChar(100)
+  ratio             String?   @db.VarChar(50)
+  imageCount        Int       @default(1) @map("image_count")
+  estimatedCredits  Int       @default(0) @map("estimated_credits")
+  chargedCredits    Int       @default(0) @map("charged_credits")
+  provider          String?   @db.VarChar(100)
+  providerJobId     String?   @map("provider_job_id") @db.VarChar(255)
+  providerRequest   Json?     @map("provider_request")
+  providerResponse  Json?     @map("provider_response")
+  safetyStatus      String    @default("pending") @map("safety_status") @db.VarChar(50)
+  safetyResult      Json?     @map("safety_result")
+  failureCode       String?   @map("failure_code") @db.VarChar(100)
+  failureMessage    String?   @map("failure_message") @db.Text
+  startedAt         DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted           Int       @default(0)
+
+  session        CreationSession? @relation(fields: [sessionId], references: [sessionId], onDelete: NoAction, onUpdate: NoAction)
+  user           User             @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  theme          Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+  referenceImage ReferenceImage?  @relation(fields: [referenceId], references: [referenceId], onDelete: NoAction, onUpdate: NoAction)
+  sourceImage    GeneratedImage?  @relation("GenerationSourceImage", fields: [sourceImageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
+  images         GeneratedImage[]
+
+  @@index([userId, createdAt], map: "idx_generation_jobs_user_created_at")
+  @@index([status, createdAt], map: "idx_generation_jobs_status_created_at")
+  @@index([themeId], map: "idx_generation_jobs_theme_id")
+  @@index([sourceImageId], map: "idx_generation_jobs_source_image_id")
+  @@index([providerJobId], map: "idx_generation_jobs_provider_job_id")
+  @@map("generation_jobs")
+  @@schema("monica_ai")
+}
+
+model GeneratedImage {
+  id              BigInt    @id @default(autoincrement())
+  imageId         String    @unique @default(dbgenerated("gen_random_uuid()")) @map("image_id") @db.Uuid
+  jobId           String?   @map("job_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  themeId         String?   @map("theme_id") @db.Uuid
+  status          String    @default("generated") @db.VarChar(50)
+  storageKey      String    @map("storage_key") @db.Text
+  imageUrl        String?   @map("image_url") @db.Text
+  thumbnailUrl    String?   @map("thumbnail_url") @db.Text
+  width           Int?
+  height          Int?
+  promptUsed      String?   @map("prompt_used") @db.Text
+  model           String?   @db.VarChar(100)
+  style           String?   @db.VarChar(100)
+  ratio           String?   @db.VarChar(50)
+  safetyStatus    String    @default("pending") @map("safety_status") @db.VarChar(50)
+  safetyResult    Json?     @map("safety_result")
+  metadata        Json?
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted         Int       @default(0)
+
+  job          GenerationJob?    @relation(fields: [jobId], references: [jobId], onDelete: NoAction, onUpdate: NoAction)
+  user         User              @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  theme        Theme?            @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+  usedAsSourceJobs GenerationJob[] @relation("GenerationSourceImage")
+  submissions  ImageSubmission[]
+  publicImage  PublicImage?
+
+  @@index([userId, createdAt], map: "idx_generated_images_user_created_at")
+  @@index([themeId], map: "idx_generated_images_theme_id")
+  @@index([status, createdAt], map: "idx_generated_images_status_created_at")
+  @@map("generated_images")
+  @@schema("monica_ai")
+}
+
+model ImageSubmission {
+  id                 BigInt    @id @default(autoincrement())
+  submissionId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("submission_id") @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  imageId            String    @map("image_id") @db.Uuid
+  themeId            String    @map("theme_id") @db.Uuid
+  status             String    @default("under_review") @db.VarChar(50)
+  promptSnapshot     String?   @map("prompt_snapshot") @db.Text
+  creatorNote        String?   @map("creator_note") @db.Text
+  safetyStatus       String    @default("pending") @map("safety_status") @db.VarChar(50)
+  relevanceStatus    String    @default("pending") @map("relevance_status") @db.VarChar(50)
+  reviewSummary      String?   @map("review_summary") @db.Text
+  submittedAt        DateTime? @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt         DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  publishedAt        DateTime? @map("published_at") @db.Timestamptz(6)
+  createdAt          DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted            Int       @default(0)
+
+  user    User           @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  image   GeneratedImage @relation(fields: [imageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
+  theme   Theme          @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+  reviews ReviewRecord[]
+  publicImage PublicImage?
+
+  @@index([userId, submittedAt], map: "idx_image_submissions_user_submitted_at")
+  @@index([themeId, status], map: "idx_image_submissions_theme_status")
+  @@index([imageId], map: "idx_image_submissions_image_id")
+  @@map("image_submissions")
+  @@schema("monica_ai")
+}
+
+model ReviewRecord {
+  id             BigInt    @id @default(autoincrement())
+  reviewId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("review_id") @db.Uuid
+  submissionId   String?   @map("submission_id") @db.Uuid
+  targetType     String    @map("target_type") @db.VarChar(50)
+  targetId       String    @map("target_id") @db.Uuid
+  reviewerUserId String?   @map("reviewer_user_id") @db.Uuid
+  reviewType     String    @map("review_type") @db.VarChar(50)
+  result         String    @db.VarChar(50)
+  reason         String?   @db.Text
+  detail         Json?
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  deleted        Int       @default(0)
+
+  submission ImageSubmission? @relation(fields: [submissionId], references: [submissionId], onDelete: NoAction, onUpdate: NoAction)
+  reviewer   User?            @relation(fields: [reviewerUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([targetType, targetId], map: "idx_review_records_target")
+  @@index([submissionId], map: "idx_review_records_submission_id")
+  @@map("review_records")
+  @@schema("monica_ai")
+}
+
+model PublicImage {
+  id             BigInt    @id @default(autoincrement())
+  publicImageId  String    @unique @default(dbgenerated("gen_random_uuid()")) @map("public_image_id") @db.Uuid
+  imageId        String    @unique @map("image_id") @db.Uuid
+  submissionId   String?   @unique @map("submission_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  themeId        String?   @map("theme_id") @db.Uuid
+  status         String    @default("published") @db.VarChar(50)
+  title          String?   @db.VarChar(255)
+  promptPublic   Boolean   @default(true) @map("prompt_public")
+  tags           Json?
+  likeCount      Int       @default(0) @map("like_count")
+  saveCount      Int       @default(0) @map("save_count")
+  viewCount      Int       @default(0) @map("view_count")
+  featuredScore  Int       @default(0) @map("featured_score")
+  publishedAt    DateTime? @default(now()) @map("published_at") @db.Timestamptz(6)
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted        Int       @default(0)
+
+  image      GeneratedImage   @relation(fields: [imageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
+  submission ImageSubmission? @relation(fields: [submissionId], references: [submissionId], onDelete: NoAction, onUpdate: NoAction)
+  user       User             @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+  theme      Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+  likes      ImageLike[]
+  saves      ImageSave[]
+
+  @@index([status, publishedAt], map: "idx_public_images_status_published_at")
+  @@index([themeId, featuredScore], map: "idx_public_images_theme_featured_score")
+  @@index([likeCount], map: "idx_public_images_like_count")
+  @@map("public_images")
+  @@schema("monica_ai")
+}
+
+model ImageLike {
+  id            BigInt    @id @default(autoincrement())
+  publicImageId String    @map("public_image_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  deleted       Int       @default(0)
+
+  publicImage PublicImage @relation(fields: [publicImageId], references: [publicImageId], onDelete: NoAction, onUpdate: NoAction)
+  user        User        @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([publicImageId, userId], map: "image_likes_public_image_user_key")
+  @@index([userId, createdAt], map: "idx_image_likes_user_created_at")
+  @@map("image_likes")
+  @@schema("monica_ai")
+}
+
+model ImageSave {
+  id            BigInt    @id @default(autoincrement())
+  publicImageId String    @map("public_image_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  deleted       Int       @default(0)
+
+  publicImage PublicImage @relation(fields: [publicImageId], references: [publicImageId], onDelete: NoAction, onUpdate: NoAction)
+  user        User        @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([publicImageId, userId], map: "image_saves_public_image_user_key")
+  @@index([userId, createdAt], map: "idx_image_saves_user_created_at")
+  @@map("image_saves")
+  @@schema("monica_ai")
+}
+```
+
+实际落地时需要在已有 `User` Model 中补充反向 relation 字段，或者将上面的 relation 简化为无反向关系的外键字段。推荐补充反向 relation，便于 Prisma 查询。
+
+## 5. 状态机
+
+### 5.1 Theme.status
+
+- `draft`：草稿。
+- `scheduled`：已排期。
+- `published`：已发布。
+- `archived`：归档。
+- `hidden`：隐藏。
+
+今日主题查询规则：
+
+- `status = published`
+- `publishDate <= today`
+- 取 `publishDate` 最新的一条。
+
+### 5.2 ThemeSubmission.status
+
+- `under_review`：已提交，等待审核。
+- `accepted_to_pool`：审核通过，进入候选主题池。
+- `duplicate`：与已有主题或候选题重复。
+- `rejected`：审核拒绝。
+- `selected`：被选为正式主题。
+- `published`：关联的正式主题已发布。
+
+主题来源统一规则：
+
+- 普通用户提交主题想法时创建 `ThemeSubmission`。
+- 管理员创建主题也先创建 `ThemeSubmission`，但 `sourceType = admin`，审核路径可直接进入 `accepted_to_pool` 或 `selected`。
+- 当候选题被采纳为每日主题时，创建或关联 `Theme`，并回写 `ThemeSubmission.acceptedThemeId`。
+- 积分奖励依据来自 `ThemeSubmission.status` 的变化，不新增积分模型，仍写入现有 `CreditAuditLog`。
+
+### 5.3 CreationSession.status
+
+- `active`：创作中。
+- `completed`：已有生成结果。
+- `abandoned`：用户离开或长时间未继续。
+
+### 5.4 GenerationJob.status
+
+- `pending`：任务已创建。
+- `safety_checking`：安全检查中。
+- `queued`：等待调用供应商。
+- `running`：供应商生成中。
+- `succeeded`：生成成功。
+- `failed`：生成失败。
+- `blocked`：安全或额度原因阻止。
+- `cancelled`：取消。
+
+`GenerationJob.generationType`：
+
+- `text_to_image`：普通文生图。
+- `image_variation`：基于已有图片生成变体，使用 `sourceImageId` 关联来源图。
+- `image_edit`：基于已有图片和编辑指令生成新图，使用 `sourceImageId` 和 `editInstruction`。
+
+### 5.5 GeneratedImage.status
+
+- `generated`：已生成，未投稿。
+- `submitted`：已投稿。
+- `under_review`：审核中。
+- `published`：已公开。
+- `rejected`：投稿被拒。
+- `hidden`：隐藏。
+
+### 5.6 ImageSubmission.status
+
+- `under_review`：审核中。
+- `needs_review`：自动审核命中，需要人工复核。
+- `published`：审核通过并发布。
+- `rejected`：审核拒绝。
+- `withdrawn`：用户撤回。
+
+### 5.7 safetyStatus
+
+- `pending`
+- `passed`
+- `failed`
+- `needs_review`
+- `skipped`
+
+## 6. 后端服务设计
+
+### 6.1 ThemeSubmissionService
+
+职责：
+
+- 接收用户或管理员提交的主题想法。
+- 自动审核主题质量、安全性和重复度。
+- 支持人工审核、编辑后通过、标记重复、拒绝。
+- 将通过审核的主题想法放入候选池。
+- 将候选题采纳为正式 `Theme`。
+- 触发主题提交相关积分奖励。
+
+关键方法：
+
+```ts
+createThemeSubmission(userId, input): Promise<ThemeSubmission>
+reviewThemeSubmission(reviewerUserId, input): Promise<ThemeSubmission>
+acceptToPool(submissionId, reviewerUserId, input): Promise<ThemeSubmission>
+selectAsTheme(submissionId, reviewerUserId, input): Promise<Theme>
+listMyThemeSubmissions(userId, input): Promise<PagedResult<ThemeSubmission>>
+```
+
+### 6.2 ThemeService
+
+职责：
+
+- 获取今日主题。
+- 查询主题列表。
+- 查询主题详情。
+- 查询主题作品。
+- 维护主题统计。
+
+关键方法：
+
+```ts
+getTodayTheme(): Promise<Theme | null>
+listThemes(input): Promise<PagedResult<Theme>>
+getThemeDetail(themeId: string): Promise<ThemeDetail>
+listThemeImages(themeId: string, input): Promise<PagedResult<PublicImage>>
+```
+
+### 6.3 CreationSessionService
+
+职责：
+
+- 创建或复用创作会话。
+- 记录来源页面。
+- 保存主题上下文和当前设置。
+- 关联 Assistant、生成任务、参考图。
+
+关键方法：
+
+```ts
+createSession(input): Promise<CreationSession>
+touchSession(sessionId: string, input): Promise<CreationSession>
+completeSession(sessionId: string): Promise<void>
+```
+
+### 6.4 AssistantService
+
+职责：
+
+- Get Ideas。
+- More like this。
+- Improve Prompt。
+- Ask Assistant。
+- 记录 PromptLog。
+
+AI 调用内部留空，通过 `AssistantProvider` 占位。
+
+关键方法：
+
+```ts
+getIdeas(userId, input): Promise<IdeaResult>
+moreLikeThis(userId, input): Promise<IdeaResult>
+improvePrompt(userId, input): Promise<ImprovePromptResult>
+ask(userId, input): Promise<AskAssistantResult>
+```
+
+### 6.5 GenerationService
+
+职责：
+
+- 计算生成消耗。
+- 创建生成任务。
+- 校验用户额度。
+- 执行 prompt/reference 安全检查。
+- 扣减积分。
+- 调用图片生成 Provider。
+- 回写任务状态。
+- 保存 GeneratedImage。
+- 失败时按规则退款。
+- 通过 `generationType` 区分文生图、变体、编辑。
+- 通过 `sourceImageId` 记录变体/编辑的来源图片。
+
+关键方法：
+
+```ts
+estimateCost(input): Promise<CostEstimate>
+createGenerationJob(userId, input): Promise<GenerationJob>
+runGenerationJob(jobId): Promise<void>
+syncGenerationJob(jobId): Promise<void>
+```
+
+积分规则：
+
+- 创建任务前使用现有 credit service 检查余额。
+- 任务进入供应商调用前扣减积分。
+- `operationReferId = jobId`。
+- `feature = ai_image_generation`。
+- 任务失败且供应商未产生成本时，调用现有积分退款能力。
+
+### 6.6 ImageService
+
+职责：
+
+- 查询图片详情。
+- 校验图片归属。
+- 创建下载 URL。
+- 上传 reference image。
+- 为 variations/edit 创建对应的 `GenerationJob`。
+
+关键方法：
+
+```ts
+getPublicImageDetail(publicImageId, viewerUserId?)
+getMyImage(userId, imageId)
+uploadReferenceImage(userId, input)
+createVariation(userId, imageId, input)
+createEdit(userId, imageId, input)
+```
+
+### 6.7 SubmissionService
+
+职责：
+
+- 创建投稿。
+- 防止重复投稿。
+- 自动审核。
+- 人工审核。
+- 发布 PublicImage。
+- 更新 GeneratedImage 状态。
+
+关键方法：
+
+```ts
+createSubmission(userId, input): Promise<ImageSubmission>
+reviewSubmission(adminUserId, input): Promise<ImageSubmission>
+publishSubmission(submissionId): Promise<PublicImage>
+rejectSubmission(submissionId, reason): Promise<ImageSubmission>
+```
+
+### 6.8 ExploreService
+
+职责：
+
+- 查询公开图片。
+- 查询主题列表。
+- 图片详情。
+- Like / Save。
+
+关键方法：
+
+```ts
+listExploreImages(input, viewerUserId?)
+getImageDetail(publicImageId, viewerUserId?)
+toggleLike(userId, publicImageId)
+toggleSave(userId, publicImageId)
+```
+
+Like / Save 要求：
+
+- 登录后才能操作。
+- 使用唯一键避免重复。
+- 软删除或恢复时同步 `likeCount` / `saveCount`。
+
+### 6.9 StudioService
+
+职责：
+
+- 查询用户自己的图片。
+- 按状态筛选。
+- 查看自己的 prompt。
+- 查询自己的投稿状态。
+
+关键方法：
+
+```ts
+listMyImages(userId, input)
+getMyImageDetail(userId, imageId)
+getMyImagePrompt(userId, imageId)
+```
+
+### 6.10 SafetyService
+
+职责：
+
+- Prompt 安全检查。
+- Reference image 安全检查。
+- 生成图片安全检查。
+- 投稿内容安全检查。
+- 写入 ReviewRecord。
+
+AI/审核供应商实现留空。
+
+关键方法：
+
+```ts
+checkPrompt(input): Promise<SafetyResult>
+checkImage(input): Promise<SafetyResult>
+checkSubmission(input): Promise<SafetyResult>
+checkThemeRelevance(input): Promise<RelevanceResult>
+```
+
+## 7. API 设计
+
+### 7.1 鉴权级别
+
+<CheetTable title="鉴权级别">
+
+| 级别 | 说明 | 使用方式 |
+| --- | --- | --- |
+| Public | 不需要登录 | 不调用 `ApiAuthUtils` 或只读接口 |
+| Optional Auth | 登录用户返回个性化状态，未登录也可访问 | `authUtils.getUser()` |
+| Required Auth | 必须登录 | `authUtils.requireAuthWithUser()` |
+| Owner Required | 必须登录且只能访问自己的资源 | `requireAuthWithUser()` + `userId` 条件 |
+| Admin Required | 管理端审核、主题管理 | `requireAuthWithUser()` + 管理员权限判断 |
+
+</CheetTable>
+
+当前 User Model 没有角色字段，Admin 权限建议先用环境变量白名单或后续单独补 `AdminUser` / `UserRole`。MVP 可先定义 `assertAdmin(user)` 占位。
+
+### 7.2 通用响应
+
+成功：
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+失败：
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Validation error",
+    "details": []
+  }
+}
+```
+
+### 7.3 Theme API
+
+#### `GET /api/themes/today`
+
+鉴权：Public
+
+职责：
+
+- 返回今日主题。
+- Home 和 Assistant 取今日主题上下文使用。
+
+#### `GET /api/themes`
+
+鉴权：Public
+
+Query：
+
+- `page`
+- `pageSize`
+- `sort`
+- `tag`
+
+职责：
+
+- Explore Themes。
+- Theme Picker。
+
+#### `GET /api/themes/:themeId`
+
+鉴权：Public
+
+职责：
+
+- 返回主题详情。
+- 返回统计信息。
+
+#### `GET /api/themes/:themeId/images`
+
+鉴权：Optional Auth
+
+Query：
+
+- `tab=featured|most_liked|newest`
+- `page`
+- `pageSize`
+
+职责：
+
+- 返回主题公开作品。
+- 登录用户附带 liked/saved 状态。
+
+### 7.4 Theme Submission API
+
+#### `POST /api/theme-submissions`
+
+鉴权：Required Auth
+
+职责：
+
+- 用户提交每日主题想法。
+- 管理员也使用该接口创建主题想法，后端根据管理员身份写入 `sourceType = admin`。
+- 创建 `ThemeSubmission`。
+- 触发自动安全、重复和质量检查。
+
+#### `GET /api/theme-submissions/my`
+
+鉴权：Required Auth
+
+职责：
+
+- 查询当前用户提交过的主题想法。
+- 返回用户侧状态，如 Under review、Accepted、Selected、Duplicate、Rejected。
+
+#### `POST /api/admin/theme-submissions/:themeSubmissionId/review`
+
+鉴权：Admin Required
+
+职责：
+
+- 人工审核主题想法。
+- 支持接受进候选池、拒绝、标记重复、编辑后接受。
+- 审核通过时可触发有效提交积分奖励。
+
+#### `POST /api/admin/theme-submissions/:themeSubmissionId/select`
+
+鉴权：Admin Required
+
+职责：
+
+- 将候选主题采纳为正式 `Theme`。
+- 创建或关联 `Theme`。
+- 回写 `ThemeSubmission.acceptedThemeId` 和状态。
+- 可触发主题被采纳积分奖励。
+
+### 7.5 Assistant API
+
+#### `POST /api/assistant/ideas`
+
+鉴权：Optional Auth 或 Required Auth
+
+建议：
+
+- MVP 如果 Assistant 消耗成本，使用 Required Auth。
+- 如果允许匿名试用，使用 Optional Auth 并按匿名用户额度控制。
+
+职责：
+
+- 根据今日主题、当前主题或用户选择主题生成创意方向。
+- 写入 `CreationSession` 和 `PromptLog`。
+
+AI 内容：留空。
+
+#### `POST /api/assistant/more-like-this`
+
+鉴权：Optional Auth 或 Required Auth
+
+职责：
+
+- 根据 seed idea 生成相似方向。
+- 写入 `PromptLog`。
+
+AI 内容：留空。
+
+#### `POST /api/assistant/improve-prompt`
+
+鉴权：Optional Auth 或 Required Auth
+
+职责：
+
+- 改写用户当前 prompt。
+- 不直接覆盖用户 prompt。
+- 返回 original / improved。
+- 写入 `PromptLog`。
+
+AI 内容：留空。
+
+#### `POST /api/assistant/ask`
+
+鉴权：Optional Auth 或 Required Auth
+
+职责：
+
+- 处理短对话式 prompt 构思。
+- 返回 assistant message 和方向列表。
+- 写入 `PromptLog`。
+
+AI 内容：留空。
+
+### 7.6 Generation API
+
+#### `POST /api/generation/estimate`
+
+鉴权：Optional Auth
+
+职责：
+
+- 根据模型和数量返回预估积分消耗。
+- 不创建任务。
+
+#### `POST /api/generation/jobs`
+
+鉴权：Required Auth
+
+职责：
+
+- 创建生成任务。
+- 校验 prompt、模型、数量、比例。
+- 校验 reference image 归属。
+- 校验安全。
+- 校验积分余额。
+- 扣减积分。
+- 写入 `GenerationJob`。
+- 触发异步生成。
+
+AI 调用：留空，由 `runGenerationJob` 后续实现。
+
+#### `GET /api/generation/jobs/:jobId`
+
+鉴权：Owner Required
+
+职责：
+
+- 查询任务状态。
+- 返回生成结果列表。
+
+#### `POST /api/generation/jobs/:jobId/sync`
+
+鉴权：Owner Required 或 Server Internal
+
+职责：
+
+- 主动同步供应商任务状态。
+- MVP 可不开放给前端，只作为内部任务。
+
+### 7.7 Image API
+
+#### `POST /api/images/reference`
+
+鉴权：Required Auth
+
+职责：
+
+- 上传 reference image。
+- 创建 `ReferenceImage`。
+- 触发安全检查。
+
+#### `GET /api/images/public/:publicImageId`
+
+鉴权：Optional Auth
+
+职责：
+
+- Explore 图片详情。
+- 返回作者、主题、prompt、标签、liked/saved 状态。
+
+#### `GET /api/images/my/:imageId`
+
+鉴权：Owner Required
+
+职责：
+
+- 返回用户自己的图片详情。
+
+#### `GET /api/images/my/:imageId/prompt`
+
+鉴权：Owner Required
+
+职责：
+
+- 返回图片生成时使用的 prompt。
+- 用于 Studio 的 `View prompt`。
+
+#### `POST /api/images/:imageId/variations`
+
+鉴权：Owner Required
+
+职责：
+
+- 创建 `GenerationJob`，`generationType = image_variation`。
+- 使用 `sourceImageId` 记录来源图片。
+- 具体 AI 编辑调用留空。
+
+#### `POST /api/images/:imageId/edit`
+
+鉴权：Owner Required
+
+职责：
+
+- 创建 `GenerationJob`，`generationType = image_edit`。
+- 使用 `sourceImageId` 记录来源图片。
+- 使用 `editInstruction` 记录编辑指令。
+- 具体 AI 编辑调用留空。
+
+### 7.8 Submission API
+
+#### `POST /api/submissions`
+
+鉴权：Required Auth
+
+职责：
+
+- 提交图片到主题。
+- 校验图片归属。
+- 校验主题存在且可投稿。
+- 校验重复投稿。
+- 保存 prompt snapshot 和 creator note。
+- 创建 `ImageSubmission`。
+- 更新 `GeneratedImage.status`。
+- 触发安全和主题相关性检查。
+
+#### `GET /api/submissions/:submissionId`
+
+鉴权：Owner Required
+
+职责：
+
+- 查询用户自己的投稿详情。
+
+#### `GET /api/submissions/my`
+
+鉴权：Required Auth
+
+职责：
+
+- 查询当前用户投稿列表。
+
+#### `POST /api/admin/submissions/:submissionId/review`
+
+鉴权：Admin Required
+
+职责：
+
+- 人工审核投稿。
+- 通过时创建 `PublicImage`。
+- 拒绝时更新状态和原因。
+- 写入 `ReviewRecord`。
+
+### 7.9 Explore API
+
+#### `GET /api/explore/images`
+
+鉴权：Optional Auth
+
+Query：
+
+- `page`
+- `pageSize`
+- `sort=latest|popular|featured`
+- `tag`
+- `themeId`
+
+职责：
+
+- 返回公开图片列表。
+- 登录用户附带 liked/saved 状态。
+
+#### `POST /api/explore/images/:publicImageId/like`
+
+鉴权：Required Auth
+
+职责：
+
+- 点赞或取消点赞。
+- 同步 `PublicImage.likeCount`。
+
+#### `POST /api/explore/images/:publicImageId/save`
+
+鉴权：Required Auth
+
+职责：
+
+- 收藏或取消收藏。
+- 同步 `PublicImage.saveCount`。
+
+### 7.10 Studio API
+
+#### `GET /api/studio/images`
+
+鉴权：Required Auth
+
+Query：
+
+- `status=all|generated|submitted|under_review|published|rejected`
+- `page`
+- `pageSize`
+
+职责：
+
+- 返回当前用户图片库。
+- 映射前端 Studio tabs。
+
+#### `GET /api/studio/images/:imageId`
+
+鉴权：Owner Required
+
+职责：
+
+- 返回用户自己的图片详情、生成任务摘要、投稿状态。
+
+## 8. 权限与数据访问规则
+
+### 8.1 公开资源
+
+公开可访问：
+
+- 已发布主题。
+- `PublicImage.status = published` 的图片。
+- 已公开图片的作者展示名、主题、公开 prompt。
+
+不可公开：
+
+- 用户未发布生成图片。
+- PromptLog。
+- GenerationJob provider request/response。
+- ReviewRecord detail。
+- 用户积分和订单数据。
+
+### 8.2 用户私有资源
+
+以下资源必须按 `userId` 校验归属：
+
+- CreationSession。
+- ReferenceImage。
+- GenerationJob。
+- GeneratedImage。
+- ImageSubmission。
+- Studio 图片列表。
+
+查询条件必须带：
+
+```ts
+where: {
+  imageId,
+  userId: auth.user.userId,
+  deleted: 0,
+}
+```
+
+### 8.3 管理端资源
+
+管理端 API 包括：
+
+- 主题创建/编辑/排期。
+- 投稿审核。
+- PublicImage 下架/精选。
+- ReviewRecord 查询。
+
+MVP 可先预留接口，不在用户侧开放。
+
+## 9. 关键业务流程
+
+### 9.1 创建生成任务
+
+<Mermaid
+  title="9.1 创建生成任务"
+  chart={`
+sequenceDiagram
+  participant FE as Frontend
+  participant API as POST /api/generation/jobs
+  participant Auth as ApiAuthUtils
+  participant Gen as GenerationService
+  participant DB as Prisma
+  participant Credit as CreditService
+  participant AI as ImageGenerationProvider
+
+  FE->>API: prompt/settings/reference/theme
+  API->>Auth: requireAuthWithUser
+  Auth-->>API: user
+  API->>Gen: createGenerationJob
+  Gen->>DB: validate session/theme/reference
+  Gen->>Gen: safety check placeholder
+  Gen->>Credit: hasEnoughCredits
+  Gen->>DB: create GenerationJob
+  Gen->>Credit: consumeCredit(operationReferId=jobId)
+  Gen-->>API: job pending/queued
+  API-->>FE: jobId/status
+  Gen->>AI: run async placeholder
+  AI-->>Gen: provider result placeholder
+  Gen->>DB: create GeneratedImage/update job
+`}
+/>
+
+### 9.2 投稿发布
+
+<Mermaid
+  title="9.2 投稿发布"
+  chart={`
+sequenceDiagram
+  participant FE as Frontend
+  participant API as POST /api/submissions
+  participant Auth as ApiAuthUtils
+  participant Sub as SubmissionService
+  participant DB as Prisma
+  participant Review as Safety/Review
+
+  FE->>API: imageId/themeId/prompt/creatorNote
+  API->>Auth: requireAuthWithUser
+  Auth-->>API: user
+  API->>Sub: createSubmission
+  Sub->>DB: validate image owner and theme
+  Sub->>DB: create ImageSubmission
+  Sub->>DB: update GeneratedImage under_review
+  Sub->>Review: auto review placeholder
+  Review-->>Sub: passed/needs_review/rejected
+  Sub->>DB: update submission status
+  API-->>FE: submission status
+`}
+/>
+
+### 9.3 审核通过发布
+
+<Mermaid
+  title="9.3 审核通过发布"
+  chart={`
+flowchart TD
+  A[Admin review pass] --> B[Update ImageSubmission published]
+  B --> C[Update GeneratedImage published]
+  C --> D[Create PublicImage]
+  D --> E[Write ReviewRecord]
+  E --> F[Theme stats async refresh]
+`}
+/>
+
+## 10. 积分集成方案
+
+### 10.1 消耗点
+
+MVP 只在图片生成时消耗积分：
+
+- Assistant 暂不消耗，或后续按配置开启。
+- Variation/Edit 如果接入，也按生成类任务消耗。
+
+### 10.2 消耗策略
+
+1. `Estimate Generation Cost` 根据 model + imageCount 计算预估消耗。
+2. `Create Generation Job` 事务中检查余额。
+3. 调用现有 `creditService.consumeCredit` 扣减。
+4. `operationReferId` 使用 `GenerationJob.jobId`。
+5. `feature` 使用：
+   - `ai_image_generation`
+   - `ai_image_variation`
+   - `ai_image_edit`
+
+### 10.3 退款策略
+
+需要区分失败类型：
+
+- 安全检查失败：不创建供应商任务，不扣积分。
+- 余额不足：不创建任务或创建 `blocked` 任务，不扣积分。
+- 供应商调用前失败：如已扣积分，退款。
+- 供应商已产生成本但失败：按后续商业规则决定是否退款。
+
+退款仍使用现有 credit service，不新增流水表。
+
+## 11. 异步任务方案
+
+MVP 可以先使用“API 创建任务 + 后台执行函数”的轻量方案；生产建议接入队列。
+
+### 11.1 MVP
+
+- API 创建 `GenerationJob`。
+- 返回 `jobId`。
+- 服务端异步触发 `runGenerationJob(jobId)`。
+- 前端轮询 `GET /api/generation/jobs/:jobId`。
+
+风险：
+
+- Serverless 环境中长任务不稳定。
+- 供应商回调和超时处理弱。
+
+### 11.2 推荐生产方案
+
+- 使用队列处理生成任务。
+- `GenerationJob.status` 作为状态源。
+- Worker 负责 AI Provider 调用。
+- 回调或轮询同步供应商结果。
+- 失败任务支持重试次数和失败原因。
+
+可后续补充：
+
+- `retryCount`
+- `nextRetryAt`
+- `lockedAt`
+- `lockedBy`
+
+## 12. 数据查询策略
+
+### 12.1 Explore 图片列表
+
+查询 `PublicImage`：
+
+- `status = published`
+- `deleted = 0`
+- 按 `publishedAt`、`likeCount`、`featuredScore` 排序。
+- Include `image`、`theme`、`user` 基础展示信息。
+
+登录用户额外查询：
+
+- 当前页 `publicImageId` 集合对应的 `ImageLike`。
+- 当前页 `publicImageId` 集合对应的 `ImageSave`。
+
+避免 N+1。
+
+### 12.2 Studio 图片列表
+
+查询 `GeneratedImage`：
+
+- `userId = currentUser.userId`
+- `deleted = 0`
+- 根据 Tab 映射 status。
+
+Tab 映射：
+
+- `All`：不限制 status。
+- `Generated`：`generated`。
+- `Submitted`：`submitted`。
+- `Under review`：`under_review`。
+- `Published`：`published`。
+- `Rejected`：`rejected`。
+
+### 12.3 Theme Gallery
+
+查询 `PublicImage`：
+
+- `themeId = theme.themeId`
+- `status = published`
+- `deleted = 0`
+
+排序：
+
+- Featured：`featuredScore desc, publishedAt desc`
+- Most liked：`likeCount desc, publishedAt desc`
+- Newest：`publishedAt desc`
+
+## 13. 安全与审核
+
+### 13.1 安全检查点
+
+- Prompt 生成前检查。
+- Reference image 上传后检查。
+- 图片生成完成后检查。
+- 投稿时检查图片、prompt、creator note。
+- 审核发布前检查主题相关性。
+
+### 13.2 ReviewRecord 使用
+
+`ReviewRecord` 记录所有自动和人工审核结果。
+
+适用对象：
+
+- `prompt`
+- `reference_image`
+- `generated_image`
+- `submission`
+
+`targetType` 示例：
+
+- `prompt`
+- `reference_image`
+- `generated_image`
+- `submission`
+
+`reviewType` 示例：
+
+- `safety_auto`
+- `safety_manual`
+- `theme_relevance`
+- `publish_manual`
+
+## 14. 错误码建议
+
+通用：
+
+- `VALIDATION_ERROR`
+- `UNAUTHORIZED`
+- `FORBIDDEN`
+- `NOT_FOUND`
+- `CONFLICT`
+- `RATE_LIMITED`
+- `INTERNAL_ERROR`
+
+业务：
+
+- `INSUFFICIENT_CREDITS`
+- `PROMPT_BLOCKED`
+- `REFERENCE_IMAGE_BLOCKED`
+- `IMAGE_BLOCKED`
+- `THEME_NOT_SUBMITTABLE`
+- `IMAGE_NOT_OWNED`
+- `DUPLICATE_SUBMISSION`
+- `GENERATION_JOB_FAILED`
+- `PROVIDER_UNAVAILABLE`
+
+## 15. 实施顺序
+
+### 15.1 第一阶段：数据与只读接口
+
+- 追加 Prisma 业务 Model。
+- 生成 Prisma Client。
+- 实现 ThemeSubmission 创建和管理员快速审核/采纳流程。
+- 实现 Theme API。
+- 实现 Explore 只读 API。
+- 实现 Studio 列表 API。
+
+### 15.2 第二阶段：创作和生成任务
+
+- 实现 CreationSession。
+- 实现 Assistant API，占位返回或接入 Provider 空实现。
+- 实现 Generation estimate。
+- 实现 GenerationJob 创建、状态查询。
+- 接入积分扣减。
+
+### 15.3 第三阶段：图片和投稿
+
+- 实现 GeneratedImage 查询。
+- 实现 ReferenceImage 上传记录。
+- 实现 Submission 创建。
+- 实现审核状态流转。
+- 实现 PublicImage 发布。
+
+### 15.4 第四阶段：交互增强
+
+- Like / Save。
+- Variation / Edit，作为 `GenerationJob.generationType` 的扩展能力实现。
+- Theme stats 异步更新。
+- 管理审核接口。
+- 队列化生成任务。
+
+## 16. 待确认项
+
+- 管理员权限来源：环境变量白名单、Clerk metadata，还是新增角色表。
+- 匿名用户是否允许生成图片。
+- Assistant 是否消耗积分。
+- 图片生成失败后的退款边界。
+- 图片存储供应商和签名 URL 策略。
+- AI Provider 的具体模型列表、成本表和参数映射。

@@ -1,0 +1,620 @@
+---
+title: Monica AI 数据流转时序图
+description: Monica AI 业务场景的数据表流转、同步异步边界、Redis 锁与积分预扣减设计
+date: 2026-06-11
+---
+
+## 1. 说明
+
+本文按真实用户功能流程说明数据如何流转。这里的“场景”不是单个原子操作，而是用户完成一个实际功能的完整过程。
+
+不覆盖：
+
+- 用户注册 / 登录。
+- 购买积分。
+- 订单支付。
+- 订阅管理。
+
+特别规则：
+
+- 凡是调用 AI 的地方，都必须先进入 Redis 分布式锁。
+- 凡是调用 AI 且消耗积分的地方，都必须执行积分预扣减。
+- 积分预扣减操作的是现有 `Credit-积分余额` 和 `CreditAuditLog-积分流水`。
+- AI 异步任务失败时，需要根据失败阶段执行积分补偿。
+
+## 2. 同步与异步标记
+
+| 标记 | 含义 |
+| --- | --- |
+| 同步 | 用户请求内立即完成，接口返回前完成 |
+| 异步 | 接口先返回任务或状态，后续由 Worker / Queue / Provider callback 完成 |
+| 锁 | 使用 Redis 分布式锁保护并发 |
+| 预扣减 | AI 调用前先扣减积分 |
+| 补偿 | AI 失败后按规则退回积分或标记失败 |
+
+## 3. 场景 A：用户提交主题想法
+
+用户在站内提交一个每日主题想法。该流程不调用 AI 时可以完全同步；如果启用自动质量/安全审核，则审核部分可异步。
+
+涉及数据表：
+
+- `User-用户`
+- `ThemeSubmission-主题提交`
+- `ReviewRecord-审核记录`
+- `Credit-积分余额`
+- `CreditAuditLog-积分流水`
+
+<Mermaid
+  title="3. 场景 A：用户提交主题想法"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant API as ThemeSubmission API
+  participant DB as 数据库
+  participant Review as 审核服务/异步任务
+  participant Credit as 积分服务
+
+  FE->>API: 提交主题想法
+  API->>DB: 同步创建 ThemeSubmission-主题提交(status=under_review)
+  API-->>FE: 返回提交成功和审核中状态
+
+  API->>Review: 异步触发自动审核
+  Review->>DB: 异步写入 ReviewRecord-审核记录
+  Review->>DB: 异步更新 ThemeSubmission-主题提交(status=accepted_to_pool/rejected/duplicate)
+
+  alt 有效提交并需要奖励积分
+    Review->>Credit: 同步增加 Credit-积分余额
+    Review->>DB: 同步写入 CreditAuditLog-积分流水(operationReferId=themeSubmissionId)
+  end
+`}
+/>
+
+关键状态变化：
+
+- `ThemeSubmission.status`: `under_review -> accepted_to_pool / rejected / duplicate`
+- `CreditAuditLog.operationReferId`: `ThemeSubmission.themeSubmissionId`
+
+## 4. 场景 B：管理员采纳主题并发布每日主题
+
+管理员从候选主题中选中一个主题，编辑后采纳为正式主题。管理员自己创建主题也走同一条 `ThemeSubmission-主题提交` 链路，只是审核路径更快。
+
+涉及数据表：
+
+- `User-用户`
+- `ThemeSubmission-主题提交`
+- `Theme-正式主题`
+- `ReviewRecord-审核记录`
+- `Credit-积分余额`
+- `CreditAuditLog-积分流水`
+
+<Mermaid
+  title="4. 场景 B：管理员采纳主题并发布每日主题"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant Admin as 管理员前端
+  participant API as Admin Theme API
+  participant DB as 数据库
+  participant Credit as 积分服务
+
+  Admin->>API: 采纳主题提交并设置排期/发布信息
+  API->>DB: 同步读取 ThemeSubmission-主题提交
+  API->>DB: 同步创建 Theme-正式主题(status=scheduled/published)
+  API->>DB: 同步更新 ThemeSubmission(status=selected/published, acceptedThemeId=themeId)
+  API->>DB: 同步写入 ReviewRecord-审核记录(reviewType=theme_select)
+
+  alt 主题被采纳需要奖励积分
+    API->>Credit: 同步增加 Credit-积分余额
+    API->>DB: 同步写入 CreditAuditLog-积分流水(operationReferId=themeSubmissionId)
+  end
+
+  API-->>Admin: 返回正式 Theme-正式主题
+`}
+/>
+
+关键状态变化：
+
+- `ThemeSubmission.status`: `accepted_to_pool -> selected / published`
+- `Theme.status`: `scheduled / published`
+- `ThemeSubmission.acceptedThemeId`: 关联 `Theme.themeId`
+
+## 5. 场景 C：用户在首页自由生成图片
+
+用户在 Home 输入 prompt，选择模型、风格、比例和数量，点击 Generate。该流程调用 AI，需要 Redis 分布式锁和积分预扣减。
+
+涉及数据表：
+
+- `User-用户`
+- `Credit-积分余额`
+- `CreditAuditLog-积分流水`
+- `CreationSession-创作会话`
+- `GenerationJob-生成任务`
+- `GeneratedImage-生成图片`
+- `ReviewRecord-审核记录`
+
+<Mermaid
+  title="5. 场景 C：用户在首页自由生成图片"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant API as Generation API
+  participant Redis as Redis分布式锁
+  participant Credit as 积分服务
+  participant DB as 数据库
+  participant Queue as 任务队列
+  participant Worker as AI Worker
+  participant AI as AI Provider
+
+  FE->>API: 点击 Generate(prompt/settings)
+  API->>Redis: 锁 userId + feature + requestKey
+  Redis-->>API: 获取锁成功
+
+  API->>DB: 同步创建/更新 CreationSession-创作会话(sourcePage=home)
+  API->>DB: 同步创建 GenerationJob-生成任务(status=pending, generationType=text_to_image)
+  API->>Credit: 同步检查并预扣减 Credit-积分余额
+  Credit->>DB: 同步写入 CreditAuditLog-积分流水(operationType=freeze/consume, operationReferId=jobId)
+  API->>DB: 同步更新 GenerationJob(status=queued, chargedCredits)
+  API->>Queue: 异步投递 jobId
+  API->>Redis: 释放锁
+  API-->>FE: 返回 jobId 和 queued 状态
+
+  Worker->>DB: 异步读取 GenerationJob-生成任务
+  Worker->>DB: 异步写入 ReviewRecord-审核记录(prompt safety)
+  Worker->>DB: 异步更新 GenerationJob(status=running)
+  Worker->>AI: 调用 AI 生成图片
+  AI-->>Worker: 返回图片结果
+  Worker->>DB: 异步创建 GeneratedImage-生成图片
+  Worker->>DB: 异步更新 GenerationJob(status=succeeded)
+`}
+/>
+
+失败补偿：
+
+<Mermaid
+  title="5. 场景 C：用户在首页自由生成图片"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant Worker as AI Worker
+  participant DB as 数据库
+  participant Credit as 积分服务
+
+  alt 安全检查失败且未调用 AI
+    Worker->>DB: 更新 GenerationJob(status=blocked)
+    Worker->>Credit: 退回预扣减积分
+    Worker->>DB: 写入 CreditAuditLog-积分流水(operationReferId=jobId)
+  else AI Provider 调用前失败
+    Worker->>DB: 更新 GenerationJob(status=failed)
+    Worker->>Credit: 退回预扣减积分
+    Worker->>DB: 写入 CreditAuditLog-积分流水(operationReferId=jobId)
+  else AI Provider 已产生成本但失败
+    Worker->>DB: 更新 GenerationJob(status=failed, failureCode)
+    Worker->>DB: 保留 CreditAuditLog-积分流水，是否退款按业务规则处理
+  end
+`}
+/>
+
+关键状态变化：
+
+- `GenerationJob.status`: `pending -> queued -> running -> succeeded / failed / blocked`
+- `GeneratedImage.status`: `generated`
+- `CreditAuditLog.operationReferId`: `GenerationJob.jobId`
+
+## 6. 场景 D：用户使用主题灵感后生成图片
+
+用户在 Theme Detail 或 Studio 中选择一个主题，点击 `Get ideas`，使用某个 idea 填入 prompt，再点击 Generate。
+
+该流程有两个 AI 触点：
+
+- Assistant 生成 ideas。
+- 图片生成。
+
+如果 Assistant 配置为消耗积分，也必须执行 Redis 锁和积分预扣减；如果 Assistant 免费，则只写日志，不扣积分。
+
+涉及数据表：
+
+- `User-用户`
+- `Theme-正式主题`
+- `CreationSession-创作会话`
+- `PromptLog-Prompt日志`
+- `Credit-积分余额`
+- `CreditAuditLog-积分流水`
+- `GenerationJob-生成任务`
+- `GeneratedImage-生成图片`
+
+<Mermaid
+  title="6. 场景 D：用户使用主题灵感后生成图片"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant AssistantAPI as Assistant API
+  participant GenAPI as Generation API
+  participant Redis as Redis分布式锁
+  participant Credit as 积分服务
+  participant DB as 数据库
+  participant Queue as 任务队列
+  participant AI as AI Provider
+
+  FE->>AssistantAPI: 点击 Get ideas(themeId)
+  AssistantAPI->>DB: 同步创建/更新 CreationSession(themeId, sourcePage)
+
+  alt Assistant 消耗积分
+    AssistantAPI->>Redis: 锁 userId + assistant + requestKey
+    AssistantAPI->>Credit: 同步预扣减 Credit-积分余额
+    Credit->>DB: 同步写入 CreditAuditLog(operationReferId=promptLogId或sessionId)
+  end
+
+  AssistantAPI->>AI: 调用 AI 生成 ideas
+  AI-->>AssistantAPI: 返回 ideas
+  AssistantAPI->>DB: 同步写入 PromptLog(actionType=get_ideas)
+  AssistantAPI->>Redis: 释放锁
+  AssistantAPI-->>FE: 返回 ideas
+
+  FE->>FE: 用户点击 Use，前端填入 prompt
+  FE->>GenAPI: 点击 Generate(prompt, themeId, sessionId)
+  GenAPI->>Redis: 锁 userId + generation + requestKey
+  GenAPI->>DB: 同步创建 GenerationJob(themeId, sessionId)
+  GenAPI->>Credit: 同步预扣减 Credit-积分余额
+  Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
+  GenAPI->>Queue: 异步投递 jobId
+  GenAPI->>Redis: 释放锁
+  GenAPI-->>FE: 返回 jobId
+`}
+/>
+
+关键状态变化：
+
+- `PromptLog.actionType`: `get_ideas`
+- `GenerationJob.themeId`: 当前主题
+- `GeneratedImage.themeId`: 当前主题上下文
+
+## 7. 场景 E：用户 Improve Prompt 后生成图片
+
+用户输入一个粗略 prompt，点击 `Improve prompt`，确认替换或追加后再生成图片。
+
+涉及数据表：
+
+- `User-用户`
+- `CreationSession-创作会话`
+- `PromptLog-Prompt日志`
+- `Credit-积分余额`
+- `CreditAuditLog-积分流水`
+- `GenerationJob-生成任务`
+- `GeneratedImage-生成图片`
+
+<Mermaid
+  title="7. 场景 E：用户 Improve Prompt 后生成图片"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant AssistantAPI as Assistant API
+  participant GenAPI as Generation API
+  participant Redis as Redis分布式锁
+  participant Credit as 积分服务
+  participant DB as 数据库
+  participant AI as AI Provider
+  participant Queue as 任务队列
+
+  FE->>AssistantAPI: 点击 Improve prompt(originalPrompt)
+  AssistantAPI->>DB: 同步创建/更新 CreationSession
+
+  alt Improve Prompt 消耗积分
+    AssistantAPI->>Redis: 锁 userId + improve_prompt + requestKey
+    AssistantAPI->>Credit: 同步预扣减 Credit-积分余额
+    Credit->>DB: 同步写入 CreditAuditLog(operationReferId=promptLogId或sessionId)
+  end
+
+  AssistantAPI->>AI: 调用 AI 改写 prompt
+  AI-->>AssistantAPI: 返回 improvedPrompt
+  AssistantAPI->>DB: 同步写入 PromptLog(actionType=improve_prompt)
+  AssistantAPI->>Redis: 释放锁
+  AssistantAPI-->>FE: 返回 original/improved
+
+  FE->>FE: 用户点击 Replace prompt 或 Append details
+  FE->>GenAPI: 点击 Generate(finalPrompt)
+  GenAPI->>Redis: 锁 userId + generation + requestKey
+  GenAPI->>DB: 同步创建 GenerationJob(prompt=finalPrompt)
+  GenAPI->>Credit: 同步预扣减 Credit-积分余额
+  Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
+  GenAPI->>Queue: 异步投递 jobId
+  GenAPI->>Redis: 释放锁
+  GenAPI-->>FE: 返回 jobId
+`}
+/>
+
+关键状态变化：
+
+- `PromptLog.actionType`: `improve_prompt`
+- `PromptLog.usedForGeneration`: 当最终 prompt 来自该日志时可标记为 true
+- `GenerationJob.prompt`: 用户最终确认后的 prompt
+
+## 8. 场景 F：用户上传参考图并生成图片
+
+用户添加 reference image，然后基于 prompt 和参考图生成图片。
+
+涉及数据表：
+
+- `User-用户`
+- `ReferenceImage-参考图`
+- `CreationSession-创作会话`
+- `GenerationJob-生成任务`
+- `GeneratedImage-生成图片`
+- `ReviewRecord-审核记录`
+- `Credit-积分余额`
+- `CreditAuditLog-积分流水`
+
+<Mermaid
+  title="8. 场景 F：用户上传参考图并生成图片"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant UploadAPI as Reference Image API
+  participant GenAPI as Generation API
+  participant Redis as Redis分布式锁
+  participant DB as 数据库
+  participant Credit as 积分服务
+  participant Queue as 任务队列
+  participant Worker as AI Worker
+  participant AI as AI Provider
+
+  FE->>UploadAPI: 上传参考图
+  UploadAPI->>DB: 同步创建 ReferenceImage(status=uploaded, safetyStatus=pending)
+  UploadAPI-->>FE: 返回 referenceId
+
+  UploadAPI->>DB: 异步/同步写入 ReviewRecord(reference image safety)
+  UploadAPI->>DB: 更新 ReferenceImage.safetyStatus=passed/failed
+
+  FE->>GenAPI: 点击 Generate(prompt, referenceId)
+  GenAPI->>Redis: 锁 userId + generation + requestKey
+  GenAPI->>DB: 同步校验 ReferenceImage 归属和 safetyStatus
+  GenAPI->>DB: 同步创建 GenerationJob(referenceId)
+  GenAPI->>Credit: 同步预扣减 Credit-积分余额
+  Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
+  GenAPI->>Queue: 异步投递 jobId
+  GenAPI->>Redis: 释放锁
+  GenAPI-->>FE: 返回 jobId
+
+  Worker->>AI: 异步调用 AI，携带 reference image
+  AI-->>Worker: 返回图片
+  Worker->>DB: 创建 GeneratedImage
+  Worker->>DB: 更新 GenerationJob(status=succeeded)
+`}
+/>
+
+关键状态变化：
+
+- `ReferenceImage.safetyStatus`: `pending -> passed / failed`
+- `GenerationJob.referenceId`: 关联参考图
+- `GeneratedImage` 是结果作品，`ReferenceImage` 仍只是输入素材
+
+## 9. 场景 G：用户基于已有图片生成变体或编辑图
+
+用户在生成结果卡片或 Studio 中点击 `Variations` 或 `Edit`。不单独建立 `ImageEdit` 表，而是创建新的 `GenerationJob-生成任务`。
+
+涉及数据表：
+
+- `User-用户`
+- `GeneratedImage-生成图片`
+- `GenerationJob-生成任务`
+- `Credit-积分余额`
+- `CreditAuditLog-积分流水`
+
+<Mermaid
+  title="9. 场景 G：用户基于已有图片生成变体或编辑图"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant API as Image Variation/Edit API
+  participant Redis as Redis分布式锁
+  participant Credit as 积分服务
+  participant DB as 数据库
+  participant Queue as 任务队列
+  participant Worker as AI Worker
+  participant AI as AI Provider
+
+  FE->>API: 点击 Variations/Edit(sourceImageId, instruction?)
+  API->>Redis: 锁 userId + image_derivative + sourceImageId
+  API->>DB: 同步校验 GeneratedImage 归属
+  API->>DB: 同步创建 GenerationJob(generationType=image_variation/image_edit, sourceImageId, editInstruction)
+  API->>Credit: 同步预扣减 Credit-积分余额
+  Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
+  API->>Queue: 异步投递 jobId
+  API->>Redis: 释放锁
+  API-->>FE: 返回 jobId
+
+  Worker->>AI: 异步调用 AI，携带 source image 和 instruction
+  AI-->>Worker: 返回新图片
+  Worker->>DB: 异步创建 GeneratedImage(jobId=新任务)
+  Worker->>DB: 异步更新 GenerationJob(status=succeeded)
+`}
+/>
+
+关键状态变化：
+
+- `GenerationJob.generationType`: `image_variation / image_edit`
+- `GenerationJob.sourceImageId`: 原始图片
+- 新结果仍进入 `GeneratedImage-生成图片`
+- Studio 继续只查询 `GeneratedImage-生成图片`
+
+## 10. 场景 H：用户提交作品到主题
+
+用户从生成结果或 Studio 中点击 `Submit to this theme`，提交作品进入审核。该流程不调用 AI 时可以同步；如果启用主题相关性 AI 审核，则审核部分必须走 Redis 锁和积分策略。如果主题相关性审核不收费，也可以只加锁不扣积分。
+
+涉及数据表：
+
+- `User-用户`
+- `GeneratedImage-生成图片`
+- `Theme-正式主题`
+- `ImageSubmission-作品投稿`
+- `ReviewRecord-审核记录`
+- `PublicImage-公开图片`
+
+<Mermaid
+  title="10. 场景 H：用户提交作品到主题"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant API as Submission API
+  participant DB as 数据库
+  participant Review as 审核服务
+  participant Redis as Redis分布式锁
+  participant AI as AI Provider
+
+  FE->>API: 提交作品(imageId, themeId, creatorNote)
+  API->>DB: 同步校验 GeneratedImage 归属
+  API->>DB: 同步校验 Theme 可投稿
+  API->>DB: 同步创建 ImageSubmission(status=under_review)
+  API->>DB: 同步更新 GeneratedImage(status=under_review)
+  API-->>FE: 返回 under_review
+
+  API->>Review: 异步触发审核
+  Review->>DB: 异步写入 ReviewRecord(safety)
+
+  opt 使用 AI 做主题相关性审核
+    Review->>Redis: 锁 submissionId + relevance_check
+    Review->>AI: 调用 AI 判断主题相关性
+    AI-->>Review: 返回 relevance result
+    Review->>Redis: 释放锁
+  end
+
+  Review->>DB: 异步写入 ReviewRecord(theme_relevance)
+  Review->>DB: 异步更新 ImageSubmission(status=needs_review/published/rejected)
+
+  alt 审核通过
+    Review->>DB: 创建 PublicImage-公开图片
+    Review->>DB: 更新 GeneratedImage(status=published)
+  else 审核拒绝
+    Review->>DB: 更新 GeneratedImage(status=rejected)
+  end
+`}
+/>
+
+关键状态变化：
+
+- `ImageSubmission.status`: `under_review -> needs_review / published / rejected`
+- `GeneratedImage.status`: `generated -> under_review -> published / rejected`
+- `PublicImage` 只在审核通过后创建
+
+## 11. 场景 I：用户浏览公开图片并点赞/收藏
+
+用户在 Explore 或 Theme Gallery 中浏览公开图片，并进行 Like / Save。
+
+涉及数据表：
+
+- `User-用户`
+- `PublicImage-公开图片`
+- `ImageLike-图片点赞`
+- `ImageSave-图片收藏`
+
+<Mermaid
+  title="11. 场景 I：用户浏览公开图片并点赞/收藏"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant API as Explore API
+  participant DB as 数据库
+
+  FE->>API: 获取公开图片列表
+  API->>DB: 查询 PublicImage(status=published)
+  API->>DB: 如果已登录，查询 ImageLike/ImageSave 当前用户状态
+  API-->>FE: 返回图片列表和 liked/saved 状态
+
+  FE->>API: 点击 Like
+  API->>DB: 同步 upsert/soft-delete ImageLike
+  API->>DB: 同步更新 PublicImage.likeCount
+  API-->>FE: 返回 liked 状态和 likeCount
+
+  FE->>API: 点击 Save
+  API->>DB: 同步 upsert/soft-delete ImageSave
+  API->>DB: 同步更新 PublicImage.saveCount
+  API-->>FE: 返回 saved 状态和 saveCount
+`}
+/>
+
+关键状态变化：
+
+- `ImageLike.deleted`: `0 / 1`
+- `ImageSave.deleted`: `0 / 1`
+- `PublicImage.likeCount` / `PublicImage.saveCount` 同步维护
+
+## 12. 场景 J：用户在 My Studio 查看创作资产
+
+用户进入 My Studio，查看自己的生成图、投稿状态，并按状态筛选。
+
+涉及数据表：
+
+- `User-用户`
+- `GeneratedImage-生成图片`
+- `GenerationJob-生成任务`
+- `ImageSubmission-作品投稿`
+- `PublicImage-公开图片`
+
+<Mermaid
+  title="12. 场景 J：用户在 My Studio 查看创作资产"
+  chart={`
+sequenceDiagram
+  autonumber
+  participant FE as 前端
+  participant API as Studio API
+  participant DB as 数据库
+
+  FE->>API: 打开 My Studio(status filter)
+  API->>DB: 查询 GeneratedImage(userId=currentUser)
+  API->>DB: include GenerationJob 摘要
+  API->>DB: include ImageSubmission 最新状态
+  API->>DB: include PublicImage 如果已发布
+  API-->>FE: 返回图片列表
+
+  FE->>API: 点击 View prompt
+  API->>DB: 校验 GeneratedImage.userId
+  API->>DB: 返回 GeneratedImage.promptUsed 或 GenerationJob.prompt
+  API-->>FE: 返回 prompt
+`}
+/>
+
+关键点：
+
+- Studio 不查询 `ReferenceImage` 作为作品。
+- Studio 的主资产是 `GeneratedImage-生成图片`。
+- 投稿状态来自 `ImageSubmission-作品投稿` 和 `GeneratedImage.status`。
+
+## 13. AI 场景通用事务原则
+
+所有 AI 场景统一遵循以下顺序：
+
+<Mermaid
+  title="13. AI 场景通用事务原则"
+  chart={`
+flowchart TD
+  A[收到用户 AI 请求] --> B[Redis 分布式锁]
+  B --> C[校验用户权限和资源归属]
+  C --> D[估算积分成本]
+  D --> E[预扣减 Credit-积分余额]
+  E --> F[写入 CreditAuditLog-积分流水]
+  F --> G[创建业务任务或日志]
+  G --> H[投递异步任务]
+  H --> I[释放 Redis 锁]
+  I --> J[Worker 调用 AI]
+  J --> K{AI 是否成功}
+  K -->|成功| L[写入结果表并更新任务成功]
+  K -->|失败且需退款| M[补偿积分并写流水]
+  K -->|失败但不退款| N[记录失败原因]
+`}
+/>
+
+必须保证：
+
+- 同一个用户同一个请求不能重复扣积分。
+- 预扣减和任务创建要有可追溯关联。
+- `CreditAuditLog.operationReferId` 必须指向业务任务 ID。
+- Worker 重试必须幂等。
+- AI 结果写入必须幂等，避免重复创建图片。
+

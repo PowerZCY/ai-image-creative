@@ -1,0 +1,1090 @@
+---
+title: Monica AI 产品说明书
+description: Monica AI 产品功能模块、数据流程、前端交互、后端模块与接口职责说明
+date: 2026-06-11
+---
+
+> 主题, 类似于Quiz, 基于问题出发，促进思考与激发创作灵感
+
+## 1. 产品定位
+
+Monica AI 是一个面向 AI 图片创作的社区型产品。它的核心不是单纯提供一个 prompt 输入框，而是让用户在一个统一创作面板中完成：
+
+- 获取创意灵感。
+- 将模糊想法改写成可生成图片的 prompt。
+- 选择模型和生成设置。
+- 生成图片。
+- 基于结果继续编辑、生成变体或下载。
+- 将作品提交到每日主题。
+- 浏览主题和社区作品，并从他人作品获得灵感。
+- 在个人工作台管理自己的生成图片和提交状态。
+
+产品主体验围绕三类创作场景展开：
+
+- 自由创作：用户想生成任意图片。
+- 主题创作：用户围绕每日主题进行创作并投稿。
+- 灵感再创作：用户从主题、社区图片或个人历史图片出发继续创作。
+
+## 2. 产品模块划分
+
+### 2.1 首页 Home
+
+首页承担通用 AI 图片生成入口，同时展示今日主题。
+
+核心模块：
+
+- 通用创作面板。
+- 今日主题展示区。
+- 主题相关精选内容入口。
+- 首页作品/主题推荐入口。
+
+首页创作面板默认是自由创作模式，不强制绑定今日主题。
+
+用户可以：
+
+- 直接输入 prompt 并生成图片。
+- 点击 `Get ideas about today's theme` 获取今日主题灵感。
+- 点击 `Improve prompt` 优化当前 prompt。
+- 点击 `Ask assistant` 进行短对话式 prompt 构思。
+- 选择模型、风格、图片比例、生成数量。
+- 展开更多设置并填写 negative prompt。
+- 生成后下载、编辑、生成变体或提交到今日主题。
+
+首页的今日主题是灵感入口，不是生成器的强制上下文。
+
+### 2.2 主题详情页 Theme Detail
+
+主题详情页用于展示某个每日主题，并鼓励用户围绕该主题创作。
+
+核心模块：
+
+- 主题 Hero 信息。
+- `Create your version` 入口。
+- 当前主题上下文创作面板。
+- 当前主题生成结果区。
+- 主题作品 Gallery。
+- Gallery 排序/筛选入口，如 Featured、Most liked、Newest。
+
+主题详情页创作面板默认绑定当前主题上下文。
+
+用户可以：
+
+- 输入自己对主题的解释并生成图片。
+- 获取当前主题相关创意方向。
+- 优化 prompt，并结合当前主题上下文。
+- 生成图片后提交到当前主题。
+- 浏览该主题下的精选作品。
+
+主题绑定规则：
+
+- 系统不把主题标题硬塞进用户 prompt。
+- Assistant 在生成灵感或优化 prompt 时使用主题作为隐含约束。
+- 生成记录保存 `theme_id` 和来源页面。
+- 用户点击提交后，作品进入主题投稿审核流程。
+
+### 2.3 Explore
+
+Explore 是发现入口，支持用户浏览主题和社区图片。
+
+核心模块：
+
+- Themes / Images 双 Tab。
+- 排序或标签筛选，如 Latest、Popular、Cinematic、Surreal。
+- 主题卡片列表。
+- 图片卡片列表。
+- 图片详情弹窗。
+
+主题卡片展示：
+
+- 主题标题。
+- 日期。
+- 简短说明。
+- 小型预览图集合。
+- 创作统计，如 creations、creators、featured。
+- 标签。
+- `View theme`。
+- `Create from this theme`。
+
+图片详情展示：
+
+- 图片预览。
+- 作者。
+- 所属主题。
+- prompt。
+- 标签。
+- `Use as inspiration`。
+- `Use prompt`。
+- `Copy prompt`。
+- `Like`。
+- `Save`。
+
+Explore 的重点是把浏览行为转化为再次创作。
+
+### 2.4 My Studio
+
+My Studio 是登录用户的个人创作工作台，不只是历史图库。
+
+核心模块：
+
+- Studio 创作面板。
+- `Get ideas from a theme` 入口。
+- 个人图片库。
+- 状态筛选 Tabs。
+
+状态筛选：
+
+- All。
+- Generated。
+- Submitted。
+- Under review。
+- Published。
+- Rejected。
+
+图片卡片展示：
+
+- 图片预览。
+- 状态。
+- 使用模型。
+- 关联主题或 No theme。
+- `View prompt`。
+- `Edit`。
+- `Submit`。
+
+Studio 创作面板默认不绑定主题。只有用户点击 `Get ideas from a theme` 并选择主题后，当前创作才带有主题上下文。
+
+### 2.5 创作面板 Creation Panel
+
+创作面板是产品最重要的复用模块，出现在 Home、Theme Detail、My Studio。
+
+核心组成：
+
+- Assistant 快捷动作区。
+- Reference image 添加入口。
+- Prompt 输入框。
+- Assistant 输出区。
+- 模型选择。
+- 风格选择。
+- 图片数量选择。
+- 图片比例选择。
+- 更多设置入口。
+- Negative prompt。
+- Generate 按钮。
+- 安全检查状态。
+- 生成结果区。
+
+不同页面的差异：
+
+<CheetTable title="创作面板 Creation Panel">
+
+| 页面 | 默认模式 | 主题上下文 | 生成后提交入口 |
+| --- | --- | --- | --- |
+| Home | 自由创作 | 无强制绑定，可从今日主题取灵感 | Submit to today's theme |
+| Theme Detail | 当前主题创作 | 当前主题 | Submit to this theme |
+| My Studio | 自由创作 | 默认无，用户可手动选择主题 | Submit 或 Submit to today's theme |
+
+</CheetTable>
+
+### 2.6 Assistant
+
+Assistant 是创作面板内的轻量创作助手，不是独立聊天产品。
+
+核心能力：
+
+- 根据主题生成创意方向。
+- 将方向改写成完整 prompt。
+- 优化用户已有 prompt。
+- 围绕用户要求进行短对话式 prompt 构思。
+- 生成相似方向。
+- 提供快捷改写建议，如 Warmer、Stranger、No people。
+
+Assistant 的输出必须服务于图片生成，不能变成开放式闲聊。
+
+### 2.7 提交作品 Submission
+
+提交作品通过弹窗完成。
+
+提交弹窗包含：
+
+- 图片预览。
+- 投稿主题。
+- Prompt。
+- 创作说明。
+- Submit。
+- Cancel。
+
+提交后作品进入审核状态，用户可以在 My Studio 中查看状态。
+
+### 2.8 主题选择器 Theme Picker
+
+Theme Picker 用于 Studio 中从主题获取灵感。
+
+触发入口：
+
+- My Studio 的 `Get ideas from a theme`。
+
+用户流程：
+
+- 打开主题选择器。
+- 查看 Today's theme 和历史主题。
+- 点击 `Use theme`。
+- 系统关闭弹窗。
+- Studio 创作面板显示当前主题上下文。
+- Assistant 展示该主题相关灵感方向。
+
+## 3. 核心数据流程
+
+### 3.1 自由创作流程
+
+<Mermaid
+  title="3.1 自由创作流程"
+  chart={`
+flowchart TD
+  A[用户进入 Home 或 My Studio] --> B[输入 prompt 或使用 Assistant]
+  B --> C[选择模型/风格/比例/数量]
+  C --> D[点击 Generate]
+  D --> E[安全检查]
+  E -->|通过| F[创建生成任务]
+  E -->|不通过| G[返回安全提示]
+  F --> H[调用图片生成模型]
+  H --> I[保存生成图片和 Prompt used]
+  I --> J[展示结果]
+  J --> K[下载/编辑/变体/提交]
+`}
+/>
+
+### 3.2 主题创作流程
+
+<Mermaid
+  title="3.2 主题创作流程"
+  chart={`
+flowchart TD
+  A[用户进入 Theme Detail] --> B[系统加载当前主题]
+  B --> C[创作面板带主题上下文]
+  C --> D[用户输入想法或获取主题灵感]
+  D --> E[Assistant 生成方向或优化 prompt]
+  E --> F[用户确认 prompt]
+  F --> G[点击 Generate]
+  G --> H[安全检查并创建生成任务]
+  H --> I[保存图片并关联 theme_id]
+  I --> J[展示结果]
+  J --> K[用户点击 Submit to this theme]
+  K --> L[填写提交信息]
+  L --> M[创建投稿记录]
+  M --> N[进入 Under review]
+`}
+/>
+
+### 3.3 Assistant Ideas 流程
+
+<Mermaid
+  title="3.3 Assistant Ideas 流程"
+  chart={`
+flowchart TD
+  A[用户点击 Get ideas] --> B{是否需要主题上下文}
+  B -->|Home| C[使用今日主题作为灵感来源]
+  B -->|Theme Detail| D[使用当前主题]
+  B -->|Studio 且未选主题| E[打开 Theme Picker]
+  E --> F[用户选择主题]
+  F --> G[保存 selectedTheme]
+  C --> H[生成 3 个创意方向]
+  D --> H
+  G --> H
+  H --> I[展示方向列表]
+  I --> J[Use]
+  I --> K[More like this]
+  J --> L[改写为完整 prompt 并填入输入框]
+  K --> H
+`}
+/>
+
+### 3.4 Improve Prompt 流程
+
+<Mermaid
+  title="3.4 Improve Prompt 流程"
+  chart={`
+flowchart TD
+  A[用户点击 Improve prompt] --> B{Prompt 是否为空}
+  B -->|为空| C[提示先输入一个初始想法]
+  B -->|不为空| D[读取当前 prompt 和主题上下文]
+  D --> E[调用文本模型生成 improved prompt]
+  E --> F[展示 Original 和 Improved]
+  F --> G[Replace prompt]
+  F --> H[Append details]
+  F --> I[Try another version]
+  G --> J[替换输入框]
+  H --> K[追加到输入框]
+  I --> E
+`}
+/>
+
+### 3.5 图片灵感再创作流程
+
+<Mermaid
+  title="3.5 图片灵感再创作流程"
+  chart={`
+flowchart TD
+  A[用户在 Explore 打开图片详情] --> B[查看图片、作者、主题、prompt]
+  B --> C{用户动作}
+  C -->|Use as inspiration| D[跳转到主题创作页]
+  D --> E[Assistant 基于原 prompt 生成相似方向]
+  C -->|Use prompt| F[跳转到主题创作页并填入原 prompt]
+  C -->|Copy prompt| G[复制 prompt]
+`}
+/>
+
+### 3.6 投稿审核流程
+
+<Mermaid
+  title="3.6 投稿审核流程"
+  chart={`
+flowchart TD
+  A[用户提交图片到主题] --> B[创建 Submission]
+  B --> C[自动审核]
+  C -->|风险命中| D[Rejected 或进入人工复核]
+  C -->|通过| E[Under review]
+  E --> F[人工审核]
+  F -->|通过| G[Published]
+  F -->|拒绝| H[Rejected]
+  G --> I[进入主题 Gallery/Explore]
+  H --> J[用户在 Studio 查看状态]
+`}
+/>
+
+## 4. 前端重要交互模块
+
+### 4.1 页面导航
+
+顶部导航包含：
+
+- Home。
+- Theme Detail。
+- Explore。
+- My Studio。
+
+导航行为：
+
+- 切换页面时更新当前选中状态。
+- 页面切换后滚动到顶部。
+- `View theme`、`Create from this theme` 等按钮可跳转到 Theme Detail。
+
+### 4.2 Prompt 输入与同步
+
+每个创作面板维护独立 prompt 状态。
+
+交互要求：
+
+- 用户输入时实时更新当前面板 prompt。
+- Assistant 使用当前 prompt 作为上下文。
+- `Use`、`Use prompt`、`Replace prompt` 会覆盖输入框。
+- `Append details` 会在原 prompt 后追加改写内容。
+- 系统不应在未确认时静默覆盖用户 prompt。
+
+### 4.3 Assistant 快捷动作
+
+创作面板顶部固定展示：
+
+- `Get ideas ...`
+- `Improve prompt`
+- `Ask assistant`
+
+点击后在 prompt 下方展开 Assistant 输出区。
+
+Assistant 输出区支持关闭，不影响当前 prompt。
+
+### 4.4 Get Ideas
+
+输出内容：
+
+- 3 个创意方向。
+- 每个方向包含 `Use` 和 `More like this`。
+- 底部包含 `More ideas` 和 `Close`。
+
+`Use` 行为：
+
+- 将方向改写成完整 prompt。
+- 填入 prompt 输入框。
+- 提示用户可继续编辑并点击 Generate。
+- 不自动生成。
+
+`More like this` 行为：
+
+- 以当前方向为 seed 重新生成相近但不同的方向。
+
+### 4.5 Improve Prompt
+
+空 prompt 状态：
+
+- 提示用户先输入一个初始想法。
+
+非空 prompt 状态：
+
+- 展示 Original。
+- 展示 Improved。
+- 提供 `Replace prompt`。
+- 提供 `Append details`。
+- 提供 `Try another version`。
+
+交互原则：
+
+- 用户必须明确选择是否替换或追加。
+- Improve Prompt 是改写当前题材，不是换题材。
+
+### 4.6 Ask Assistant
+
+Ask Assistant 是短对话式 prompt 构思器。
+
+输入框 placeholder 引导用户描述：
+
+- 想创作什么。
+- 想如何调整当前 prompt。
+- 想要更具体、更抽象、更温暖、更怪、更少人物等。
+
+Assistant 回复：
+
+- 简短消息。
+- 3 个可选方向。
+- 每个方向提供 `Use` 和 `More like this`。
+- 快捷 follow-up，如 Warmer、Stranger、No people。
+
+### 4.7 生成设置
+
+生成设置包含：
+
+- Model：GPT Image、Flux Pro、Ideogram、Recraft、Stable Diffusion。
+- Style：Auto、Cinematic、Realistic、Anime、Illustration。
+- Images：1、2、4。
+- Aspect ratio：1:1、4:5、9:16、16:9。
+- Negative prompt。
+
+交互要求：
+
+- 模型、风格、数量、比例通过下拉或分段选择切换。
+- 当前选择要在按钮上可见。
+- 图片数量影响 Generate 按钮上的消耗提示。
+- Negative prompt 位于更多设置抽屉中，默认收起。
+
+### 4.8 Reference Image
+
+Prompt 输入区左侧提供添加 reference image 的入口。
+
+MVP 职责：
+
+- 允许用户添加参考图。
+- 生成请求记录 reference image。
+- 后端根据所选模型判断是否支持 reference image。
+- 不支持时前端需要明确提示。
+
+### 4.9 Generate
+
+点击 Generate 后：
+
+- 同步当前 prompt 和设置。
+- 执行安全检查。
+- 创建生成任务。
+- 展示生成中状态。
+- 生成完成后展示图片卡片。
+
+图片卡片包含：
+
+- 图片预览。
+- Prompt used。
+- 模型。
+- 风格。
+- 比例。
+- Download。
+- Edit。
+- Variations。
+- Submit。
+
+### 4.10 图片详情弹窗
+
+图片详情用于 Explore 图片。
+
+展示：
+
+- 图片。
+- 作者。
+- 所属主题。
+- Prompt。
+- 标签。
+
+操作：
+
+- `Use as inspiration`：跳转到 Theme Detail，并让 Assistant 基于该图片 prompt 生成灵感方向。
+- `Use prompt`：跳转到 Theme Detail，并直接填入该 prompt。
+- `Copy prompt`：复制 prompt，并显示已复制状态。
+- `Like`：点赞。
+- `Save`：收藏。
+
+### 4.11 提交弹窗
+
+触发：
+
+- 生成结果卡片的 Submit 按钮。
+- Studio 图片卡片的 Submit 按钮。
+
+展示：
+
+- 图片预览。
+- 目标主题。
+- Prompt。
+- 创作说明输入框。
+
+提交后：
+
+- 创建投稿记录。
+- 初始用户侧状态为 Under review。
+- My Studio 中可查看状态。
+
+### 4.12 Studio 状态筛选
+
+用户点击状态 Tab 后：
+
+- 更新选中状态。
+- 筛选图片列表。
+- 不改变创作面板内容。
+
+## 5. 后端功能模块
+
+### 5.1 用户与权限模块
+
+职责：
+
+- 用户登录态识别。
+- 用户资料读取。
+- 用户作品归属校验。
+- 投稿、收藏、点赞等操作的权限校验。
+- 匿名用户与登录用户的功能边界控制。
+
+### 5.2 主题模块
+
+职责：
+
+- 管理每日主题。
+- 提供今日主题。
+- 提供历史主题列表。
+- 提供主题详情。
+- 提供主题统计。
+- 提供主题下作品列表。
+- 支持主题标签、排序和筛选。
+
+### 5.3 创作会话模块
+
+职责：
+
+- 记录一次创作面板会话。
+- 记录来源页面，如 home、theme_detail、studio、explore_image_detail。
+- 记录当前主题上下文。
+- 记录用户使用的 prompt、设置和 Assistant 动作。
+- 将生成任务、生成结果和 prompt 日志串联起来。
+
+### 5.4 Assistant 模块
+
+职责：
+
+- 处理 Get Ideas。
+- 处理 More like this。
+- 处理 Improve Prompt。
+- 处理 Ask Assistant。
+- 将用户模糊输入转成可生成图片的 prompt。
+- 结合主题上下文或图片 prompt 生成创作方向。
+- 记录 Assistant 输入输出日志。
+
+Assistant 不负责生成图片，只负责创意和 prompt 文本。
+
+### 5.5 图片生成模块
+
+职责：
+
+- 接收最终 prompt 和生成设置。
+- 进行安全检查。
+- 创建生成任务。
+- 调用对应图片模型供应商。
+- 处理异步任务状态。
+- 保存生成结果。
+- 记录模型、成本、耗时、失败原因。
+- 支持 reference image 和 negative prompt。
+
+### 5.6 图片编辑模块
+
+职责：
+
+- 基于已有图片生成 variations。
+- 支持编辑入口。
+- 支持后续扩展局部编辑、去除物体、扩图、高清修复。
+- 保存编辑后的图片与来源图片关系。
+
+MVP 可先定义接口与数据关系，具体编辑能力根据接入模型逐步开放。
+
+### 5.7 媒体存储模块
+
+职责：
+
+- 上传 reference image。
+- 存储生成图片。
+- 存储缩略图。
+- 管理图片访问 URL。
+- 处理公开图和私有图的访问权限。
+
+### 5.8 投稿审核模块
+
+职责：
+
+- 创建作品投稿。
+- 自动安全审核。
+- 主题相关性检查。
+- 人工审核状态流转。
+- 发布到主题 Gallery 和 Explore。
+- 拒绝原因记录。
+- 用户侧状态展示。
+
+### 5.9 Explore 模块
+
+职责：
+
+- 提供主题列表。
+- 提供公开图片列表。
+- 支持排序、标签筛选、分页。
+- 提供图片详情。
+- 支持 Like、Save、Copy prompt 相关统计。
+
+### 5.10 Studio 模块
+
+职责：
+
+- 提供用户生成图片列表。
+- 按状态筛选。
+- 展示图片的生成信息和投稿信息。
+- 支持查看 prompt、编辑、提交。
+- 支持用户自己的图片管理。
+
+### 5.11 安全与风控模块
+
+职责：
+
+- Prompt 安全检查。
+- Reference image 安全检查。
+- 生成结果安全检查。
+- 投稿内容安全检查。
+- 违规内容拦截。
+- 记录安全审核结果。
+- 针对高风险内容进入人工复核。
+
+### 5.12 计费与额度模块
+
+职责：
+
+- 根据图片数量和模型计算消耗。
+- 在 Generate 按钮上返回预估消耗。
+- 创建生成任务前校验额度。
+- 生成成功后扣减额度。
+- 生成失败时处理退款或不扣费。
+- 记录用户额度流水。
+
+## 6. 重要数据 Model
+
+以下只说明职责，不展开字段级设计。
+
+### User
+
+表示产品用户。
+
+职责：
+
+- 关联创作会话、生成图片、投稿、点赞、收藏、额度流水。
+- 作为权限和归属判断基础。
+
+### Theme
+
+表示每日主题或历史主题。
+
+职责：
+
+- 承载主题标题、说明、日期、标签、统计、发布状态。
+- 作为主题创作、主题 Gallery、投稿审核的核心上下文。
+
+### CreationSession
+
+表示一次创作过程。
+
+职责：
+
+- 记录用户从哪个页面开始创作。
+- 记录是否带主题上下文。
+- 关联 Assistant 日志、生成任务和生成结果。
+- 帮助分析用户从灵感到生成的完整路径。
+
+### PromptLog
+
+表示 Assistant 或用户 prompt 改写过程。
+
+职责：
+
+- 记录 Improve Prompt、Get Ideas、Ask Assistant 的输入输出。
+- 标记哪个 prompt 最终用于生成。
+- 作为内部日志，不作为 MVP 的用户可见 prompt version history。
+
+### GenerationJob
+
+表示一次图片生成任务。
+
+职责：
+
+- 记录最终 prompt、negative prompt、模型、风格、比例、数量。
+- 记录任务状态、供应商信息、成本、失败原因。
+- 关联生成结果图片。
+
+### GeneratedImage
+
+表示生成出来的一张图片。
+
+职责：
+
+- 保存图片资源、缩略图、生成参数摘要。
+- 关联用户、生成任务、主题上下文。
+- 支持下载、编辑、变体、提交。
+- 作为 Studio 图片库的核心数据。
+
+### ReferenceImage
+
+表示用户上传或选择的参考图。
+
+职责：
+
+- 关联创作会话或生成任务。
+- 支持后端安全审核。
+- 支持供应商调用时作为参考输入。
+
+### ImageEdit
+
+表示一次基于图片的编辑或变体生成。
+
+职责：
+
+- 记录来源图片。
+- 记录编辑类型，如 variations、edit。
+- 关联新生成图片。
+
+### Submission
+
+表示用户将图片提交到主题的投稿记录。
+
+职责：
+
+- 关联用户、图片、主题。
+- 保存提交 prompt 和创作说明。
+- 记录审核状态。
+- 记录发布结果。
+
+### ReviewRecord
+
+表示自动或人工审核记录。
+
+职责：
+
+- 记录审核对象，如图片、prompt、submission。
+- 记录审核类型、结果、原因和操作人。
+- 支持追溯审核状态变化。
+
+### PublicImage
+
+表示已经发布到公开区域的图片。
+
+职责：
+
+- 连接 GeneratedImage 和公开展示信息。
+- 支持 Explore、Theme Gallery、作者页等公开展示。
+- 承载点赞、收藏、排序等公开属性。
+
+### Like
+
+表示用户点赞。
+
+职责：
+
+- 记录用户对公开图片的点赞关系。
+- 支持统计和排序。
+
+### Save
+
+表示用户收藏。
+
+职责：
+
+- 记录用户保存公开图片的行为。
+- 支持后续个人收藏列表。
+
+### CreditLedger
+
+表示额度流水。
+
+职责：
+
+- 记录生成消耗、奖励、退款和人工调整。
+- 支持用户额度余额计算与审计。
+
+## 7. 重要接口职责
+
+以下为接口职责说明，不限定具体 REST 或 RPC 形式。
+
+### 7.1 主题接口
+
+`Get Today Theme`
+
+- 返回今日主题信息。
+- 用于 Home 今日主题区和 Home Assistant 灵感入口。
+
+`List Themes`
+
+- 返回历史主题列表。
+- 支持分页、排序和标签筛选。
+- 用于 Explore Themes 和 Theme Picker。
+
+`Get Theme Detail`
+
+- 返回单个主题详情。
+- 包含主题说明、统计、相关作品入口信息。
+
+`List Theme Images`
+
+- 返回某个主题下公开作品。
+- 支持 Featured、Most liked、Newest。
+
+### 7.2 Assistant 接口
+
+`Get Ideas`
+
+- 输入主题上下文、当前 prompt、来源页面。
+- 返回 3 到 6 个创意方向。
+
+`More Like This`
+
+- 输入 seed idea、主题上下文。
+- 返回相似但不同的创意方向。
+
+`Improve Prompt`
+
+- 输入原 prompt、主题上下文、风格、模型偏好。
+- 返回 improved prompt。
+
+`Ask Assistant`
+
+- 输入用户消息、当前 prompt、短对话历史、主题上下文。
+- 返回 assistant 消息和可选方向列表。
+
+### 7.3 生成接口
+
+`Estimate Generation Cost`
+
+- 输入模型和图片数量。
+- 返回预估消耗。
+
+`Create Generation Job`
+
+- 输入 prompt、negative prompt、模型、风格、比例、数量、reference image、主题上下文。
+- 校验安全和额度。
+- 创建生成任务。
+
+`Get Generation Job`
+
+- 查询生成任务状态。
+- 返回 pending、running、succeeded、failed 等状态。
+
+`List Generated Images`
+
+- 返回任务生成的图片列表。
+
+### 7.4 图片接口
+
+`Get Image Detail`
+
+- 返回图片预览、作者、主题、prompt、标签和交互状态。
+
+`Download Image`
+
+- 返回图片下载地址或下载流。
+
+`Create Image Variation`
+
+- 基于已有图片创建变体任务。
+
+`Edit Image`
+
+- 基于已有图片创建编辑任务。
+
+`Upload Reference Image`
+
+- 上传参考图并返回可用于生成的资源标识。
+
+### 7.5 投稿接口
+
+`Create Submission`
+
+- 输入 image、theme、prompt、创作说明。
+- 创建投稿并进入审核。
+
+`Get Submission`
+
+- 查询投稿详情和审核状态。
+
+`List My Submissions`
+
+- 返回当前用户投稿记录。
+
+`Review Submission`
+
+- 管理端审核投稿。
+- 支持通过、拒绝、人工复核。
+
+### 7.6 Explore 接口
+
+`List Explore Images`
+
+- 返回公开图片列表。
+- 支持排序、标签筛选、分页。
+
+`Like Image`
+
+- 点赞或取消点赞。
+
+`Save Image`
+
+- 收藏或取消收藏。
+
+### 7.7 Studio 接口
+
+`List My Images`
+
+- 返回当前用户图片。
+- 支持 All、Generated、Submitted、Under review、Published、Rejected 筛选。
+
+`Get My Image`
+
+- 返回用户自己的图片详情。
+
+`Get My Image Prompt`
+
+- 返回图片生成时使用的 prompt。
+
+### 7.8 安全接口
+
+`Check Prompt Safety`
+
+- 检查 prompt 是否可用于生成。
+
+`Check Image Safety`
+
+- 检查 reference image 或生成结果是否可展示。
+
+`Check Submission Safety`
+
+- 检查投稿内容是否适合公开审核。
+
+## 8. 状态定义
+
+### 8.1 GenerationJob 状态
+
+- `pending`：任务已创建，等待执行。
+- `running`：供应商生成中。
+- `succeeded`：生成成功。
+- `failed`：生成失败。
+- `blocked`：安全或额度原因阻止生成。
+- `cancelled`：用户或系统取消。
+
+### 8.2 GeneratedImage 状态
+
+- `generated`：已生成，未投稿。
+- `submitted`：已投稿。
+- `under_review`：审核中。
+- `published`：已公开发布。
+- `rejected`：投稿被拒绝。
+- `hidden`：已隐藏或下架。
+
+### 8.3 Submission 状态
+
+- `draft`：提交弹窗中尚未提交。
+- `submitted`：已提交。
+- `under_review`：审核中。
+- `published`：审核通过并发布。
+- `rejected`：审核拒绝。
+- `needs_review`：自动审核命中风险，等待人工处理。
+
+用户侧可简化展示为：
+
+- Generated。
+- Submitted。
+- Under review。
+- Published。
+- Rejected。
+
+## 9. 产品规则
+
+### 9.1 Prompt 使用规则
+
+- 生成图片使用最终输入框中的 prompt。
+- Assistant 中间过程作为系统日志保存。
+- 用户可见重点是 Prompt used。
+- MVP 不需要完整 prompt version history。
+
+### 9.2 主题上下文规则
+
+- Home 默认不绑定主题。
+- Theme Detail 默认绑定当前主题。
+- Studio 默认不绑定主题。
+- Studio 只有用户选择主题后才绑定主题上下文。
+- 使用主题灵感生成的图片可以记录 `theme_id`，但必须用户主动提交才进入审核。
+
+### 9.3 投稿规则
+
+- 生成图片不会自动公开。
+- 用户必须主动提交到主题。
+- 投稿必须经过审核。
+- 只有 published 状态进入公开 Gallery 和 Explore。
+
+### 9.4 安全规则
+
+- 生成前检查 prompt。
+- 上传参考图后检查图片。
+- 生成结果需要检查后再允许公开提交。
+- 投稿时再次检查 prompt、图片和创作说明。
+
+### 9.5 额度规则
+
+- Generate 前展示预估消耗。
+- 图片数量影响消耗。
+- 不同模型可有不同消耗。
+- 生成失败时不应按成功结果扣费，具体退款规则由计费方案确定。
+
+## 10. MVP 范围
+
+MVP 必须包含：
+
+- Home 通用创作面板。
+- Theme Detail 主题创作面板。
+- Explore 的 Themes / Images 浏览。
+- 图片详情弹窗。
+- My Studio 创作和图片管理。
+- Assistant 的 Get Ideas、Improve Prompt、Ask Assistant。
+- 图片生成任务。
+- 生成结果卡片。
+- 投稿弹窗。
+- 投稿审核状态。
+- 基础安全检查。
+- 基础额度消耗。
+
+MVP 可延后：
+
+- 完整图片局部编辑。
+- 高清修复。
+- 扩图。
+- 完整 prompt version history。
+- 管理端复杂运营能力。
+- i18n 详细方案。
+- 复杂动画和视觉样式。
+
+## 11. 后续设计输入
+
+本文档可作为后续两个方案的输入：
+
+- 后端设计方案：围绕模块、Model、接口、状态机、异步任务、供应商适配、安全审核、额度系统展开。
+- 前端设计方案：在本文交互模块基础上，补充 UI 设计规范、组件拆分、页面布局、响应式、动画和 i18n 方案。

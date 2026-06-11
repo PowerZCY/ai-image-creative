@@ -1,0 +1,332 @@
+---
+title: Monica AI 数据表关系
+description: Monica AI 已有基础表与新增业务表的数据流向、关系图和权限边界说明
+date: 2026-06-11
+---
+
+## 1. 目的
+
+本文用于在落地 Prisma schema 前，统一说明当前已有基础数据表和 Monica AI 新增业务表之间的数据流向。
+
+重点回答：
+
+- 每张表对应哪个中文业务概念。
+- 用户、积分、主题、生成、投稿、公开展示之间如何流转。
+- 哪些表是现有基础能力，哪些表是 Monica AI 新增业务能力。
+- 哪些关系决定 API 鉴权、归属校验和索引设计。
+
+## 2. 表名与中文业务名称
+
+### 2.1 已有基础表
+
+<CheetTable title="已有基础表">
+
+| 表名 / Model | 中文业务名称 | 当前职责 |
+| --- | --- | --- |
+| `User` | 用户 | 用户身份主表，承接匿名用户、注册用户、Clerk 用户、Stripe Customer |
+| `Credit` | 积分余额 | 用户当前可用积分余额，区分免费、订阅、一次性购买积分 |
+| `CreditAuditLog` | 积分流水 | 记录积分发放、消耗、调整、清空等审计流水 |
+| `Subscription` | 订阅 | 用户订阅状态和订阅周期 |
+| `Transaction` | 订单交易 | Stripe 等支付订单、付款状态、授予积分 |
+| `UserBackup` | 用户备份 | 用户删除或迁移时的备份记录 |
+| `Apilog` | API 日志 | 外部系统或关键 API 调用日志 |
+
+</CheetTable>
+
+### 2.2 Monica AI 新增业务表
+
+<CheetTable title="Monica AI 新增业务表">
+
+| 表名 / Model | 中文业务名称 | 当前职责 |
+| --- | --- | --- |
+| `ThemeSubmission` | 主题提交 | 用户或管理员提交每日主题想法，进入审核和候选池 |
+| `Theme` | 正式主题 | 已采纳、排期或发布的每日主题 |
+| `CreationSession` | 创作会话 | 一次创作过程，串联页面来源、主题上下文、Assistant 和生成任务 |
+| `PromptLog` | Prompt 日志 | Assistant 的 ideas、improve、ask 等输入输出日志 |
+| `ReferenceImage` | 参考图 | 用户上传的本地参考图片，作为生成输入素材 |
+| `GenerationJob` | 生成任务 | 图片生成、变体、编辑的异步任务记录 |
+| `GeneratedImage` | 生成图片 | AI 生成出的用户私有图片资产 |
+| `ImageSubmission` | 作品投稿 | 用户将生成图片提交到主题的审核记录 |
+| `ReviewRecord` | 审核记录 | 自动审核和人工审核历史 |
+| `PublicImage` | 公开图片 | 审核通过后进入 Explore / Theme Gallery 的公开展示记录 |
+| `ImageLike` | 图片点赞 | 用户对公开图片的点赞关系 |
+| `ImageSave` | 图片收藏 | 用户对公开图片的收藏关系 |
+
+</CheetTable>
+
+## 3. 总体数据流向图
+
+<Mermaid
+  title="3. 总体数据流向图"
+  chart={`
+flowchart TD
+  User[User-用户]
+  Credit[Credit-积分余额]
+  CreditAuditLog[CreditAuditLog-积分流水]
+  Subscription[Subscription-订阅]
+  Transaction[Transaction-订单交易]
+
+  ThemeSubmission[ThemeSubmission-主题提交]
+  Theme[Theme-正式主题]
+  CreationSession[CreationSession-创作会话]
+  PromptLog[PromptLog-Prompt日志]
+  ReferenceImage[ReferenceImage-参考图]
+  GenerationJob[GenerationJob-生成任务]
+  GeneratedImage[GeneratedImage-生成图片]
+  ImageSubmission[ImageSubmission-作品投稿]
+  ReviewRecord[ReviewRecord-审核记录]
+  PublicImage[PublicImage-公开图片]
+  ImageLike[ImageLike-图片点赞]
+  ImageSave[ImageSave-图片收藏]
+
+  User --> Credit
+  User --> CreditAuditLog
+  User --> Subscription
+  User --> Transaction
+
+  Transaction --> Credit
+  Transaction --> CreditAuditLog
+
+  User --> ThemeSubmission
+  ThemeSubmission --> Theme
+
+  User --> CreationSession
+  Theme --> CreationSession
+  CreationSession --> PromptLog
+  User --> PromptLog
+  Theme --> PromptLog
+
+  User --> ReferenceImage
+  CreationSession --> ReferenceImage
+
+  User --> GenerationJob
+  Theme --> GenerationJob
+  CreationSession --> GenerationJob
+  ReferenceImage --> GenerationJob
+  GenerationJob --> CreditAuditLog
+
+  GenerationJob --> GeneratedImage
+  User --> GeneratedImage
+  Theme --> GeneratedImage
+
+  GeneratedImage --> ImageSubmission
+  User --> ImageSubmission
+  Theme --> ImageSubmission
+  ImageSubmission --> ReviewRecord
+
+  ImageSubmission --> PublicImage
+  GeneratedImage --> PublicImage
+  Theme --> PublicImage
+  User --> PublicImage
+
+  PublicImage --> ImageLike
+  User --> ImageLike
+  PublicImage --> ImageSave
+  User --> ImageSave
+`}
+/>
+
+## 4. 主业务链路
+
+### 4.1 主题生产链路
+
+<Mermaid
+  title="4.1 主题生产链路"
+  chart={`
+flowchart LR
+  User[User-用户] --> ThemeSubmission[ThemeSubmission-主题提交]
+  ThemeSubmission --> Review[审核/编辑]
+  Review --> Theme[Theme-正式主题]
+  ThemeSubmission --> CreditAuditLog[CreditAuditLog-积分流水]
+`}
+/>
+
+说明：
+
+- 普通用户和管理员都通过 `ThemeSubmission-主题提交` 进入主题生产流程。
+- 管理员提交时也是一条链路，只是审核路径更快。
+- `Theme-正式主题` 只表示已采纳、排期或发布的主题。
+- 用户提交主题获得奖励时，不新建奖励表，写入 `CreditAuditLog-积分流水`。
+
+### 4.2 图片生成链路
+
+<Mermaid
+  title="4.2 图片生成链路"
+  chart={`
+flowchart LR
+  User[User-用户] --> CreationSession[CreationSession-创作会话]
+  Theme[Theme-正式主题] --> CreationSession
+  CreationSession --> PromptLog[PromptLog-Prompt日志]
+  User --> ReferenceImage[ReferenceImage-参考图]
+  ReferenceImage --> GenerationJob[GenerationJob-生成任务]
+  CreationSession --> GenerationJob
+  Theme --> GenerationJob
+  GenerationJob --> CreditAuditLog[CreditAuditLog-积分流水]
+  GenerationJob --> GeneratedImage[GeneratedImage-生成图片]
+`}
+/>
+
+说明：
+
+- `CreationSession-创作会话` 记录用户从 Home、Theme Detail、Studio 或 Explore inspiration 进入创作的上下文。
+- `PromptLog-Prompt日志` 只记录 Assistant 中间过程，不是用户公开内容。
+- `ReferenceImage-参考图` 是用户上传的输入素材，不是作品。
+- `GenerationJob-生成任务` 是扣积分、调用 AI、记录供应商状态的任务表。
+- `GeneratedImage-生成图片` 是 Studio 中展示的用户私有图片资产。
+- 生成扣费通过 `CreditAuditLog-积分流水` 追溯，余额仍由 `Credit-积分余额` 管理。
+
+### 4.3 投稿与公开展示链路
+
+<Mermaid
+  title="4.3 投稿与公开展示链路"
+  chart={`
+flowchart LR
+  User[User-用户] --> GeneratedImage[GeneratedImage-生成图片]
+  GeneratedImage --> ImageSubmission[ImageSubmission-作品投稿]
+  Theme[Theme-正式主题] --> ImageSubmission
+  ImageSubmission --> ReviewRecord[ReviewRecord-审核记录]
+  ImageSubmission --> PublicImage[PublicImage-公开图片]
+  GeneratedImage --> PublicImage
+  PublicImage --> ImageLike[ImageLike-图片点赞]
+  PublicImage --> ImageSave[ImageSave-图片收藏]
+`}
+/>
+
+说明：
+
+- 生成图片不会自动公开。
+- 用户主动提交后创建 `ImageSubmission-作品投稿`。
+- 投稿审核过程写入 `ReviewRecord-审核记录`。
+- 通过审核后创建 `PublicImage-公开图片`。
+- `PublicImage-公开图片` 不重复存图片文件，它引用 `GeneratedImage-生成图片`，只承载公开展示、排序、点赞、收藏相关数据。
+
+### 4.4 支付与积分链路
+
+<Mermaid
+  title="4.4 支付与积分链路"
+  chart={`
+flowchart LR
+  User[User-用户] --> Transaction[Transaction-订单交易]
+  Transaction --> Subscription[Subscription-订阅]
+  Transaction --> Credit[Credit-积分余额]
+  Transaction --> CreditAuditLog[CreditAuditLog-积分流水]
+  GenerationJob[GenerationJob-生成任务] --> CreditAuditLog
+  ThemeSubmission[ThemeSubmission-主题提交] --> CreditAuditLog
+`}
+/>
+
+说明：
+
+- 购买、订阅、支付状态继续使用现有 `Transaction-订单交易` 和 `Subscription-订阅`。
+- 用户当前余额继续使用 `Credit-积分余额`。
+- 所有积分变动继续使用 `CreditAuditLog-积分流水`。
+- 图片生成消耗积分时，`CreditAuditLog.operationReferId` 可记录 `GenerationJob.jobId`。
+- 主题提交奖励积分时，`CreditAuditLog.operationReferId` 可记录 `ThemeSubmission.themeSubmissionId`。
+
+## 5. 核心关系清单
+
+### 5.1 用户关系
+
+<CheetTable title="用户关系">
+
+| 来源 | 关系 | 目标 | 说明 |
+| --- | --- | --- | --- |
+| `User-用户` | 1:1 | `Credit-积分余额` | 一个用户一份积分余额 |
+| `User-用户` | 1:1 | `Subscription-订阅` | 一个用户当前一份订阅状态 |
+| `User-用户` | 1:N | `Transaction-订单交易` | 一个用户可有多笔订单 |
+| `User-用户` | 1:N | `CreditAuditLog-积分流水` | 一个用户有多条积分流水 |
+| `User-用户` | 1:N | `ThemeSubmission-主题提交` | 用户可提交多个主题想法 |
+| `User-用户` | 1:N | `CreationSession-创作会话` | 用户可有多次创作会话 |
+| `User-用户` | 1:N | `GenerationJob-生成任务` | 用户可创建多个生成任务 |
+| `User-用户` | 1:N | `GeneratedImage-生成图片` | 用户可拥有多张私有生成图 |
+| `User-用户` | 1:N | `ImageSubmission-作品投稿` | 用户可提交多个作品 |
+| `User-用户` | 1:N | `PublicImage-公开图片` | 用户可发布多个公开作品 |
+| `User-用户` | 1:N | `ImageLike-图片点赞` | 用户可点赞多张公开图片 |
+| `User-用户` | 1:N | `ImageSave-图片收藏` | 用户可收藏多张公开图片 |
+
+</CheetTable>
+
+### 5.2 主题关系
+
+<CheetTable title="主题关系">
+
+| 来源 | 关系 | 目标 | 说明 |
+| --- | --- | --- | --- |
+| `ThemeSubmission-主题提交` | N:1 | `Theme-正式主题` | 多个提交可能被编辑、合并或采纳为正式主题 |
+| `Theme-正式主题` | 1:N | `CreationSession-创作会话` | 主题详情页创作会绑定主题上下文 |
+| `Theme-正式主题` | 1:N | `GenerationJob-生成任务` | 围绕主题生成的任务记录主题 |
+| `Theme-正式主题` | 1:N | `GeneratedImage-生成图片` | 生成图可带主题上下文 |
+| `Theme-正式主题` | 1:N | `ImageSubmission-作品投稿` | 用户把作品提交到某个主题 |
+| `Theme-正式主题` | 1:N | `PublicImage-公开图片` | 主题 Gallery 展示公开图片 |
+
+</CheetTable>
+
+### 5.3 创作和生成关系
+
+<CheetTable title="创作和生成关系">
+
+| 来源 | 关系 | 目标 | 说明 |
+| --- | --- | --- | --- |
+| `CreationSession-创作会话` | 1:N | `PromptLog-Prompt日志` | 一次创作会产生多个 Assistant 日志 |
+| `CreationSession-创作会话` | 1:N | `ReferenceImage-参考图` | 一次创作可上传多个参考图 |
+| `CreationSession-创作会话` | 1:N | `GenerationJob-生成任务` | 一次创作可发起多次生成 |
+| `ReferenceImage-参考图` | 1:N | `GenerationJob-生成任务` | 一个参考图可被多个生成任务使用 |
+| `GenerationJob-生成任务` | 1:N | `GeneratedImage-生成图片` | 一个任务可生成 1/2/4 张图片 |
+| `GeneratedImage-生成图片` | 1:N | `GenerationJob-生成任务` | 一张图可作为变体/编辑的来源图 |
+
+</CheetTable>
+
+### 5.4 投稿和公开关系
+
+<CheetTable title="投稿和公开关系">
+
+| 来源 | 关系 | 目标 | 说明 |
+| --- | --- | --- | --- |
+| `GeneratedImage-生成图片` | 1:N | `ImageSubmission-作品投稿` | 一张图理论上可提交到不同主题，业务上可限制重复提交 |
+| `ImageSubmission-作品投稿` | 1:N | `ReviewRecord-审核记录` | 一次投稿可能有自动审核和人工审核记录 |
+| `ImageSubmission-作品投稿` | 1:1 | `PublicImage-公开图片` | 投稿审核通过后创建公开展示记录 |
+| `GeneratedImage-生成图片` | 1:1 | `PublicImage-公开图片` | 公开图片引用原始生成图 |
+| `PublicImage-公开图片` | 1:N | `ImageLike-图片点赞` | 公开图片可被多个用户点赞 |
+| `PublicImage-公开图片` | 1:N | `ImageSave-图片收藏` | 公开图片可被多个用户收藏 |
+
+</CheetTable>
+
+## 6. 权限边界从关系中推导
+
+<CheetTable title="权限边界从关系中推导">
+
+| 表名 / Model | 读权限 | 写权限 | 原因 |
+| --- | --- | --- | --- |
+| `User-用户` | 本人 / 系统 | 系统 | 用户身份基础表 |
+| `Credit-积分余额` | 本人 / 系统 | 系统 | 余额不能由业务接口直接写 |
+| `CreditAuditLog-积分流水` | 本人 / 系统 | 系统 | 积分审计流水 |
+| `Transaction-订单交易` | 本人 / 系统 | 支付系统 / 系统 | 支付订单 |
+| `Subscription-订阅` | 本人 / 系统 | 支付系统 / 系统 | 订阅状态 |
+| `ThemeSubmission-主题提交` | 本人 / 管理员 | 本人提交，管理员审核 | 用户提交主题想法 |
+| `Theme-正式主题` | 公开 | 管理员 / 系统 | 公开主题内容 |
+| `CreationSession-创作会话` | 本人 | 本人 / 系统 | 用户私有创作过程 |
+| `PromptLog-Prompt日志` | 系统 / 管理员 | 系统 | 内部日志，不直接给用户完整展示 |
+| `ReferenceImage-参考图` | 本人 | 本人 / 系统 | 用户上传的私有输入素材 |
+| `GenerationJob-生成任务` | 本人 | 本人创建，系统更新 | 用户私有异步任务 |
+| `GeneratedImage-生成图片` | 本人 | 系统 | 用户私有图片资产 |
+| `ImageSubmission-作品投稿` | 本人 / 管理员 | 本人提交，管理员审核 | 投稿审核对象 |
+| `ReviewRecord-审核记录` | 管理员 / 系统 | 系统 / 管理员 | 审核审计 |
+| `PublicImage-公开图片` | 公开 | 系统 / 管理员 | 公开展示记录 |
+| `ImageLike-图片点赞` | 本人状态 / 公开计数 | 本人 | 用户互动 |
+| `ImageSave-图片收藏` | 本人状态 | 本人 | 用户收藏 |
+
+</CheetTable>
+
+## 7. 关键设计结论
+
+- `User-用户` 是所有业务数据归属的根。
+- `Credit-积分余额`、`CreditAuditLog-积分流水`、`Transaction-订单交易`、`Subscription-订阅` 已经完备，不需要为 Monica AI 新建积分或订单表。
+- `ThemeSubmission-主题提交` 是主题来源，普通用户和管理员走同一条主题生产链路。
+- `Theme-正式主题` 是创作上下文和投稿目标。
+- `GenerationJob-生成任务` 是积分消耗和 AI 供应商调用的核心任务表。
+- `GeneratedImage-生成图片` 是 My Studio 的核心资产。
+- `ImageSubmission-作品投稿` 是从私有图进入公开展示前的审核层。
+- `PublicImage-公开图片` 是公开展示投影，不重复存储图片资产。
+- `ReferenceImage-参考图` 是生成输入素材，不是作品。
+- `ImageLike-图片点赞` 和 `ImageSave-图片收藏` 是用户与公开图片之间的关系表。
+

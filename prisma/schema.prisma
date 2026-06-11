@@ -6,7 +6,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-schemas  = ["ai-image-creative", "public"]
+schemas  = ["monica_ai", "public"]
 }
 
 // === backend-core models ===
@@ -30,7 +30,7 @@ model User {
   @@index([fingerprintId], map: "idx_users_fingerprint_id")
   @@map("users")
 
-  @@schema("ai-image-creative")
+  @@schema("monica_ai")
 }
 
 model Subscription {
@@ -53,7 +53,7 @@ model Subscription {
   @@index([orderId], map: "idx_subscriptions_order_id")
   @@map("subscriptions")
 
-  @@schema("ai-image-creative")
+  @@schema("monica_ai")
 }
 
 model Credit {
@@ -85,7 +85,7 @@ model Credit {
   @@index([userId], map: "idx_credits_user_id")
   @@map("credits")
 
-  @@schema("ai-image-creative")
+  @@schema("monica_ai")
 }
 
 model Transaction {
@@ -129,7 +129,7 @@ model Transaction {
   @@index([userId], map: "idx_transactions_user_id")
   @@map("transactions")
 
-  @@schema("ai-image-creative")
+  @@schema("monica_ai")
 }
 
 model CreditAuditLog {
@@ -149,7 +149,7 @@ model CreditAuditLog {
   @@index([userId], map: "idx_credit_audit_log_user_id")
   @@map("credit_audit_log")
 
-  @@schema("ai-image-creative")
+  @@schema("monica_ai")
 }
 
 model UserBackup {
@@ -172,7 +172,7 @@ model UserBackup {
   @@index([originalUserId], map: "idx_user_backup_original_user_id")
   @@map("user_backup")
 
-   @@schema("ai-image-creative")
+   @@schema("monica_ai")
 }
 
 model Apilog {
@@ -186,5 +186,5 @@ model Apilog {
 
   @@map("apilog")
 
-  @@schema("ai-image-creative")
+  @@schema("monica_ai")
 }
