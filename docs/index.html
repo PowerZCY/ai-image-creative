@@ -776,6 +776,63 @@
       min-height: 0;
     }
 
+    .masonry-grid {
+      column-count: 4;
+      column-gap: 20px;
+    }
+
+    .masonry-grid .image-card {
+      break-inside: avoid;
+      margin: 0 0 20px;
+      display: inline-flex;
+      width: 100%;
+    }
+
+    .gallery-image {
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      border-radius: 0;
+      overflow: hidden;
+    }
+
+    .gallery-image img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .gallery-image:hover {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .gallery-meta {
+      padding: 12px 14px 14px;
+      gap: 6px;
+    }
+
+    .gallery-meta .compact-title {
+      font-size: 0.98rem;
+      line-height: 1.25;
+    }
+
+    .gallery-alt {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
     .image-card:hover {
       transform: translateY(-12px);
       box-shadow: var(--shadow-lg);
@@ -888,6 +945,17 @@
       border-radius: var(--radius-full);
     }
 
+    .art.cat-glasses {
+      background-image: url("glasses/cat-with-glasses.webp");
+      background-size: cover;
+      background-position: center;
+    }
+
+    .art.cat-glasses::before,
+    .art.cat-glasses::after {
+      content: none;
+    }
+
     .card-body {
       padding: 24px;
       flex-grow: 1;
@@ -945,23 +1013,59 @@
       background: var(--panel-soft);
     }
 
-    /* Theme Detail Hero */
+    /* Theme Hero */
     .theme-hero {
-      padding: 80px 0;
-      text-align: center;
-      max-width: 800px;
-      margin: 0 auto;
+      padding: 36px 0 64px;
     }
 
     .theme-hero h1 {
-      font-size: 4.8rem;
+      font-size: clamp(3.4rem, 7vw, 5.6rem);
       letter-spacing: 0;
-      line-height: 0.9;
-      margin: 24px 0;
+      line-height: 0.95;
+      margin: 20px 0 0;
+      white-space: nowrap;
+    }
+
+    .theme-copy {
+      display: grid;
+      gap: 22px;
+      max-width: 1080px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .theme-note {
+      display: grid;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.65;
+      max-width: 760px;
+      margin: 0 auto;
+      text-align: left;
+    }
+
+    .theme-note p {
+      margin: 0;
+    }
+
+    .submission-hint {
+      justify-self: center;
+      max-width: 760px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius-sm);
+      background: var(--panel-soft);
+      padding: 12px 16px;
+      color: var(--ink);
+      font-weight: 650;
+      line-height: 1.55;
     }
 
     @media (max-width: 900px) {
       .home-theme-panel { grid-template-columns: 1fr; gap: 40px; text-align: center; }
+      .masonry-grid { column-count: 2; }
       .hero-stack { height: 350px; }
       .hero-stack .art { width: 220px; height: 280px; }
       .theme-poster-content { order: 2; }
@@ -993,7 +1097,8 @@
 
       .home-theme-panel { grid-template-columns: 1fr; gap: 32px; }
       .section-title { font-size: 2.5rem; }
-      .theme-hero h1 { font-size: 3.25rem; }
+      .theme-hero h1 { font-size: 3.25rem; white-space: normal; }
+      .masonry-grid { column-count: 1; }
       .theme-poster-content .section-title { font-size: 3rem; }
       .creation-panel { margin: 20px 0; }
       .composer-main { flex-direction: column; }
@@ -1038,7 +1143,6 @@
         </div>
         <nav class="nav" aria-label="Primary">
           <button class="selected" data-nav="home">Home</button>
-          <button data-nav="theme">Theme Detail</button>
           <button data-nav="explore">Explore</button>
           <button data-nav="studio">My Studio</button>
         </nav>
@@ -1054,23 +1158,24 @@
           </div>
           
           <div id="home-creator" class="creation-panel"></div>
+          <p class="submission-hint" style="margin: 0 auto; max-width: 720px; text-align: left;">After generating images, you can choose one to submit under today's theme and show everyone your imagination.</p>
         </div>
 
         <div class="panel panel-pad" style="margin-top: 80px; border: none; background: transparent; box-shadow: none;">
           <div class="home-theme-panel">
             <div class="theme-poster-content">
               <div class="chip">Today's theme</div>
-              <h2 class="section-title">Show Silence</h2>
-              <p class="subtle" style="font-size: 1.25rem;">Create a scene where quiet becomes visible. Explore the beauty of absence and the weight of stillness.</p>
-              <div class="meta-row" style="margin-top: 24px;"><span class="chip">126 creations</span><span class="chip">42 creators</span></div>
+              <h2 class="section-title">After Putting On Glasses</h2>
+              <p class="subtle" style="font-size: 1.25rem;">Create images about glasses, clearer vision, and new perspectives. Show what changes when a person, animal, object, or place finally sees differently.</p>
+              <div class="meta-row" style="margin-top: 24px;"><span class="chip">156 creations</span><span class="chip">51 creators</span></div>
               <div class="button-row" style="margin-top: 32px;">
                 <button class="primary" style="height: 52px; padding: 0 32px;" data-nav-target="theme">View theme gallery</button>
               </div>
             </div>
             <div class="hero-stack">
-              <div class="art silence"></div>
-              <div class="art lonely"></div>
+              <div class="art cat-glasses"></div>
               <div class="art poster"></div>
+              <div class="art lonely"></div>
             </div>
           </div>
         </div>
@@ -1114,15 +1219,31 @@
 
       <section id="theme" class="page">
         <div class="theme-hero">
-          <div class="chip">Jun 9, 2026</div>
-          <h1 class="section-title">Show Silence</h1>
-          <p class="subtle" style="margin: 0 auto;">Create a scene where silence is felt through absence, body language, space, or visual metaphor.</p>
-          <div class="meta-row" style="justify-content: center; margin-top: 24px;">
-            <span>126 creations</span><span>42 creators</span><span>18 featured</span>
-          </div>
-          <div class="button-row" style="justify-content: center; margin-top: 32px;">
-            <button class="primary" style="height: 52px; padding: 0 32px;" data-scroll-to="theme-creator">Create your version</button>
-            <button style="height: 52px; padding: 0 32px;" data-scroll-to="featured-images">Explore gallery</button>
+          <div class="theme-copy">
+            <div>
+              <div class="chip">Jun 12, 2026</div>
+              <h1 class="section-title">After Putting On Glasses</h1>
+            </div>
+            <div class="theme-note" aria-label="Theme note">
+              <p>Putting on glasses can be a real moment: someone finally recognizes a familiar face, reads a sign, or notices details that were always there.</p>
+              <p>It can also be a visual metaphor. The glasses may stand for a new skill, a method, a mindset, or a way of thinking that makes the same world easier to understand.</p>
+              <p>The creative question is: who or what puts them on? A person, a cat with glasses, a dog with glasses, an object, or even a city can all become different ways to show clearer vision.</p>
+            </div>
+            <p class="submission-hint">After generating images, you can choose one to submit under this theme and show everyone your imagination.</p>
+            <div class="meta-row" style="justify-content: center;">
+              <span>156 creations</span><span>51 creators</span><span>21 featured</span>
+            </div>
+            <div class="chip-row" style="justify-content: center;">
+              <span class="chip">glasses</span>
+              <span class="chip">clear vision</span>
+              <span class="chip">new perspective</span>
+              <span class="chip">visual metaphor</span>
+              <span class="chip">conceptual AI art</span>
+              <span class="chip">perspective shift</span>
+              <span class="chip">cat with glasses</span>
+              <span class="chip">dog with glasses</span>
+              <span class="chip">animals with glasses</span>
+            </div>
           </div>
         </div>
 
@@ -1145,7 +1266,7 @@
               <button>Newest</button>
             </div>
           </div>
-          <div id="theme-gallery" class="image-grid"></div>
+          <div id="theme-gallery" class="masonry-grid"></div>
         </section>
       </section>
 
@@ -1211,7 +1332,7 @@
           <div id="submit-preview" class="art silence"></div>
           <div>
             <div class="field-label">Theme</div>
-            <div id="submit-theme" class="notice">Show Silence</div>
+            <div id="submit-theme" class="notice">After Putting On Glasses</div>
             <div class="field-label" style="margin-top: 14px;">Prompt</div>
             <textarea id="submit-prompt" rows="5"></textarea>
             <div class="field-label" style="margin-top: 14px;">Creation note optional</div>
@@ -1237,11 +1358,11 @@
         <div class="split-modal">
           <div id="detail-art" class="art rain"></div>
           <div>
-            <div class="meta-row"><span id="detail-author">@mira</span><span id="detail-theme">Show Silence</span></div>
+            <div class="meta-row"><span id="detail-author">@mira</span><span id="detail-theme">After Putting On Glasses</span></div>
             <div class="field-label" style="margin-top: 12px;">Prompt</div>
             <p id="detail-prompt" class="prompt-preview"></p>
             <div class="field-label">Creation note</div>
-            <p class="subtle">I wanted the scene to feel quiet before the viewer understands why.</p>
+            <p class="subtle">I wanted the glasses to feel like both a real object and a metaphor for noticing what was always present.</p>
             <div class="chip-row">
               <span class="chip">Flux Pro</span>
               <span class="chip">Cinematic</span>
@@ -1270,8 +1391,8 @@
         <input placeholder="Search themes...">
         <div class="theme-picker-list">
           <div class="theme-picker-item">
-            <div><strong>Today's theme</strong><div class="subtle">Show Silence</div></div>
-            <button data-pick-theme="Show Silence">Use theme</button>
+            <div><strong>Today's theme</strong><div class="subtle">After Putting On Glasses</div></div>
+            <button data-pick-theme="After Putting On Glasses">Use theme</button>
           </div>
           <div class="theme-picker-item">
             <div><strong>Recent theme</strong><div class="subtle">The Architecture of Loneliness</div></div>
@@ -1289,11 +1410,11 @@
   <script>
     const themes = [
       {
-        title: "Show Silence",
-        date: "Jun 9, 2026",
-        brief: "Create an image where quiet becomes visible through absence, space, or body language.",
-        art: "silence",
-        stats: "126 creations · 42 creators · 18 featured"
+        title: "After Putting On Glasses",
+        date: "Jun 12, 2026",
+        brief: "Show how glasses reveal details, clarity, or a whole new way of seeing.",
+        art: "cat-glasses",
+        stats: "156 creations · 51 creators · 21 featured"
       },
       {
         title: "A City Where the Rain Falls Upward",
@@ -1313,14 +1434,28 @@
 
     const galleryImages = [
       {
-        art: "silence",
+        art: "cat-glasses",
+        src: "glasses/cat-with-glasses.webp",
+        title: "Cat With Glasses",
+        alt: "A cute white cat with glasses sits on a bright sunlit wooden windowsill, surrounded by potted succulents and lush green trailing plants.",
         author: "@mira",
-        theme: "Show Silence",
-        prompt: "An empty dinner table in a dim apartment after an argument, untouched plates, two chairs slightly turned away from each other, heavy stillness in the air, muted colors, cinematic lighting.",
-        tags: ["cinematic", "quiet", "interior"]
+        theme: "After Putting On Glasses",
+        prompt: "A cute white cat with glasses sits on a bright sunlit wooden windowsill, surrounded by potted succulents and lush green trailing plants, warm illustrated style, clear curious eyes, gentle morning light.",
+        tags: ["cat with glasses", "illustration", "clear vision"]
+      },
+      {
+        art: "silence",
+        title: "Formula Glasses",
+        alt: "A student puts on symbolic glasses made of formulas while a messy classroom becomes clear geometric patterns and readable equations.",
+        author: "@noor",
+        theme: "After Putting On Glasses",
+        prompt: "A student puts on symbolic glasses made of formulas, and the messy classroom turns into clear geometric patterns and readable equations, warm cinematic light, visual metaphor for learning.",
+        tags: ["clear vision", "student", "visual metaphor"]
       },
       {
         art: "lonely",
+        title: "One Lit Window",
+        alt: "A narrow concrete apartment tower with one lit window and a single distant figure in foggy dawn light.",
         author: "@ren",
         theme: "The Architecture of Loneliness",
         prompt: "A narrow concrete apartment tower with one lit window, a single figure visible from far away, foggy dawn, restrained geometry, architectural solitude.",
@@ -1328,6 +1463,8 @@
       },
       {
         art: "rain",
+        title: "Upward Rain Station",
+        alt: "A neon train station where rain rises from the tracks into the night sky while commuters stand under broken lights.",
         author: "@sato",
         theme: "A City Where the Rain Falls Upward",
         prompt: "A neon train station where rain rises from the tracks into the night sky, commuters standing still under broken lights, surreal cinematic city scene.",
@@ -1335,25 +1472,27 @@
       },
       {
         art: "poster",
+        title: "Sharper City Map",
+        alt: "Transparent eyeglass lenses sharpen a blurred city map into readable streets and names in a minimal poster-style image.",
         author: "@lina",
-        theme: "Show Silence",
-        prompt: "A minimal poster-style image of a white sound wave becoming an empty circle, restrained design, muted color blocks, visual metaphor for silence.",
-        tags: ["poster", "minimal", "design"]
+        theme: "After Putting On Glasses",
+        prompt: "A minimal poster-style image of transparent eyeglass lenses sharpening a blurred city map into readable streets and names, restrained design, crisp contrast, new perspective.",
+        tags: ["poster", "glasses", "new perspective"]
       }
     ];
 
     const studioImages = [
-      { art: "silence", status: "Generated", theme: "No theme", model: "GPT Image" },
+      { art: "cat-glasses", status: "Generated", theme: "No theme", model: "GPT Image" },
       { art: "rain", status: "Under review", theme: "A City Where the Rain Falls Upward", model: "Flux Pro" },
       { art: "lonely", status: "Published", theme: "The Architecture of Loneliness", model: "Ideogram" },
-      { art: "poster", status: "Rejected", theme: "Show Silence", model: "Recraft" }
+      { art: "poster", status: "Rejected", theme: "After Putting On Glasses", model: "Recraft" }
     ];
 
     const creators = {
       home: {
         title: "",
         context: "free",
-        theme: "Show Silence",
+        theme: "After Putting On Glasses",
         placeholder: "Describe anything you want to create...",
         ideaLabel: "Get ideas about today's theme",
         submitLabel: "Submit to today's theme",
@@ -1368,7 +1507,7 @@
       theme: {
         title: "Create for this theme",
         context: "theme",
-        theme: "Show Silence",
+        theme: "After Putting On Glasses",
         placeholder: "Describe your interpretation...",
         ideaLabel: "Get ideas about this theme",
         submitLabel: "Submit to this theme",
@@ -1378,7 +1517,7 @@
         ratio: "1:1",
         count: "2",
         negativePrompt: "",
-        selectedTheme: "Show Silence"
+        selectedTheme: "After Putting On Glasses"
       },
       studio: {
         title: "Create",
@@ -1548,13 +1687,13 @@
       const state = creators[id];
       const theme = state.selectedTheme || state.theme || "today's theme";
       const baseIdeas = seed ? [
-        `Change the main subject while keeping the emotional distance from ${seed}`,
-        `Make a quieter and more abstract version of ${seed}`,
-        `Keep the theme but shift the composition to a wider environmental scene`
+        `Change the main subject while keeping the moment of clearer vision from ${seed}`,
+        `Make a more symbolic version of ${seed} where the glasses represent a new skill or mindset`,
+        `Keep the theme but shift the composition to a wider scene where only the view through the lenses is sharp`
       ] : [
-        `An empty dinner table after an argument`,
-        `A subway platform where everyone avoids speaking`,
-        `A child holding a glass bell around a sleeping city`
+        `A person puts on glasses and finally recognizes a familiar face across a busy street`,
+        `A cat with glasses studies a human living room like a tiny scholar in a research lab`,
+        `A city wearing giant transparent glasses, with only the view through the lenses becoming sharp and meaningful`
       ];
       const output = document.getElementById(`${id}-assistant`);
       output.classList.add("active");
@@ -1728,7 +1867,7 @@
     function generateImages(id) {
       syncPrompt(id);
       const state = creators[id];
-      const prompt = state.prompt.trim() || "A quiet empty room with a single chair near a window, soft morning light, muted colors, subtle dust in the air, a feeling of waiting and absence.";
+      const prompt = state.prompt.trim() || "A person puts on glasses and the same room becomes full of readable details, clear light through the lenses, visual metaphor for new perspective, thoughtful composition.";
       const count = Number(state.count);
       const status = document.getElementById(`${id}-result-status`);
       const safety = document.getElementById(`${id}-safety`);
@@ -1739,7 +1878,7 @@
       if (safety) safety.textContent = "Safety check passed";
       if (id === "studio") {
         studioImages.unshift({
-          art: creators.studio.selectedTheme ? "silence" : "poster",
+          art: creators.studio.selectedTheme ? "cat-glasses" : "poster",
           status: "Generated",
           theme: creators.studio.selectedTheme || "No theme",
           model: state.model
@@ -1756,7 +1895,7 @@
         const inlineStatus = document.getElementById(`${id}-inline-status`);
         const inlineResults = document.getElementById(`${id}-inline-results`);
         if (inlineOutput && inlineResults) {
-          const arts = ["silence", "rain", "lonely", "poster"];
+          const arts = ["cat-glasses", "poster", "lonely", "rain"];
           inlineOutput.classList.add("active");
           if (inlineStatus) inlineStatus.textContent = `${count} mock image${count > 1 ? "s" : ""} generated`;
           inlineResults.innerHTML = Array.from({ length: count }, (_, index) => resultCard({
@@ -1779,7 +1918,7 @@
 
       setTimeout(() => {
         if (status) status.textContent = `${count} mock image${count > 1 ? "s" : ""} generated`;
-        const arts = ["silence", "rain", "lonely", "poster"];
+        const arts = ["cat-glasses", "poster", "lonely", "rain"];
         results.innerHTML = Array.from({ length: count }, (_, index) => resultCard({
           art: arts[index % arts.length],
           prompt,
@@ -1831,7 +1970,7 @@
           </div>
           <div class="meta-row"><span>${escapeHtml(theme.stats)}</span></div>
           <div class="chip-row">
-            <span class="chip">cinematic</span><span class="chip">surreal</span><span class="chip">quiet</span>
+            <span class="chip">glasses</span><span class="chip">clear vision</span><span class="chip">new perspective</span>
           </div>
           <div class="button-row">
             <button data-nav-target="theme">View theme</button>
@@ -1843,9 +1982,16 @@
     }
 
     function imageCard(image) {
+      const visual = image.src
+        ? `<button class="gallery-image" data-open-image="${galleryImages.indexOf(image)}" aria-label="Open ${escapeHtml(image.title || "image detail")}"><img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt || image.title || "Gallery image")}"></button>`
+        : `<button class="art ${image.art}" style="width: 100%; border: 0; border-radius: 0; aspect-ratio: ${image.art === "rain" ? "4 / 5" : image.art === "poster" ? "3 / 4" : "1 / 1"};" data-open-image="${galleryImages.indexOf(image)}" aria-label="Open ${escapeHtml(image.title || "image detail")}"></button>`;
       return `
         <article class="image-card">
-          <button class="art ${image.art}" style="width: 100%; border: 0; border-radius: 0;" data-open-image="${galleryImages.indexOf(image)}" aria-label="Open image detail"></button>
+          ${visual}
+          <div class="card-body gallery-meta">
+            <h3 class="compact-title">${escapeHtml(image.title || "Untitled Image")}</h3>
+            <p class="gallery-alt">${escapeHtml(image.alt || "")}</p>
+          </div>
         </article>
       `;
     }
@@ -1980,7 +2126,7 @@
       if (target.dataset.submit) {
         const label = target.dataset.submitLabel || "Submit image";
         const panel = target.dataset.panel;
-        const theme = creators[panel].selectedTheme || "Show Silence";
+        const theme = creators[panel].selectedTheme || "After Putting On Glasses";
         document.getElementById("submit-title").textContent = label;
         document.getElementById("submit-theme").textContent = theme;
         document.getElementById("submit-prompt").value = target.dataset.submit;
