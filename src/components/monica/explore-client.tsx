@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Bookmark, Heart, ImagePlus, Loader2, Search, X } from 'lucide-react';
+import {
+  themeBgColor,
+  themeBorderColor,
+  themeButtonGradientClass,
+  themeButtonGradientHoverClass,
+  themeHeroEyesOnClass,
+  themeIconColor,
+} from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaExploreCopy, MonicaThemeSummary } from './copy';
 
@@ -145,12 +153,12 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <h1 className="text-3xl font-semibold text-white md:text-5xl">{copy.title}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+            <h1 className={cn('bg-clip-text text-3xl font-semibold text-transparent md:text-5xl', themeHeroEyesOnClass)}>{copy.title}</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               {copy.description}
             </p>
           </div>
-          <div className="flex rounded-md border border-white/10 bg-zinc-950 p-1">
+          <div className="flex rounded-md border border-border bg-muted/50 p-1">
             {([
               { value: 'themes', label: copy.tabs.themes },
               { value: 'images', label: copy.tabs.images },
@@ -161,7 +169,9 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
                 onClick={() => setTab(option.value)}
                 className={cn(
                   'h-9 rounded px-3 text-sm transition',
-                  tab === option.value ? 'bg-emerald-300 text-zinc-950' : 'text-zinc-300 hover:bg-white/10',
+                  tab === option.value
+                    ? cn('text-white', themeButtonGradientClass)
+                    : 'text-muted-foreground hover:bg-background hover:text-foreground',
                 )}
               >
                 {option.label}
@@ -170,14 +180,17 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
           </div>
         </div>
 
-        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-white/10 bg-zinc-950/70 p-3 md:flex-row md:items-center md:justify-between">
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-border bg-card/70 p-3 md:flex-row md:items-center md:justify-between">
           <label className="relative block w-full md:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={copy.searchPlaceholder}
-              className="h-10 w-full rounded-md border border-white/10 bg-zinc-900 pl-9 pr-3 text-sm text-white outline-none transition focus:border-emerald-300/70"
+              className={cn(
+                'h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-current',
+                themeIconColor,
+              )}
             />
           </label>
 
@@ -191,8 +204,8 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
                   className={cn(
                     'h-9 rounded-md border px-3 text-sm transition',
                     themeFilter === option.value
-                      ? 'border-emerald-300 bg-emerald-300 text-zinc-950'
-                      : 'border-white/10 text-zinc-300 hover:bg-white/10',
+                      ? cn('border-transparent text-white', themeButtonGradientClass)
+                      : 'border-border text-muted-foreground hover:bg-background hover:text-foreground',
                   )}
                 >
                   {option.label}
@@ -200,7 +213,7 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
               ))}
             </div>
           ) : (
-            <div className="flex rounded-md border border-white/10 bg-zinc-950 p-1">
+            <div className="flex rounded-md border border-border bg-muted/50 p-1">
               {sortOptions.map((option) => (
                 <button
                   key={option.value}
@@ -208,7 +221,9 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
                   onClick={() => setSort(option.value)}
                   className={cn(
                     'h-9 rounded px-3 text-sm transition',
-                    sort === option.value ? 'bg-emerald-300 text-zinc-950' : 'text-zinc-300 hover:bg-white/10',
+                    sort === option.value
+                      ? cn('text-white', themeButtonGradientClass)
+                      : 'text-muted-foreground hover:bg-background hover:text-foreground',
                   )}
                 >
                   {option.label}
@@ -219,14 +234,14 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+          <div className="mb-4 rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
             {error}
           </div>
         )}
 
         {tab === 'themes' ? (
           filteredThemes.length === 0 ? (
-            <div className="rounded-lg border border-white/10 bg-zinc-950/60 p-6 text-sm text-zinc-400">
+            <div className="rounded-lg border border-border bg-card/60 p-6 text-sm text-muted-foreground">
               {copy.emptyThemes}
             </div>
           ) : (
@@ -237,18 +252,18 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
             </div>
           )
         ) : loading ? (
-            <div className="flex h-40 items-center justify-center rounded-lg border border-white/10 bg-zinc-950/60 text-zinc-400">
+            <div className="flex h-40 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground">
               <Loader2 className="mr-2 size-4 animate-spin" />
               {copy.loading}
             </div>
           ) : images.length === 0 ? (
-            <div className="rounded-lg border border-white/10 bg-zinc-950/60 p-6 text-sm text-zinc-400">
+            <div className="rounded-lg border border-border bg-card/60 p-6 text-sm text-muted-foreground">
               {copy.empty}
             </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {images.map((publicImage) => (
-              <article key={publicImage.publicImageId} className="overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+              <article key={publicImage.publicImageId} className="overflow-hidden rounded-lg border border-border bg-card">
                 <button
                   type="button"
                   onClick={() => setActiveImage(publicImage)}
@@ -265,20 +280,20 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
                       className="aspect-square w-full object-cover"
                     />
                   ) : (
-                    <div className="grid aspect-square place-items-center text-zinc-500">
+                    <div className="grid aspect-square place-items-center text-muted-foreground">
                       <ImagePlus className="size-8" />
                     </div>
                   )}
                 </button>
                 <div className="space-y-3 p-3">
-                  <div className="truncate text-sm font-medium text-white">
+                  <div className="truncate text-sm font-medium text-foreground">
                     {publicImage.title || publicImage.image.promptUsed || copy.untitled}
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => void toggleAction(publicImage.publicImageId, 'like')}
-                      className="flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-white/10 text-sm text-zinc-200 hover:bg-white/10"
+                      className="flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border text-sm text-foreground hover:bg-muted"
                     >
                       <Heart className="size-4" />
                       <span className="sr-only">{copy.actions.like}</span>
@@ -287,7 +302,7 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
                     <button
                       type="button"
                       onClick={() => void toggleAction(publicImage.publicImageId, 'save')}
-                      className="flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-white/10 text-sm text-zinc-200 hover:bg-white/10"
+                      className="flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border text-sm text-foreground hover:bg-muted"
                     >
                       <Bookmark className="size-4" />
                       <span className="sr-only">{copy.actions.save}</span>
@@ -303,13 +318,13 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
 
       {activeImage && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-lg border border-white/10 bg-zinc-950 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <h2 className="text-lg font-semibold text-white">{copy.imageDetail}</h2>
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-lg border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="text-lg font-semibold text-foreground">{copy.imageDetail}</h2>
               <button
                 type="button"
                 onClick={() => setActiveImage(null)}
-                className="grid size-9 place-items-center rounded-md border border-white/10 text-zinc-300 hover:bg-white/10"
+                className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label={copy.close}
               >
                 <X className="size-4" />
@@ -326,14 +341,14 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
                   className="aspect-square w-full rounded-md object-cover"
                 />
               ) : (
-                <div className="grid aspect-square place-items-center rounded-md bg-zinc-900 text-zinc-500">
+                <div className="grid aspect-square place-items-center rounded-md bg-muted text-muted-foreground">
                   <ImagePlus className="size-8" />
                 </div>
               )}
               <div className="space-y-4">
                 <div>
-                  <div className="text-xs uppercase text-zinc-500">{copy.prompt}</div>
-                  <p className="mt-2 text-sm leading-6 text-zinc-200">
+                  <div className="text-xs uppercase text-muted-foreground">{copy.prompt}</div>
+                  <p className="mt-2 text-sm leading-6 text-foreground">
                     {activeImage.image.promptUsed || activeImage.title || copy.untitled}
                   </p>
                 </div>
@@ -341,14 +356,14 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
                   <button
                     type="button"
                     onClick={() => void copyActivePrompt()}
-                    className="h-10 rounded-md border border-white/10 px-3 text-sm text-zinc-200 hover:bg-white/10"
+                    className="h-10 rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted"
                   >
                     {copied ? copy.copied : copy.copyPrompt}
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveImage(null)}
-                    className="h-10 rounded-md bg-emerald-300 px-3 text-sm font-medium text-zinc-950 hover:bg-emerald-200"
+                    className={cn('h-10 rounded-md px-3 text-sm font-medium text-white hover:brightness-105', themeButtonGradientClass, themeButtonGradientHoverClass)}
                   >
                     {copy.usePrompt}
                   </button>
@@ -364,30 +379,30 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
 
 function ThemeCard({ theme, copy }: { theme: MonicaThemeSummary; copy: MonicaExploreCopy }) {
   return (
-    <article className="overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+    <article className="overflow-hidden rounded-lg border border-border bg-card">
       {theme.coverImageUrl ? (
         <Image
           src={theme.coverImageUrl}
           alt=""
           width={720}
           height={480}
-          className="aspect-[16/10] w-full object-cover"
+          className="aspect-16/10 w-full object-cover"
         />
       ) : (
-        <div className="grid aspect-[16/10] place-items-center bg-zinc-900 text-zinc-500">
+        <div className="grid aspect-16/10 place-items-center bg-muted text-muted-foreground">
           <ImagePlus className="size-8" />
         </div>
       )}
       <div className="space-y-4 p-4">
-        <div className="text-xs text-emerald-100">{theme.date}</div>
+        <div className={cn('text-xs font-medium', themeIconColor)}>{theme.date}</div>
         <div>
-          <h2 className="text-lg font-semibold text-white">{theme.title}</h2>
-          <p className="mt-2 text-sm leading-6 text-zinc-400">{theme.brief}</p>
+          <h2 className="text-lg font-semibold text-foreground">{theme.title}</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{theme.brief}</p>
         </div>
-        <div className="text-xs text-zinc-500">{theme.stats}</div>
+        <div className="text-xs text-muted-foreground">{theme.stats}</div>
         <div className="flex flex-wrap gap-2">
           {theme.tags.map((tag) => (
-            <span key={tag} className="rounded-full border border-white/10 px-2 py-1 text-xs text-zinc-300">
+            <span key={tag} className={cn('rounded-full border px-2 py-1 text-xs', themeBgColor, themeBorderColor, themeIconColor)}>
               {tag}
             </span>
           ))}
@@ -395,13 +410,13 @@ function ThemeCard({ theme, copy }: { theme: MonicaThemeSummary; copy: MonicaExp
         <div className="flex gap-2">
           <Link
             href="/theme"
-            className="flex h-9 flex-1 items-center justify-center rounded-md border border-white/10 text-sm text-zinc-200 hover:bg-white/10"
+            className="flex h-9 flex-1 items-center justify-center rounded-md border border-border text-sm text-foreground hover:bg-muted"
           >
             {copy.viewTheme}
           </Link>
           <Link
             href="/"
-            className="flex h-9 flex-1 items-center justify-center rounded-md bg-emerald-300 px-3 text-sm font-medium text-zinc-950 hover:bg-emerald-200"
+            className={cn('flex h-9 flex-1 items-center justify-center rounded-md px-3 text-sm font-medium text-white hover:brightness-105', themeButtonGradientClass, themeButtonGradientHoverClass)}
           >
             {copy.createFromTheme}
           </Link>

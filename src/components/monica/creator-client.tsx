@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { ImagePlus, Loader2, Sparkles, UploadCloud, X } from 'lucide-react';
+import {
+  themeBgColor,
+  themeBorderColor,
+  themeButtonGradientClass,
+  themeButtonGradientHoverClass,
+  themeHeroEyesOnClass,
+  themeIconColor,
+} from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaCreatorCopy } from './copy';
 
@@ -187,44 +195,57 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)] lg:items-start">
         <div className="space-y-6">
           <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-sm text-emerald-100">
+            <div className={cn(
+              'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm',
+              themeBgColor,
+              themeBorderColor,
+              themeIconColor,
+            )}>
               <Sparkles className="size-4" />
               <span>{copy.badge}</span>
             </div>
-            <h1 className="max-w-3xl text-4xl font-semibold leading-tight text-white md:text-6xl">
+            <h1 className={cn('max-w-3xl bg-clip-text text-4xl font-semibold leading-tight text-transparent md:text-6xl', themeHeroEyesOnClass)}>
               {copy.title}
             </h1>
-            <p className="max-w-2xl text-base leading-7 text-zinc-300 md:text-lg">
+            <p className="max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
               {copy.description}
             </p>
           </div>
 
-          <div className="grid gap-3 text-sm text-zinc-300 sm:grid-cols-3">
+          <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
             <Metric label={copy.estimatedLabel} value={`${estimatedCredits} ${copy.creditsUnit}`} />
             <Metric label={copy.queueLabel} value={isPolling ? copy.running : copy.ready} />
             <Metric label={copy.resultLabel} value={job ? formatStatus(job.status, copy.statusLabels) : copy.notStarted} />
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-zinc-950/80 p-4 shadow-2xl shadow-black/30 backdrop-blur md:p-5">
+        <div className="rounded-lg border border-border bg-card/80 p-4 shadow-2xl shadow-black/10 backdrop-blur dark:shadow-black/30 md:p-5">
           <div className="space-y-4">
             <label className="block">
-              <span className="text-sm font-medium text-zinc-200">{copy.promptLabel}</span>
+              <span className="text-sm font-medium text-foreground">{copy.promptLabel}</span>
               <textarea
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                className="mt-2 min-h-36 w-full resize-none rounded-md border border-white/10 bg-zinc-900 px-3 py-3 text-sm leading-6 text-white outline-none transition focus:border-emerald-300/70"
+                className={cn(
+                  'mt-2 min-h-36 w-full resize-none rounded-md border border-border bg-background px-3 py-3 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground/70',
+                  'focus:border-current',
+                  themeIconColor,
+                )}
                 placeholder={copy.promptPlaceholder}
                 maxLength={4000}
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-zinc-200">{copy.negativePromptLabel}</span>
+              <span className="text-sm font-medium text-foreground">{copy.negativePromptLabel}</span>
               <input
                 value={negativePrompt}
                 onChange={(event) => setNegativePrompt(event.target.value)}
-                className="mt-2 h-11 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm text-white outline-none transition focus:border-emerald-300/70"
+                className={cn(
+                  'mt-2 h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70',
+                  'focus:border-current',
+                  themeIconColor,
+                )}
                 placeholder={copy.negativePromptPlaceholder}
               />
             </label>
@@ -234,7 +255,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
               <OptionGroup label={copy.styleLabel} value={style} options={styleOptions} onChange={setStyle} />
               <OptionGroup label={copy.ratioLabel} value={ratio} options={ratioOptions} onChange={setRatio} />
               <div>
-                <span className="text-sm font-medium text-zinc-200">{copy.imagesLabel}</span>
+                <span className="text-sm font-medium text-foreground">{copy.imagesLabel}</span>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   {countOptions.map((count) => (
                     <button
@@ -244,8 +265,8 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
                       className={cn(
                         'h-10 rounded-md border text-sm transition',
                         imageCount === count
-                          ? 'border-emerald-300 bg-emerald-300 text-zinc-950'
-                          : 'border-white/10 bg-zinc-900 text-zinc-200 hover:border-white/30',
+                          ? cn('border-transparent text-white', themeButtonGradientClass)
+                          : 'border-border bg-background text-foreground hover:bg-muted',
                       )}
                     >
                       {count}
@@ -255,7 +276,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
               </div>
             </div>
 
-            <div className="rounded-md border border-dashed border-white/15 bg-zinc-900/70 p-3">
+            <div className="rounded-md border border-dashed border-border bg-muted/40 p-3">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -268,7 +289,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
               />
               {referenceImage ? (
                 <div className="flex items-center gap-3">
-                  <div className="h-16 w-16 overflow-hidden rounded-md border border-white/10 bg-zinc-800">
+                  <div className="h-16 w-16 overflow-hidden rounded-md border border-border bg-muted">
                     {referenceImage.url ? (
                       <Image
                         src={referenceImage.url}
@@ -279,19 +300,19 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <ImagePlus className="m-5 size-6 text-zinc-400" />
+                      <ImagePlus className="m-5 size-6 text-muted-foreground" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-white">{referenceImage.referenceId}</div>
-                    <div className="text-xs text-zinc-400">
+                    <div className="truncate text-sm font-medium text-foreground">{referenceImage.referenceId}</div>
+                    <div className="text-xs text-muted-foreground">
                       {referenceImage.safetyStatus ? formatStatus(referenceImage.safetyStatus, copy.statusLabels) : copy.uploaded}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setReferenceImage(null)}
-                    className="grid size-9 place-items-center rounded-md border border-white/10 text-zinc-300 hover:bg-white/10"
+                    className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                     aria-label={copy.removeReference}
                     title={copy.removeReference}
                   >
@@ -303,7 +324,10 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="flex w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-zinc-950 px-3 py-4 text-sm text-zinc-200 transition hover:border-emerald-300/50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={cn(
+                    'flex w-full items-center justify-center gap-2 rounded-md border bg-background px-3 py-4 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60',
+                    themeBorderColor,
+                  )}
                 >
                   {uploading ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
                   <span>{uploading ? copy.uploadingReference : copy.uploadReference}</span>
@@ -312,7 +336,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
             </div>
 
             {error && (
-              <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+              <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
                 {error}
               </div>
             )}
@@ -321,7 +345,11 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
               type="button"
               onClick={() => void handleGenerate()}
               disabled={!canGenerate}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+              className={cn(
+                'flex h-12 w-full items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60',
+                themeButtonGradientClass,
+                themeButtonGradientHoverClass,
+              )}
             >
               {generating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
               <span>{generating ? copy.generating : copy.generate}</span>
@@ -339,9 +367,9 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-zinc-950/70 px-3 py-3">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="mt-1 text-sm font-medium text-white">{value}</div>
+    <div className="rounded-md border border-border bg-card/70 px-3 py-3">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
 }
@@ -359,7 +387,7 @@ function OptionGroup({
 }) {
   return (
     <div>
-      <span className="text-sm font-medium text-zinc-200">{label}</span>
+      <span className="text-sm font-medium text-foreground">{label}</span>
       <div className="mt-2 flex flex-wrap gap-2">
         {options.map((option) => (
           <button
@@ -369,8 +397,8 @@ function OptionGroup({
             className={cn(
               'h-10 rounded-md border px-3 text-sm transition',
               value === option.value
-                ? 'border-emerald-300 bg-emerald-300 text-zinc-950'
-                : 'border-white/10 bg-zinc-900 text-zinc-200 hover:border-white/30',
+                ? cn('border-transparent text-white', themeButtonGradientClass)
+                : 'border-border bg-background text-foreground hover:bg-muted',
             )}
           >
             {option.label}
@@ -392,7 +420,7 @@ function ResultPanel({
 }) {
   if (!job) {
     return (
-      <div className="rounded-lg border border-white/10 bg-zinc-950/50 p-4 text-sm text-zinc-400">
+      <div className="rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
         {copy.emptyResult}
       </div>
     );
@@ -400,7 +428,7 @@ function ResultPanel({
 
   if (job.status === 'failed' || job.status === 'blocked' || job.status === 'cancelled') {
     return (
-      <div className="rounded-lg border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-100">
+      <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-800 dark:text-amber-100">
         {job.failureMessage || `${formatStatus(job.status, copy.statusLabels)}. ${copy.failedNoCharge}`}
       </div>
     );
@@ -408,7 +436,7 @@ function ResultPanel({
 
   if (images.length === 0) {
     return (
-      <div className="rounded-lg border border-white/10 bg-zinc-950/50 p-4 text-sm text-zinc-300">
+      <div className="rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
         {formatStatus(job.status, copy.statusLabels)}. {copy.waitingForImages}
       </div>
     );
@@ -417,7 +445,7 @@ function ResultPanel({
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {images.map((image) => (
-        <figure key={image.imageId} className="overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+        <figure key={image.imageId} className="overflow-hidden rounded-lg border border-border bg-card">
           {image.imageUrl ? (
             <Image
               src={image.imageUrl}
@@ -428,11 +456,11 @@ function ResultPanel({
               className="aspect-square w-full object-cover"
             />
           ) : (
-            <div className="grid aspect-square place-items-center text-zinc-500">
+            <div className="grid aspect-square place-items-center text-muted-foreground">
               <ImagePlus className="size-8" />
             </div>
           )}
-          <figcaption className="flex items-center justify-between px-3 py-2 text-xs text-zinc-400">
+          <figcaption className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
             <span>{copy.imageLabel} {typeof image.providerImageIndex === 'number' ? image.providerImageIndex + 1 : ''}</span>
             <span>{job.chargedCredits}/{job.estimatedCredits}</span>
           </figcaption>

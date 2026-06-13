@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import Image from 'next/image';
 import { Eye, ImagePlus, Loader2, Send, X } from 'lucide-react';
+import {
+  themeButtonGradientClass,
+  themeButtonGradientHoverClass,
+  themeHeroEyesOnClass,
+  themeIconColor,
+} from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaStudioCopy } from './copy';
 
@@ -146,21 +152,21 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col justify-between gap-3 md:flex-row md:items-end">
           <div>
-            <h1 className="text-3xl font-semibold text-white md:text-5xl">{copy.title}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+            <h1 className={cn('bg-clip-text text-3xl font-semibold text-transparent md:text-5xl', themeHeroEyesOnClass)}>{copy.title}</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               {copy.description}
             </p>
           </div>
           <button
             type="button"
             onClick={() => void loadImages()}
-            className="h-10 rounded-md border border-white/10 px-4 text-sm text-zinc-200 hover:bg-white/10"
+            className="h-10 rounded-md border border-border px-4 text-sm text-foreground hover:bg-muted"
           >
             {copy.refresh}
           </button>
         </div>
 
-        <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-white/10 bg-zinc-950/70 p-2">
+        <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-border bg-card/70 p-2">
           {tabOptions.map((option) => (
             <button
               key={option.value}
@@ -168,7 +174,9 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
               onClick={() => setTab(option.value)}
               className={cn(
                 'h-9 rounded-md px-3 text-sm transition',
-                tab === option.value ? 'bg-emerald-300 text-zinc-950' : 'text-zinc-300 hover:bg-white/10',
+                tab === option.value
+                  ? cn('text-white', themeButtonGradientClass)
+                  : 'text-muted-foreground hover:bg-background hover:text-foreground',
               )}
             >
               {option.label}
@@ -177,24 +185,24 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+          <div className="mb-4 rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
             {error}
           </div>
         )}
 
         {loading ? (
-          <div className="flex h-40 items-center justify-center rounded-lg border border-white/10 bg-zinc-950/60 text-zinc-400">
+          <div className="flex h-40 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground">
             <Loader2 className="mr-2 size-4 animate-spin" />
             {copy.loading}
           </div>
         ) : visibleImages.length === 0 ? (
-          <div className="rounded-lg border border-white/10 bg-zinc-950/60 p-6 text-sm text-zinc-400">
+          <div className="rounded-lg border border-border bg-card/60 p-6 text-sm text-muted-foreground">
             {copy.empty}
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {visibleImages.map((image) => (
-              <article key={image.imageId} className="overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+              <article key={image.imageId} className="overflow-hidden rounded-lg border border-border bg-card">
                 {image.imageUrl ? (
                   <Image
                     src={image.imageUrl}
@@ -205,12 +213,12 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                     className="aspect-square w-full object-cover"
                   />
                 ) : (
-                  <div className="grid aspect-square place-items-center text-zinc-500">
+                  <div className="grid aspect-square place-items-center text-muted-foreground">
                     <ImagePlus className="size-8" />
                   </div>
                 )}
                 <div className="space-y-3 p-3">
-                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-400">
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>{formatStatus(image.status, copy.statusLabels, copy.generated)}</span>
                     <span>
                       {formatStatus(
@@ -220,14 +228,14 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                       )}
                     </span>
                   </div>
-                  <div className="line-clamp-2 min-h-10 text-xs leading-5 text-zinc-500">
+                  <div className="line-clamp-2 min-h-10 text-xs leading-5 text-muted-foreground">
                     {image.promptUsed || copy.prompt}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setPromptTarget(image)}
-                      className="flex h-10 items-center justify-center gap-2 rounded-md border border-white/10 text-sm text-zinc-200 hover:bg-white/10"
+                      className="flex h-10 items-center justify-center gap-2 rounded-md border border-border text-sm text-foreground hover:bg-muted"
                     >
                       <Eye className="size-4" />
                       <span>{copy.viewPrompt}</span>
@@ -239,7 +247,11 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                         setCreatorNote('');
                       }}
                       disabled={!image.themeId || Boolean(image.publicImage) || submittingImageId === image.imageId}
-                      className="flex h-10 items-center justify-center gap-2 rounded-md bg-emerald-300 px-3 text-sm font-medium text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={cn(
+                        'flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50',
+                        themeButtonGradientClass,
+                        themeButtonGradientHoverClass,
+                      )}
                     >
                       {submittingImageId === image.imageId ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                       <span>{image.themeId ? copy.submit : copy.noTheme}</span>
@@ -256,18 +268,18 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
         <Modal title={copy.viewPrompt} closeLabel={copy.close} onClose={() => setPromptTarget(null)}>
           <div className="space-y-4">
             <div>
-              <div className="text-xs uppercase text-zinc-500">{copy.prompt}</div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-200">
+              <div className="text-xs uppercase text-muted-foreground">{copy.prompt}</div>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
                 {promptTarget.promptUsed || copy.empty}
               </p>
             </div>
-            <div className="grid gap-3 text-sm text-zinc-400 sm:grid-cols-2">
+            <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
               <div>
-                <div className="text-xs uppercase text-zinc-500">{copy.theme}</div>
+                <div className="text-xs uppercase text-muted-foreground">{copy.theme}</div>
                 <div className="mt-1">{promptTarget.themeId || copy.noTheme}</div>
               </div>
               <div>
-                <div className="text-xs uppercase text-zinc-500">{copy.model}</div>
+                <div className="text-xs uppercase text-muted-foreground">{copy.model}</div>
                 <div className="mt-1">{promptTarget.model || promptTarget.status}</div>
               </div>
             </div>
@@ -288,33 +300,36 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                 className="aspect-square w-full rounded-md object-cover"
               />
             ) : (
-              <div className="grid aspect-square place-items-center rounded-md bg-zinc-900 text-zinc-500">
+              <div className="grid aspect-square place-items-center rounded-md bg-muted text-muted-foreground">
                 <ImagePlus className="size-8" />
               </div>
             )}
             <div className="space-y-4">
               <div>
-                <div className="text-xs uppercase text-zinc-500">{copy.prompt}</div>
-                <p className="mt-2 line-clamp-4 text-sm leading-6 text-zinc-200">
+                <div className="text-xs uppercase text-muted-foreground">{copy.prompt}</div>
+                <p className="mt-2 line-clamp-4 text-sm leading-6 text-foreground">
                   {submitTarget.promptUsed || copy.empty}
                 </p>
               </div>
               <label className="block">
-                <span className="text-sm font-medium text-zinc-200">{copy.creatorNote}</span>
+                <span className="text-sm font-medium text-foreground">{copy.creatorNote}</span>
                 <textarea
                   value={creatorNote}
                   onChange={(event) => setCreatorNote(event.target.value)}
                   placeholder={copy.creatorNotePlaceholder}
                   rows={4}
-                  className="mt-2 w-full resize-none rounded-md border border-white/10 bg-zinc-900 px-3 py-2 text-sm leading-6 text-white outline-none transition focus:border-emerald-300/70"
+                  className={cn(
+                    'mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-current',
+                    themeIconColor,
+                  )}
                 />
               </label>
-              <p className="text-xs leading-5 text-zinc-500">{copy.submitHint}</p>
+              <p className="text-xs leading-5 text-muted-foreground">{copy.submitHint}</p>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setSubmitTarget(null)}
-                  className="h-10 rounded-md border border-white/10 px-3 text-sm text-zinc-200 hover:bg-white/10"
+                  className="h-10 rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted"
                 >
                   {copy.cancel}
                 </button>
@@ -322,7 +337,11 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                   type="button"
                   onClick={() => void submitImage(submitTarget.imageId, creatorNote)}
                   disabled={submittingImageId === submitTarget.imageId}
-                  className="flex h-10 items-center gap-2 rounded-md bg-emerald-300 px-3 text-sm font-medium text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={cn(
+                    'flex h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50',
+                    themeButtonGradientClass,
+                    themeButtonGradientHoverClass,
+                  )}
                 >
                   {submittingImageId === submitTarget.imageId ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                   <span>{copy.submitImage}</span>
@@ -349,13 +368,13 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-white/10 bg-zinc-950 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="grid size-9 place-items-center rounded-md border border-white/10 text-zinc-300 hover:bg-white/10"
+            className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={closeLabel}
           >
             <X className="size-4" />
