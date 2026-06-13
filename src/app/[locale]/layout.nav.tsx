@@ -4,7 +4,9 @@ import {
   T3PIcon,
   SettingsIcon,
   ChartColumnStackedIcon,
-  BrainCircuitIcon
+  BrainCircuitIcon,
+  ImageUpIcon,
+  SparklesIcon,
 } from '@windrun-huaiin/base-ui/icons';
 import { getAsNeededLocalizedUrl } from '@windrun-huaiin/lib/utils';
 import {
@@ -49,6 +51,24 @@ export async function primaryNavLinks(locale: string): Promise<SiteNavItemConfig
   const context = createNavContext(locale);
 
   return [
+    createLocalizedNavLink(
+      {
+        text: 'Explore',
+        path: '/explore',
+        prefetch: false,
+        icon: <ImageUpIcon />,
+      },
+      context,
+    ),
+    createLocalizedNavLink(
+      {
+        text: 'Studio',
+        path: '/studio',
+        prefetch: false,
+        icon: <SparklesIcon />,
+      },
+      context,
+    ),
     createLocalizedNavLink(
       {
         text: t1('pricing'),

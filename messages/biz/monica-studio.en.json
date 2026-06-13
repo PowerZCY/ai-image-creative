@@ -1,0 +1,50 @@
+{
+  "monica": {
+    "studio": {
+      "title": "My Studio",
+      "description": "A personal workspace for creating images, editing drafts, and tracking submission status.",
+      "myImages": "My images",
+      "refresh": "Refresh",
+      "loading": "Loading",
+      "empty": "No generated images yet.",
+      "privateStatus": "Private",
+      "submit": "Submit to today's theme",
+      "noTheme": "No theme",
+      "generated": "Generated",
+      "prompt": "Prompt",
+      "theme": "Theme",
+      "model": "Model",
+      "viewPrompt": "View prompt",
+      "close": "Close",
+      "cancel": "Cancel",
+      "submitImage": "Submit image",
+      "creatorNote": "Creation note optional",
+      "creatorNotePlaceholder": "Share your creative thinking behind this image...",
+      "submitHint": "Your image, prompt, and creation note will be public if approved.",
+      "tabs": {
+        "all": "All",
+        "generated": "Generated",
+        "submitted": "Submitted",
+        "underReview": "Under review",
+        "published": "Published",
+        "rejected": "Rejected"
+      },
+      "statusLabels": {
+        "active": "Active",
+        "approved": "Approved",
+        "blocked": "Blocked",
+        "draft": "Draft",
+        "failed": "Failed",
+        "generated": "Generated",
+        "pending": "Pending",
+        "private": "Private",
+        "published": "Published",
+        "queued": "Queued",
+        "rejected": "Rejected",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "under_review": "Under review"
+      }
+    }
+  }
+}

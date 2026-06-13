@@ -8,6 +8,14 @@ date: 2026-06-13
 
 本文用于收拢 Monica AI 的开发实施范围，按阶段推进前后端开发，并作为后续确认进度的依据。
 
+当前结论：
+
+- 除真实 AI Provider / OpenRouter 接入、统一手动联调后的小修外，MVP 前端主功能已经基本落地。
+- 已完成：首页创作主流程、首页主题区、`/theme` 主题详情页、`/explore` Themes / Images 交互、`/studio` 图片管理和投稿弹窗、Monica 业务文案 i18n 拆分。
+- 当前前端已经覆盖生成、轮询、参考图上传、结果展示、Studio 列表、状态筛选、查看 prompt、投稿、Explore 搜索/筛选/排序、图片详情、like/save 等主链路。
+- 尚未产品化完成：真实 OpenRouter Provider、动态主题 slug/id 和主题 API、Explore 主题数据从 DB/API 读取、Edit / Variations / Download 实际能力、移动端和真实账号/积分/QStash/R2 的统一联调 polish。
+- 因此当前状态应理解为“MVP 前端主链路完成，等待联调和真实 AI Provider 接入”，而不是最终产品功能全量完成。
+
 核心策略：
 
 - 先打通“生成任务闭环”，再补 Studio、投稿、Explore 和真实 AI Provider。
@@ -22,11 +30,11 @@ date: 2026-06-13
 
 | 阶段 | 目标 | 主要产出 | 状态 |
 | --- | --- | --- | --- |
-| 1 | 数据模型和后端骨架 | Prisma models、server/monica 目录、基础 repository/service | 待开始 |
-| 2 | 真实 QStash 生成任务闭环 | 创建任务、投递队列、Worker webhook、mock AI、轮询查询 | 待开始 |
-| 3 | R2 图片上传和 Reference Image | 用户上传参考图、R2 存储、Provider 可访问 URL | 待开始 |
-| 4 | 前端创作主流程 | 创作 UI、生成任务轮询、结果展示、失败/拦截状态 | 待开始 |
-| 5 | Studio / 投稿 / Explore | 私有图片库、投稿审核、公开图片、点赞收藏 | 待开始 |
+| 1 | 数据模型和后端骨架 | Prisma models、server/monica 目录、基础 repository/service | 已完成 |
+| 2 | 真实 QStash 生成任务闭环 | 创建任务、投递队列、Worker webhook、mock AI、轮询查询 | 已完成 |
+| 3 | R2 图片上传和 Reference Image | 用户上传参考图、R2 存储、Provider 可访问 URL | 已完成，待联调 |
+| 4 | 前端创作主流程 | 创作 UI、生成任务轮询、结果展示、失败/拦截状态 | 已完成，待联调 |
+| 5 | Studio / 投稿 / Explore | 私有图片库、投稿审核、公开图片、点赞收藏 | 进行中，待联调 |
 | 6 | OpenRouter 真实 Provider | 替换 mock AI、解析多图输出、Provider 错误归一化 | 待开始 |
 | 7 | 硬化和验收 | 幂等、异常返还、权限、端到端回归、移动端检查 | 待开始 |
 
@@ -282,14 +290,15 @@ Worker 流程：
 
 ## 10. 当前优先级
 
-第一轮开发只推进到阶段 4：
+第一轮已推进到阶段 5 的前后端占位闭环：
 
 1. 数据模型和后端骨架。
 2. 真实 QStash 生成任务闭环。
 3. R2 reference image 上传。
 4. 前端创作主流程。
+5. Studio / 投稿 / Explore / Theme 页面交互。
 
-阶段 5-7 等第一轮闭环稳定后再推进。
+后续优先补齐阶段 5 的手动联调问题，再进入阶段 6 OpenRouter 真实 Provider。
 
 ## 11. 进度记录
 
@@ -298,5 +307,10 @@ Worker 流程：
 | 日期 | 阶段 | 变更 | 结果 |
 | --- | --- | --- | --- |
 | 2026-06-13 | 计划 | 确认 QStash 使用真实链路，AI Provider 使用 mock | 已记录 |
+| 2026-06-13 | 阶段 2 | 实现 GenerationJob 创建 API、状态查询 API、QStash Worker API、mock image provider 和积分预扣减/返还封装 | build:prod 通过 |
+| 2026-06-13 | 阶段 3 | 实现 Reference Image 上传 API、R2StorageService、referenceId 归属校验和 Worker 侧 Provider 可访问 URL 生成 | 待联调 |
+| 2026-06-13 | 阶段 4 | 首页第一屏接入 Monica Creator，支持 prompt、参考图上传、创建任务、轮询状态和结果展示 | build:prod 通过 |
+| 2026-06-13 | 阶段 5 | 实现 Studio 图片列表、投稿发布、Explore 列表、like/save API，并新增 `/studio` 和 `/explore` 页面 | build:prod 通过 |
+| 2026-06-13 | 阶段 4/5 | 按项目 i18n 规范拆分 `messages/biz` 文案文件，新增 copy builder，补齐首页主题区、`/theme` 页面、Explore tabs/search/filter/detail、Studio tabs/prompt/submit modal | build:prod 通过 |
 
 </CheetTable>

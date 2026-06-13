@@ -1,0 +1,54 @@
+{
+  "monica": {
+    "creator": {
+      "badge": "Today's theme",
+      "title": "Create Your AI Art",
+      "description": "Shape your idea into an AI Art prompt, and generate images for this theme. After generating images, you can choose one to submit under this theme and show everyone your imagination.",
+      "promptLabel": "Prompt",
+      "promptPlaceholder": "Describe anything you want to create...",
+      "negativePromptLabel": "Negative prompt",
+      "negativePromptPlaceholder": "Optional: things to avoid, e.g. blurry hands, text, watermark",
+      "modelLabel": "Model",
+      "styleLabel": "Style",
+      "ratioLabel": "Aspect ratio",
+      "imagesLabel": "Images",
+      "uploadReference": "Add reference image",
+      "uploadingReference": "Uploading reference image",
+      "removeReference": "Remove reference image",
+      "generate": "Generate",
+      "generating": "Generating",
+      "estimatedLabel": "Estimated",
+      "queueLabel": "Queue",
+      "resultLabel": "Result",
+      "creditsUnit": "credits",
+      "ready": "Ready",
+      "running": "Running",
+      "notStarted": "Not started",
+      "uploaded": "Uploaded",
+      "emptyResult": "Generated images will appear here.",
+      "waitingForImages": "Waiting for images.",
+      "failedNoCharge": "Credits are not consumed for failed output.",
+      "imageLabel": "Image",
+      "initialPrompt": "A minimal poster-style image of transparent eyeglass lenses sharpening a blurred city map into readable streets and names, restrained design, crisp contrast, new perspective.",
+      "modelOptions": {
+        "mock": "Mock",
+        "openrouter": "OpenRouter"
+      },
+      "styleOptions": {
+        "editorial": "Editorial",
+        "cinematic": "Cinematic",
+        "product": "Product",
+        "illustration": "Illustration"
+      },
+      "statusLabels": {
+        "pending": "Pending",
+        "queued": "Queued",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "blocked": "Blocked",
+        "cancelled": "Cancelled"
+      }
+    }
+  }
+}

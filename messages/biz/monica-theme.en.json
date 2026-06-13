@@ -1,0 +1,69 @@
+{
+  "monica": {
+    "theme": {
+      "date": "Jun 12, 2026",
+      "eyebrow": "Today's theme",
+      "title": "AI Art Theme #1: After Putting On Glasses",
+      "homeTitle": "After Putting On Glasses",
+      "homeDescription": "Create images about glasses, clearer vision, and new perspectives. Show what changes when a person, animal, object, or place finally sees differently.",
+      "homeCta": "View theme gallery",
+      "recentTitle": "Recent Challenges",
+      "stats": ["156 creations", "51 creators", "21 featured"],
+      "tags": ["glasses", "clear vision", "new perspective", "visual metaphor", "conceptual AI art", "cat with glasses", "dog with glasses"],
+      "notes": [
+        "This AI image theme starts with a small act of seeing clearly, then asks you to turn that moment into a memorable visual idea.",
+        "Putting on glasses can be a real moment: someone finally recognizes a familiar face, reads a sign, or notices details that were always there.",
+        "It can also be a visual metaphor. The glasses may stand for a new skill, a method, a mindset, or a way of thinking that makes the same world easier to understand.",
+        "The creative question is: who or what puts them on? A person, a cat with glasses, a dog with glasses, an object, or even a city can all become different ways to show clearer vision."
+      ],
+      "submissionHint": "After generating images, you can choose one to submit under today's theme and show everyone your imagination.",
+      "galleryTitle": "AI Art Gallery",
+      "galleryTabs": {
+        "featured": "Featured",
+        "mostLiked": "Most liked",
+        "newest": "Newest"
+      },
+      "recent": [
+        {
+          "label": "Yesterday",
+          "title": "A City Where the Rain Falls Upward",
+          "brief": "Gravity breaks in public, and nobody agrees whether it is beautiful or wrong."
+        },
+        {
+          "label": "Two days ago",
+          "title": "The Architecture of Loneliness",
+          "brief": "Use buildings, rooms, or streets to express isolation."
+        }
+      ],
+      "gallery": [
+        {
+          "title": "Cat With Glasses",
+          "author": "@mira",
+          "theme": "After Putting On Glasses",
+          "imageUrl": "/monica/glasses/cat-with-glasses.webp",
+          "alt": "A cute white cat with glasses sits on a bright sunlit wooden windowsill, surrounded by potted succulents and lush green trailing plants.",
+          "prompt": "A cute white cat with glasses sits on a bright sunlit wooden windowsill, surrounded by potted succulents and lush green trailing plants, warm illustrated style, clear curious eyes, gentle morning light.",
+          "tags": ["cat with glasses", "illustration", "clear vision"]
+        },
+        {
+          "title": "Orange Cat Looking Up",
+          "author": "@mira",
+          "theme": "After Putting On Glasses",
+          "imageUrl": "/monica/glasses/standing-orange-cat-on-foof.jpeg",
+          "alt": "Orange cat standing on dark tiled roof, looking up at pomegranate tree",
+          "prompt": "Orange cat standing on dark tiled roof, looking up at pomegranate tree, lush green branches and red blossoms overhead, calm natural light, detailed old roof tiles, quiet courtyard atmosphere.",
+          "tags": ["orange cat", "roof", "pomegranate tree"]
+        },
+        {
+          "title": "Sleeping Orange Cat",
+          "author": "@mira",
+          "theme": "After Putting On Glasses",
+          "imageUrl": "/monica/glasses/sleeping-orange-cat-on-roof.jpeg",
+          "alt": "Orange cat sleeping peacefully on dark tiled roof under pomegranate branches",
+          "prompt": "Orange cat sleeping peacefully on dark tiled roof under pomegranate branches, warm sunlight, scattered flowers on old tiles, tranquil garden courtyard, soft realistic detail.",
+          "tags": ["orange cat", "sleeping", "roof"]
+        }
+      ]
+    }
+  }
+}

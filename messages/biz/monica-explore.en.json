@@ -1,0 +1,67 @@
+{
+  "monica": {
+    "explore": {
+      "title": "Explore",
+      "description": "Browse daily themes first, or switch to images for visual inspiration.",
+      "loading": "Loading",
+      "empty": "No public images yet.",
+      "emptyThemes": "No themes match this filter.",
+      "untitled": "Untitled Image",
+      "searchPlaceholder": "Search themes or prompts...",
+      "viewTheme": "View theme",
+      "createFromTheme": "Create from this theme",
+      "openDetail": "Open image detail",
+      "imageDetail": "Image detail",
+      "prompt": "Prompt",
+      "close": "Close",
+      "usePrompt": "Use prompt",
+      "copyPrompt": "Copy prompt",
+      "copied": "Copied",
+      "tabs": {
+        "themes": "Themes",
+        "images": "Images"
+      },
+      "filters": {
+        "latest": "Latest",
+        "popular": "Popular",
+        "cinematic": "Cinematic",
+        "surreal": "Surreal"
+      },
+      "sort": {
+        "newest": "Newest",
+        "mostLiked": "Most liked",
+        "featured": "Featured"
+      },
+      "actions": {
+        "like": "Like",
+        "save": "Save"
+      },
+      "themes": [
+        {
+          "title": "After Putting On Glasses",
+          "date": "Jun 12, 2026",
+          "brief": "Show how glasses reveal details, clarity, or a whole new way of seeing.",
+          "stats": "156 creations · 51 creators · 21 featured",
+          "tags": ["glasses", "clear vision", "new perspective"],
+          "coverImageUrl": "/monica/glasses/cat-with-glasses.webp"
+        },
+        {
+          "title": "A City Where the Rain Falls Upward",
+          "date": "Jun 8, 2026",
+          "brief": "Imagine a place where gravity forgot the rain.",
+          "stats": "348 creations · 72 creators · 24 featured",
+          "tags": ["surreal", "cinematic", "rain"],
+          "coverImageUrl": ""
+        },
+        {
+          "title": "The Architecture of Loneliness",
+          "date": "Jun 7, 2026",
+          "brief": "Use buildings, rooms, or streets to express isolation.",
+          "stats": "214 creations · 58 creators · 19 featured",
+          "tags": ["architecture", "lonely", "urban"],
+          "coverImageUrl": ""
+        }
+      ]
+    }
+  }
+}
