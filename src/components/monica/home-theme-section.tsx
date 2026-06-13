@@ -10,11 +10,12 @@ import {
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaThemeCopy } from './copy';
+import { monicaContentWidthClass } from './layout';
 
 export function HomeThemeSection({ copy }: { copy: MonicaThemeCopy }) {
   return (
     <section className="px-4 pb-20 md:px-8">
-      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)] lg:items-center">
+      <div className={cn(monicaContentWidthClass, 'grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)] lg:items-center')}>
         <TodayTheme copy={copy} />
         <ThemeGallery copy={copy} />
       </div>
@@ -82,7 +83,7 @@ function ThemeGallery({ copy }: { copy: MonicaThemeCopy }) {
 
 function RecentThemes({ copy }: { copy: MonicaThemeCopy }) {
   return (
-    <div className="mx-auto mt-16 max-w-7xl">
+    <div className={cn(monicaContentWidthClass, 'mt-16')}>
       <h3 className="mb-5 text-xl font-semibold text-foreground">
         {copy.recentTitle}
       </h3>

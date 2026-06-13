@@ -1,5 +1,6 @@
 import { MonicaCreator } from '@/components/monica/creator-client';
 import { getMonicaCreatorCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
+import { monicaContentWidthClass } from '@/components/monica/layout';
 import {
   themeBgColor,
   themeBorderColor,
@@ -55,7 +56,7 @@ export default async function ThemePage({ params }: { params: Promise<{ locale: 
       <MonicaCreator copy={creatorCopy} />
 
       <section className="px-4 pb-24 md:px-8">
-        <div className="mx-auto max-w-7xl">
+        <div className={monicaContentWidthClass}>
           <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
             <h2 className="text-2xl font-semibold text-foreground">{themeCopy.galleryTitle}</h2>
             <div className="flex rounded-md border border-border bg-muted/50 p-1">

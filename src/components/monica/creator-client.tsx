@@ -13,6 +13,7 @@ import {
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaCreatorCopy } from './copy';
+import { monicaContentWidthClass } from './layout';
 
 type ReferenceImageView = {
   referenceId: string;
@@ -192,7 +193,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
 
   return (
     <section className="min-h-[calc(100vh-4rem)] px-4 py-20 md:px-8 md:py-24">
-      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)] lg:items-start">
+      <div className={cn(monicaContentWidthClass, 'grid gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)] lg:items-start')}>
         <div className="space-y-6">
           <div className="space-y-4">
             <div className={cn(
@@ -358,7 +359,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
         </div>
       </div>
 
-      <div className="mx-auto mt-8 max-w-7xl">
+      <div className={cn(monicaContentWidthClass, 'mt-8')}>
         <ResultPanel job={job} images={generatedImages} copy={copy} />
       </div>
     </section>

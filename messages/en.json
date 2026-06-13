@@ -1,8 +1,8 @@
 {
   "home": {
-    "title": "Diaomao",
+    "title": "Monica",
     "banner": "Ship Faster | Charge Smarter | Scale Fearlessly",
-    "webTitle": "Diaomao – The Ultimate AI SaaS Starter Kit with Stripe, Credits & Docs",
+    "webTitle": "Monica – The Ultimate AI SaaS Starter Kit with Stripe, Credits & Docs",
     "webDescription": "Next.js 14 + Prisma + PostgreSQL + Stripe + Clerk + Fumadocs. Production-ready pricing tiers, credit system, anonymous-to-auth onboarding, and beautiful docs — everything you need to launch and monetize your AI product in days, not months.",
     "keywords": "AI SaaS template, Next.js boilerplate, Stripe billing, credit-based pricing, anonymous onboarding, Fumadocs, Prisma PostgreSQL, Clerk authentication",
     "openGraph": {
@@ -14,11 +14,11 @@
   },
   "hero": {
     "mainTitle": "Ship a paid AI product with",
-    "mainEyesOn": "Diaomao",
-    "description": "Pricing that upgrades itself. Credits that never leak. Docs that stay in sync. Stripe flows that just work. Diaomao is the full-stack chassis trusted by makers who refuse to waste another weekend on billing infrastructure.",
-    "button": "Get Diaomao",
+    "mainEyesOn": "Monica",
+    "description": "Pricing that upgrades itself. Credits that never leak. Docs that stay in sync. Stripe flows that just work. Monica is the full-stack chassis trusted by makers who refuse to waste another weekend on billing infrastructure.",
+    "button": "Get Monica",
     "about": "SSR-first • Mobile-perfected • Fingerprint → Clerk seamless onboarding",
-    "heroImageAlt": "Diaomao – Modern pricing, credit dashboard and documentation system",
+    "heroImageAlt": "Monica – Modern pricing, credit dashboard and documentation system",
     "heroImageUrl": "https://r2.d8ger.com/default.webp"
   },
   "usage": {
@@ -48,7 +48,7 @@
     "description": "We’ve got answers.",
     "items": [
       {
-        "question": "What exactly is Diaomao?",
+        "question": "What exactly is Monica?",
         "answer": "The fastest way to launch a production-ready, monetized AI product. Next.js 14 + Prisma + PostgreSQL + Stripe + Clerk + beautiful docs — everything pre-built and battle-tested."
       },
       {
@@ -246,7 +246,7 @@
   },
   "features": {
     "title": "Everything you keep rebuilding",
-    "eyesOn": "Diaomao already solved",
+    "eyesOn": "Monica already solved",
     "description": "Stop gluing together half-baked solutions. This is the template that ends the weekend billing nightmares.",
     "items": [
       {
@@ -273,7 +273,7 @@
   },
   "gallery": {
     "titleL": "Gallery of",
-    "eyesOn": "Diaomao",
+    "eyesOn": "Monica",
     "titleR": "Creations",
     "description": "Swipe through the built-in UI language: gradient CTAs, pill billing toggles, credit buckets, and docs hero visuals.",
     "button": {
@@ -282,7 +282,7 @@
       "align": "center"
     },
     "defaultImgUrl": "https://r2.d8ger.com/default.webp",
-    "downloadPrefix": "diaomao",
+    "downloadPrefix": "Monica",
     "prompts": [
       {
         "url": "https://r2.d8ger.com/Reve-Image/1.webp",
@@ -312,7 +312,7 @@
   },
   "tips": {
     "title": "Tips for Getting the Best Results with",
-    "eyesOn": "Diaomao",
+    "eyesOn": "Monica",
     "sections": [
       {
         "title": "Configure before coding",
@@ -342,9 +342,9 @@
   },
   "seoContent": {
     "title": "The AI-era product chassis with",
-    "eyesOn": "Diaomao",
+    "eyesOn": "Monica",
     "description": "Pricing, credits, docs, navigation, and Stripe orchestrated as one.",
-    "intro": "Diaomao compresses the slowest parts of shipping AI products into one template: Money Price runs subscription/onetime in parallel, Credit Overview governs buckets and CTA matrix, fingerprint-to-Clerk prevents funnel gaps, Stripe lifecycle and schema are pre-aligned, and Fumadocs + Header keep story and navigation consistent.",
+    "intro": "Monica compresses the slowest parts of shipping AI products into one template: Money Price runs subscription/onetime in parallel, Credit Overview governs buckets and CTA matrix, fingerprint-to-Clerk prevents funnel gaps, Stripe lifecycle and schema are pre-aligned, and Fumadocs + Header keep story and navigation consistent.",
     "sections": [
       {
         "title": "Pricing that adapts to user state",
@@ -375,10 +375,10 @@
   },
   "cta": {
     "title": "Start shipping your AI idea with",
-    "eyesOn": "Diaomao",
+    "eyesOn": "Monica",
     "description1": "One template. Every hard part solved.",
     "description2": "Stripe, credits, auth— all production-ready out of the box.",
-    "button": "Get Diaomao Now",
+    "button": "Get Monica Now",
     "url": "https://newspaper-template.org/"
   },
   "languageDetection": {

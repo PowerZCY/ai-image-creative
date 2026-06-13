@@ -14,6 +14,7 @@ import {
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaExploreCopy, MonicaThemeSummary } from './copy';
+import { monicaContentWidthClass } from './layout';
 
 type PublicImage = {
   publicImageId: string;
@@ -150,7 +151,7 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
 
   return (
     <section className="min-h-screen px-4 py-20 md:px-8 md:py-24">
-      <div className="mx-auto max-w-7xl">
+      <div className={monicaContentWidthClass}>
         <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <h1 className={cn('bg-clip-text text-3xl font-semibold text-transparent md:text-5xl', themeHeroEyesOnClass)}>{copy.title}</h1>

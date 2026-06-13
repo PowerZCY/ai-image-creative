@@ -12,6 +12,7 @@ import {
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaStudioCopy } from './copy';
+import { monicaContentWidthClass } from './layout';
 
 type StudioImage = {
   imageId: string;
@@ -149,7 +150,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
 
   return (
     <section className="min-h-screen px-4 py-20 md:px-8 md:py-24">
-      <div className="mx-auto max-w-7xl">
+      <div className={monicaContentWidthClass}>
         <div className="mb-6 flex flex-col justify-between gap-3 md:flex-row md:items-end">
           <div>
             <h1 className={cn('bg-clip-text text-3xl font-semibold text-transparent md:text-5xl', themeHeroEyesOnClass)}>{copy.title}</h1>
