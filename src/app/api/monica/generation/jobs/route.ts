@@ -18,7 +18,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ job });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const status = message.includes('Insufficient credits') ? 402 : 400;
+    const status = message.includes('Insufficient credits')
+      ? 402
+      : message.includes('Generation request is already in progress')
+        ? 409
+        : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

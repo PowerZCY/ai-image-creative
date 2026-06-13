@@ -1,6 +1,8 @@
 import { prisma } from '@/server/prisma';
 import {
+  acquireLock,
   publishFIFOQueueMessage,
+  releaseLock,
   type QstashEnvelope,
 } from '@windrun-huaiin/backend-core/upstash/server';
 import { GENERATION_QUEUE_NAME, GENERATION_STATUS, GENERATION_TYPE } from '../constants/generation';
@@ -12,8 +14,24 @@ import { generationCreditService } from './generation-credit.service';
 import { referenceImageService } from './reference-image.service';
 import { safetyService } from './safety.service';
 
+const CREATE_GENERATION_LOCK_TTL_MS = 15_000;
+
 export class GenerationService {
   async createGenerationJob(userId: string, input: CreateGenerationJobInput) {
+    const lockKey = `monica:generation:${userId}`;
+    const lockToken = await acquireLock(lockKey, CREATE_GENERATION_LOCK_TTL_MS);
+    if (!lockToken) {
+      throw new Error('Generation request is already in progress');
+    }
+
+    try {
+      return await this.createGenerationJobWithLock(userId, input);
+    } finally {
+      await releaseLock(lockKey, lockToken);
+    }
+  }
+
+  private async createGenerationJobWithLock(userId: string, input: CreateGenerationJobInput) {
     await referenceImageService.assertOwnedReferenceImage(userId, input.referenceId);
 
     const generationType = input.generationType ?? GENERATION_TYPE.TEXT_TO_IMAGE;
@@ -163,12 +181,12 @@ export class GenerationService {
   }
 
   private getWorkerUrl() {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
-    if (!baseUrl) {
-      throw new Error('NEXT_PUBLIC_BASE_URL is required to publish QStash generation jobs');
+    const workerUrl = process.env.NEXT_PUBLIC_QSTASH_GENERATE_IMAGE_TASK_URL;
+    if (!workerUrl) {
+      throw new Error('NEXT_PUBLIC_QSTASH_GENERATE_IMAGE_TASK_URL is required to publish QStash generation jobs');
     }
 
-    return `${baseUrl.replace(/\/$/, '')}/api/internal/monica/generation/run`;
+    return workerUrl;
   }
 }
 

@@ -12,6 +12,7 @@ import {
   themeIconColor,
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
+import { createR2Client } from '@/lib/r2-explorer-sdk';
 import type { MonicaCreatorCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
 
@@ -47,6 +48,45 @@ const ratioOptions = [
 
 const countOptions = [1, 2, 4];
 const terminalStatuses = new Set(['succeeded', 'failed', 'blocked', 'cancelled']);
+const r2BaseUrl = process.env.NEXT_PUBLIC_R2_BASE_URL ?? '';
+const r2BucketName = process.env.NEXT_PUBLIC_R2_BUCKET_NAME ?? '';
+const r2ApiToken = process.env.NEXT_PUBLIC_R2_API_TOKEN ?? '';
+const r2EnableMock = process.env.NEXT_PUBLIC_R2_ENABLE_MOCK === 'true';
+const r2MockImgUrl = process.env.NEXT_PUBLIC_R2_MOCK_IMG_URL ?? '';
+const r2MockTimeoutMs = Number(process.env.NEXT_PUBLIC_R2_MOCK_TIMEOUT ?? 2) * 1000;
+const r2UploadImageMaxSizeMB = Number(process.env.NEXT_PUBLIC_R2_UPLOAD_IMAGE_MAX_SIZE ?? 10);
+
+function isAllowedImageFile(file: File) {
+  return ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type);
+}
+
+function sanitizeFilenamePart(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+function getExtension(filename: string, mimeType: string) {
+  const fromName = filename.includes('.') ? filename.split('.').pop() : undefined;
+  if (fromName && /^[a-z0-9]{1,12}$/i.test(fromName)) {
+    return fromName.toLowerCase();
+  }
+
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'image/webp') return 'webp';
+  if (mimeType === 'image/gif') return 'gif';
+  return 'jpg';
+}
+
+function createReferenceImageStorageKey(file: File) {
+  const mimeType = file.type || 'application/octet-stream';
+  const ext = getExtension(file.name, mimeType);
+  const safeName = sanitizeFilenamePart(file.name.replace(/\.[^.]+$/, '')) || 'reference';
+  return `monica/reference-images/${Date.now()}-${crypto.randomUUID()}-${safeName}.${ext}`;
+}
 
 function formatStatus(status: string, labels: Record<string, string>) {
   return labels[status] ?? status;
@@ -85,6 +125,11 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const r2Client = useMemo(() => createR2Client({
+    baseUrl: r2BaseUrl,
+    bucketName: r2BucketName,
+    apiToken: r2ApiToken,
+  }), []);
 
   const estimatedCredits = useMemo(() => Math.max(1, imageCount), [imageCount]);
   const isPolling = job ? !terminalStatuses.has(job.status) : false;
@@ -126,11 +171,49 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.set('file', file);
+      if (!isAllowedImageFile(file)) {
+        throw new Error('Please upload a JPG, PNG, WEBP, or GIF image.');
+      }
+
+      if (file.size > r2UploadImageMaxSizeMB * 1024 * 1024) {
+        throw new Error(`Please select an image file less than ${r2UploadImageMaxSizeMB}MB.`);
+      }
+
+      const mimeType = file.type || 'application/octet-stream';
+      let storageKey = createReferenceImageStorageKey(file);
+      let url: string | undefined;
+
+      if (r2EnableMock) {
+        if (!r2MockImgUrl) {
+          throw new Error('NEXT_PUBLIC_R2_MOCK_IMG_URL is required when R2 mock mode is enabled');
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, r2MockTimeoutMs));
+        storageKey = `monica/reference-images/mock/${Date.now()}-${crypto.randomUUID()}`;
+        url = r2MockImgUrl;
+      } else {
+        if (!r2BaseUrl || !r2BucketName || !r2ApiToken) {
+          throw new Error('NEXT_PUBLIC_R2_BASE_URL, NEXT_PUBLIC_R2_BUCKET_NAME, and NEXT_PUBLIC_R2_API_TOKEN are required');
+        }
+
+        const uploadResult = await r2Client.upload(storageKey, file, mimeType);
+        storageKey = uploadResult.file.storedFilename || storageKey;
+        url = uploadResult.share_urls?.public?.view || uploadResult.share_urls?.protected?.view;
+        if (!uploadResult.success || !url) {
+          throw new Error('Upload failed: No public URL received');
+        }
+      }
+
       const response = await fetch('/api/monica/reference-images', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({
+          storageKey,
+          url,
+          mimeType,
+        }),
       });
 
       if (!response.ok) {

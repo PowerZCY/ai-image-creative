@@ -5,10 +5,16 @@ import { r2StorageService } from '../storage/r2-storage.service';
 import { safetyService } from './safety.service';
 
 export class ReferenceImageService {
-  async uploadReferenceImage(userId: string, input: { file: File; sessionId?: string }) {
-    const uploaded = await r2StorageService.uploadReferenceImage(userId, input.file);
+  async createReferenceImage(userId: string, input: {
+    storageKey: string;
+    url?: string;
+    mimeType?: string;
+    width?: number;
+    height?: number;
+    sessionId?: string;
+  }) {
     const safety = await safetyService.checkReferenceImages({
-      mimeType: uploaded.mimeType,
+      mimeType: input.mimeType,
     });
 
     const safetyStatus = safety.status === SAFETY_STATUS.BLOCKED ? 'failed' : safety.status;
@@ -16,11 +22,11 @@ export class ReferenceImageService {
     return referenceImageRepository.create({
       userId,
       sessionId: input.sessionId,
-      storageKey: uploaded.storageKey,
-      url: uploaded.url,
-      mimeType: uploaded.mimeType,
-      width: uploaded.width,
-      height: uploaded.height,
+      storageKey: input.storageKey,
+      url: input.url,
+      mimeType: input.mimeType,
+      width: input.width,
+      height: input.height,
       safetyStatus,
       safetyResult: safety as Prisma.InputJsonValue,
     });

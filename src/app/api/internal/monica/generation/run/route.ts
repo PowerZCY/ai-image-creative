@@ -6,6 +6,15 @@ import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-jso
 
 installBigIntJsonSerialization();
 
+function getQstashSignatureUrl() {
+  const url = process.env.NEXT_PUBLIC_QSTASH_GENERATE_IMAGE_TASK_URL;
+  if (!url) {
+    throw new Error('NEXT_PUBLIC_QSTASH_GENERATE_IMAGE_TASK_URL is required to verify QStash generation callbacks');
+  }
+
+  return url;
+}
+
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
@@ -18,7 +27,7 @@ export async function POST(request: NextRequest) {
     await verifyQstashSignature({
       signature,
       body: rawBody,
-      url: request.url,
+      url: getQstashSignatureUrl(),
     });
 
     const envelope = generationService.parseQstashEnvelope(rawBody);

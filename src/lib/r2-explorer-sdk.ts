@@ -50,6 +50,13 @@ interface R2Client {
   getUrl: (filename: string, forceDownload?: boolean) => string;
 }
 
+function encodeObjectKey(filename: string) {
+  return filename
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+}
+
 /**
  * Create R2 Explorer client for a specific bucket
  */
@@ -92,7 +99,7 @@ export function createR2Client(config: {
 
   return {
     async upload(filename: string, file: File | Blob | ArrayBuffer | string, contentType?: string): Promise<UploadResult> {
-      const url = `${cleanBaseUrl}/api/buckets/${bucketName}/${encodeURIComponent(filename)}`;
+      const url = `${cleanBaseUrl}/api/buckets/${bucketName}/${encodeObjectKey(filename)}`;
       
       const response = await fetch(url, {
         method: 'PUT',
@@ -104,7 +111,8 @@ export function createR2Client(config: {
       });
 
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Upload failed: ${errorText || response.statusText || `HTTP ${response.status}`}`);
       }
 
       return response.json();
@@ -151,7 +159,7 @@ export function createR2Client(config: {
     },
 
     async download(filename: string): Promise<Blob> {
-      const url = `${cleanBaseUrl}/api/buckets/${bucketName}/${encodeURIComponent(filename)}?download=true`;
+      const url = `${cleanBaseUrl}/api/buckets/${bucketName}/${encodeObjectKey(filename)}?download=true`;
       
       const response = await fetch(url, {
         headers: {
@@ -167,7 +175,7 @@ export function createR2Client(config: {
     },
 
     getUrl(filename: string, forceDownload: boolean = false): string {
-      const url = `${cleanBaseUrl}/api/buckets/${bucketName}/${encodeURIComponent(filename)}`;
+      const url = `${cleanBaseUrl}/api/buckets/${bucketName}/${encodeObjectKey(filename)}`;
       return forceDownload ? `${url}?download=true` : url;
     }
   };

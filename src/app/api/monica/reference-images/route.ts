@@ -6,7 +6,7 @@ import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-jso
 
 installBigIntJsonSerialization();
 
-function readOptionalString(value: FormDataEntryValue | null) {
+function readOptionalJsonString(value: unknown) {
   if (typeof value !== 'string') {
     return undefined;
   }
@@ -15,25 +15,55 @@ function readOptionalString(value: FormDataEntryValue | null) {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function readOptionalJsonNumber(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return value;
+}
+
+function getUploadErrorStatus(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes('storageKey is required')) {
+    return 400;
+  }
+  if (message.toLowerCase().includes('unauthorized') || message.toLowerCase().includes('unauthenticated')) {
+    return 401;
+  }
+
+  return 500;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authUtils = new ApiAuthUtils(request);
     const { user } = await authUtils.requireAuthWithUser();
-    const formData = await request.formData();
-    const file = formData.get('file');
 
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'file is required' }, { status: 400 });
+    if (!request.headers.get('content-type')?.includes('application/json')) {
+      return NextResponse.json({ error: 'content-type must be application/json' }, { status: 415 });
     }
 
-    const referenceImage = await referenceImageService.uploadReferenceImage(user.userId, {
-      file,
-      sessionId: readOptionalString(formData.get('sessionId')),
+    const body = await request.json() as Record<string, unknown>;
+    const storageKey = readOptionalJsonString(body.storageKey);
+    if (!storageKey) {
+      return NextResponse.json({ error: 'storageKey is required' }, { status: 400 });
+    }
+
+    const referenceImage = await referenceImageService.createReferenceImage(user.userId, {
+      storageKey,
+      url: readOptionalJsonString(body.url),
+      mimeType: readOptionalJsonString(body.mimeType),
+      width: readOptionalJsonNumber(body.width),
+      height: readOptionalJsonNumber(body.height),
+      sessionId: readOptionalJsonString(body.sessionId),
     });
 
     return NextResponse.json({ referenceImage });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    console.error('[monica/reference-images] upload failed', error);
+    return NextResponse.json({ error: message }, { status: getUploadErrorStatus(error) });
   }
 }
