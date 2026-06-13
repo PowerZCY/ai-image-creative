@@ -6,7 +6,6 @@ type Client = typeof prisma | Tx;
 
 export type CreateReferenceImageData = {
   userId: string;
-  sessionId?: string;
   storageKey: string;
   url?: string;
   mimeType?: string;
@@ -21,7 +20,6 @@ export class ReferenceImageRepository {
     return client.referenceImage.create({
       data: {
         userId: data.userId,
-        sessionId: data.sessionId,
         storageKey: data.storageKey,
         url: data.url,
         mimeType: data.mimeType,

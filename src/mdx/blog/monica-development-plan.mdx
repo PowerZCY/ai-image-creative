@@ -60,8 +60,6 @@ date: 2026-06-13
 
 - `ThemeSubmission`
 - `Theme`
-- `CreationSession`
-- `PromptLog`
 - `ReferenceImage`
 - `GenerationJob`
 - `GeneratedImage`
@@ -104,12 +102,11 @@ date: 2026-06-13
 
 1. 鉴权。
 2. 参数校验。
-3. 创建或更新 `CreationSession`。
-4. 估算积分。
-5. 创建 `GenerationJob(status=queued, estimatedCredits)`。
-6. 预扣减积分，`CreditAuditLog.operationReferId = jobId`。
-7. 投递 QStash FIFO queue，body 只包含 `{ jobId }`。
-8. 返回 `jobId` 和 `queued`。
+3. 估算积分。
+4. 创建 `GenerationJob(status=queued, estimatedCredits)`。
+5. 预扣减积分，`CreditAuditLog.operationReferId = jobId`。
+6. 投递 QStash FIFO queue，body 只包含 `{ jobId }`。
+7. 返回 `jobId` 和 `queued`。
 
 Worker 流程：
 
@@ -279,7 +276,7 @@ Worker 流程：
   - 任务状态切换不闪烁。
 - 观测：
   - 记录 `GenerationJob.failureCode`。
-  - 记录 provider response 摘要。
+  - 通过脱敏 `Apilog` 或外部日志记录 provider 错误码、耗时、状态码等摘要。
   - 记录 QStash message id。
 
 验收标准：

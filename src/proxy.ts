@@ -15,7 +15,7 @@ const intlMiddleware = createMiddleware({
 // Page routes that require authentication.
 const protectedPageRoutes = createRouteMatcher(
   buildProtectedPageRoutePatterns(
-    ['/dashboard', '/settings', '/profile', '/billing', '/studio'],
+    ['/dashboard', '/settings', '/profile', '/billing', '/studio', '/themes/my'],
     appConfig.i18n.locales
   )
 );
@@ -33,6 +33,7 @@ const protectedApiRoutes = createRouteMatcher([
   '/api/monica/reference-images(.*)',
   '/api/monica/studio(.*)',
   '/api/monica/submissions(.*)',
+  '/api/monica/themes/my(.*)',
   '/api/monica/public-images/(.*)/like',
   '/api/monica/public-images/(.*)/save'
 ]);

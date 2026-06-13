@@ -18,6 +18,8 @@ type StudioImage = {
   imageId: string;
   imageUrl?: string | null;
   thumbnailUrl?: string | null;
+  width?: number | null;
+  height?: number | null;
   status: string;
   themeId?: string | null;
   promptUsed?: string | null;
@@ -43,6 +45,27 @@ async function readError(response: Response) {
 function formatStatus(status: string | undefined | null, labels: Record<string, string>, fallback: string) {
   if (!status) return fallback;
   return labels[status] ?? status;
+}
+
+function getImageDimensions(image: StudioImage) {
+  if (image.width && image.height && image.width > 0 && image.height > 0) {
+    return { width: image.width, height: image.height };
+  }
+
+  const [ratioWidth, ratioHeight] = image.ratio?.split(':').map((value) => Number(value)) ?? [];
+  if (ratioWidth && ratioHeight && ratioWidth > 0 && ratioHeight > 0) {
+    return { width: ratioWidth * 256, height: ratioHeight * 256 };
+  }
+
+  return { width: 1024, height: 1024 };
+}
+
+function truncatePrompt(prompt: string | null | undefined, maxLength = 150) {
+  const normalized = prompt?.trim();
+  if (!normalized) {
+    return '';
+  }
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength).trimEnd()}...` : normalized;
 }
 
 export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
@@ -201,17 +224,22 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
             {copy.empty}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {visibleImages.map((image) => (
-              <article key={image.imageId} className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
+            {visibleImages.map((image) => {
+              const dimensions = getImageDimensions(image);
+              const promptPreview = truncatePrompt(image.promptUsed);
+
+              return (
+                <article key={image.imageId} className="mb-4 break-inside-avoid overflow-hidden rounded-lg border border-border bg-card">
                 {image.imageUrl ? (
                   <Image
                     src={image.imageUrl}
                     alt=""
-                    width={1024}
-                    height={1024}
+                    width={dimensions.width}
+                    height={dimensions.height}
                     unoptimized
-                    className="aspect-square w-full object-cover"
+                    sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    className="h-auto w-full object-contain"
                   />
                 ) : (
                   <div className="grid aspect-square place-items-center text-muted-foreground">
@@ -229,8 +257,11 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                       )}
                     </span>
                   </div>
-                  <div className="line-clamp-2 min-h-10 text-xs leading-5 text-muted-foreground">
-                    {image.promptUsed || copy.prompt}
+                  <div
+                    className="line-clamp-3 min-h-10 text-xs leading-5 text-muted-foreground"
+                    title={image.promptUsed ?? undefined}
+                  >
+                    {promptPreview || copy.empty}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
@@ -239,7 +270,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                       className="flex h-10 items-center justify-center gap-2 rounded-md border border-border text-sm text-foreground hover:bg-muted"
                     >
                       <Eye className="size-4" />
-                      <span>{copy.viewPrompt}</span>
+                      <span className="min-w-0 truncate">{copy.viewPrompt}</span>
                     </button>
                     <button
                       type="button"
@@ -255,12 +286,13 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                       )}
                     >
                       {submittingImageId === image.imageId ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                      <span>{image.themeId ? copy.submit : copy.noTheme}</span>
+                      <span className="min-w-0 truncate">{image.themeId ? copy.submit : copy.noTheme}</span>
                     </button>
                   </div>
                 </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
@@ -270,7 +302,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
           <div className="space-y-4">
             <div>
               <div className="text-xs uppercase text-muted-foreground">{copy.prompt}</div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
+              <p className="mt-2 max-h-[48vh] overflow-auto rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm leading-6 text-zinc-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 whitespace-pre-wrap break-words">
                 {promptTarget.promptUsed || copy.empty}
               </p>
             </div>
@@ -295,10 +327,10 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
               <Image
                 src={submitTarget.imageUrl}
                 alt=""
-                width={512}
-                height={512}
+                width={getImageDimensions(submitTarget).width}
+                height={getImageDimensions(submitTarget).height}
                 unoptimized
-                className="aspect-square w-full rounded-md object-cover"
+                className="h-auto w-full rounded-md object-contain"
               />
             ) : (
               <div className="grid aspect-square place-items-center rounded-md bg-muted text-muted-foreground">
@@ -308,8 +340,8 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
             <div className="space-y-4">
               <div>
                 <div className="text-xs uppercase text-muted-foreground">{copy.prompt}</div>
-                <p className="mt-2 line-clamp-4 text-sm leading-6 text-foreground">
-                  {submitTarget.promptUsed || copy.empty}
+                <p className="mt-2 line-clamp-4 text-sm leading-6 text-foreground" title={submitTarget.promptUsed ?? undefined}>
+                  {truncatePrompt(submitTarget.promptUsed, 260) || copy.empty}
                 </p>
               </div>
               <label className="block">
@@ -345,7 +377,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                   )}
                 >
                   {submittingImageId === submitTarget.imageId ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  <span>{copy.submitImage}</span>
+                  <span className="min-w-0 truncate">{copy.submitImage}</span>
                 </button>
               </div>
             </div>
@@ -368,14 +400,14 @@ function Modal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 py-6 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-zinc-200 bg-white text-zinc-950 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 [&_.text-foreground]:text-zinc-950 dark:[&_.text-foreground]:text-zinc-50 [&_.text-muted-foreground]:text-zinc-600 dark:[&_.text-muted-foreground]:text-zinc-400">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <h2 className="text-lg font-semibold">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="grid size-9 place-items-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
             aria-label={closeLabel}
           >
             <X className="size-4" />

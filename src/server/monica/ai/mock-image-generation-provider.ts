@@ -29,10 +29,6 @@ export class MockImageGenerationProvider implements ImageGenerationProvider {
           ratio: input.ratio,
         },
       })),
-      responseSummary: {
-        mock: true,
-        imageCount,
-      },
     };
   }
 }

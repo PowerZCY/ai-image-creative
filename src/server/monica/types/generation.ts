@@ -9,7 +9,6 @@ export type CreateGenerationJobInput = {
   imageCount: number;
   generationType?: GenerationType;
   sourcePage?: string;
-  sessionId?: string;
   themeId?: string;
   referenceId?: string;
   sourceImageId?: string;
@@ -41,7 +40,6 @@ export type ImageGenerationProviderResult = {
   provider: string;
   providerJobId?: string;
   images: ImageGenerationProviderImage[];
-  responseSummary?: Record<string, unknown>;
 };
 
 export type QstashGenerationPayload = {

@@ -53,7 +53,6 @@ export function parseCreateGenerationJobInput(payload: unknown): CreateGeneratio
     imageCount,
     generationType: readGenerationType(body.generationType),
     sourcePage: readOptionalString(body.sourcePage),
-    sessionId: readOptionalString(body.sessionId),
     themeId: readOptionalString(body.themeId),
     referenceId: readOptionalString(body.referenceId),
     sourceImageId: readOptionalString(body.sourceImageId),

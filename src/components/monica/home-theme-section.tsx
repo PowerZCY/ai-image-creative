@@ -11,6 +11,7 @@ import {
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaThemeCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
+import { getTodayThemeSlug } from './theme-routes';
 
 export function HomeThemeSection({ copy }: { copy: MonicaThemeCopy }) {
   return (
@@ -25,6 +26,8 @@ export function HomeThemeSection({ copy }: { copy: MonicaThemeCopy }) {
 }
 
 function TodayTheme({ copy }: { copy: MonicaThemeCopy }) {
+  const themeHref = `/themes/${getTodayThemeSlug(copy)}`;
+
   return (
     <div className="space-y-5">
       <div className={cn(
@@ -49,7 +52,7 @@ function TodayTheme({ copy }: { copy: MonicaThemeCopy }) {
         ))}
       </div>
       <Link
-        href="/theme"
+        href={themeHref}
         className={cn(
           'inline-flex h-11 items-center rounded-md px-4 text-sm font-semibold text-white shadow-sm transition hover:brightness-105',
           themeButtonGradientClass,

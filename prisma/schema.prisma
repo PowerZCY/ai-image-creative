@@ -28,8 +28,6 @@ model User {
   transactions             Transaction[]
   themeSubmissions         ThemeSubmission[] @relation("ThemeSubmissionUser")
   reviewedThemeSubmissions ThemeSubmission[] @relation("ThemeSubmissionReviewer")
-  creationSessions         CreationSession[]
-  promptLogs               PromptLog[]
   referenceImages          ReferenceImage[]
   generationJobs           GenerationJob[]
   generatedImages          GeneratedImage[]
@@ -198,7 +196,7 @@ model ThemeSubmission {
   id                BigInt    @id @default(autoincrement())
   themeSubmissionId String    @unique @default(dbgenerated("gen_random_uuid()")) @map("theme_submission_id") @db.Uuid
   userId            String    @map("user_id") @db.Uuid
-  status            String    @default("under_review") @db.VarChar(50)
+  status            String    @default("draft") @db.VarChar(50)
   rawTitle          String    @map("raw_title") @db.VarChar(255)
   rawDescription    String?   @map("raw_description") @db.Text
   triggerType       String?   @map("trigger_type") @db.VarChar(100)
@@ -209,7 +207,7 @@ model ThemeSubmission {
   reviewedByUserId  String?   @map("reviewed_by_user_id") @db.Uuid
   reviewReason      String?   @map("review_reason") @db.Text
   sourceType        String    @default("user") @map("source_type") @db.VarChar(50)
-  submittedAt       DateTime? @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  submittedAt       DateTime? @map("submitted_at") @db.Timestamptz(6)
   reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz(6)
   selectedAt        DateTime? @map("selected_at") @db.Timestamptz(6)
   createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -236,17 +234,15 @@ model Theme {
   status        String    @default("draft") @db.VarChar(50)
   publishDate   DateTime? @map("publish_date") @db.Date
   coverImageUrl String?   @map("cover_image_url") @db.Text
+  promptTexts   String[]  @default([]) @map("prompt_texts")
   tags          Json?
   stats         Json?
   sourceType    String?   @map("source_type") @db.VarChar(50)
-  sourceRef     Json?     @map("source_ref")
   sortOrder     Int       @default(0) @map("sort_order")
   createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deleted       Int       @default(0)
 
-  creationSessions    CreationSession[]
-  promptLogs          PromptLog[]
   generationJobs      GenerationJob[]
   generatedImages     GeneratedImage[]
   submissions         ImageSubmission[]
@@ -259,67 +255,9 @@ model Theme {
   @@schema("monica_ai")
 }
 
-model CreationSession {
-  id            BigInt    @id @default(autoincrement())
-  sessionId     String    @unique @default(dbgenerated("gen_random_uuid()")) @map("session_id") @db.Uuid
-  userId        String?   @map("user_id") @db.Uuid
-  themeId       String?   @map("theme_id") @db.Uuid
-  sourcePage    String    @map("source_page") @db.VarChar(50)
-  status        String    @default("active") @db.VarChar(50)
-  selectedModel String?   @map("selected_model") @db.VarChar(100)
-  selectedStyle String?   @map("selected_style") @db.VarChar(100)
-  selectedRatio String?   @map("selected_ratio") @db.VarChar(50)
-  selectedCount Int?      @map("selected_count")
-  context       Json?
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted       Int       @default(0)
-
-  user            User?            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  theme           Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  promptLogs      PromptLog[]
-  referenceImages ReferenceImage[]
-  generationJobs  GenerationJob[]
-
-  @@index([userId, createdAt], map: "idx_creation_sessions_user_created_at")
-  @@index([themeId], map: "idx_creation_sessions_theme_id")
-  @@index([sourcePage], map: "idx_creation_sessions_source_page")
-  @@map("creation_sessions")
-  @@schema("monica_ai")
-}
-
-model PromptLog {
-  id                BigInt    @id @default(autoincrement())
-  promptLogId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("prompt_log_id") @db.Uuid
-  sessionId         String?   @map("session_id") @db.Uuid
-  userId            String?   @map("user_id") @db.Uuid
-  themeId           String?   @map("theme_id") @db.Uuid
-  actionType        String    @map("action_type") @db.VarChar(50)
-  inputPrompt       String?   @map("input_prompt") @db.Text
-  outputPrompt      String?   @map("output_prompt") @db.Text
-  inputPayload      Json?     @map("input_payload")
-  outputPayload     Json?     @map("output_payload")
-  provider          String?   @db.VarChar(100)
-  providerModel     String?   @map("provider_model") @db.VarChar(100)
-  usedForGeneration Boolean   @default(false) @map("used_for_generation")
-  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  deleted           Int       @default(0)
-
-  session CreationSession? @relation(fields: [sessionId], references: [sessionId], onDelete: NoAction, onUpdate: NoAction)
-  user    User?            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  theme   Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-
-  @@index([sessionId, createdAt], map: "idx_prompt_logs_session_created_at")
-  @@index([userId, createdAt], map: "idx_prompt_logs_user_created_at")
-  @@index([actionType], map: "idx_prompt_logs_action_type")
-  @@map("prompt_logs")
-  @@schema("monica_ai")
-}
-
 model ReferenceImage {
   id           BigInt    @id @default(autoincrement())
   referenceId  String    @unique @default(dbgenerated("gen_random_uuid()")) @map("reference_id") @db.Uuid
-  sessionId    String?   @map("session_id") @db.Uuid
   userId       String?   @map("user_id") @db.Uuid
   storageKey   String    @map("storage_key") @db.Text
   url          String?   @db.Text
@@ -332,12 +270,10 @@ model ReferenceImage {
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   deleted      Int       @default(0)
 
-  session        CreationSession? @relation(fields: [sessionId], references: [sessionId], onDelete: NoAction, onUpdate: NoAction)
   user           User?            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
   generationJobs GenerationJob[]
 
   @@index([userId, createdAt], map: "idx_reference_images_user_created_at")
-  @@index([sessionId], map: "idx_reference_images_session_id")
   @@map("reference_images")
   @@schema("monica_ai")
 }
@@ -345,7 +281,6 @@ model ReferenceImage {
 model GenerationJob {
   id               BigInt    @id @default(autoincrement())
   jobId            String    @unique @default(dbgenerated("gen_random_uuid()")) @map("job_id") @db.Uuid
-  sessionId        String?   @map("session_id") @db.Uuid
   userId           String    @map("user_id") @db.Uuid
   themeId          String?   @map("theme_id") @db.Uuid
   referenceId      String?   @map("reference_id") @db.Uuid
@@ -364,8 +299,6 @@ model GenerationJob {
   chargedCredits   Int       @default(0) @map("charged_credits")
   provider         String?   @db.VarChar(100)
   providerJobId    String?   @map("provider_job_id") @db.VarChar(255)
-  providerRequest  Json?     @map("provider_request")
-  providerResponse Json?     @map("provider_response")
   failureCode      String?   @map("failure_code") @db.VarChar(100)
   failureMessage   String?   @map("failure_message") @db.Text
   qstashMessageId  String?   @map("qstash_message_id") @db.VarChar(255)
@@ -378,7 +311,6 @@ model GenerationJob {
   updatedAt        DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deleted          Int       @default(0)
 
-  session        CreationSession? @relation(fields: [sessionId], references: [sessionId], onDelete: NoAction, onUpdate: NoAction)
   user           User             @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
   theme          Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
   referenceImage ReferenceImage?  @relation(fields: [referenceId], references: [referenceId], onDelete: NoAction, onUpdate: NoAction)

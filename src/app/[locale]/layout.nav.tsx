@@ -62,6 +62,15 @@ export async function primaryNavLinks(locale: string): Promise<SiteNavItemConfig
     ),
     createLocalizedNavLink(
       {
+        text: 'Themes',
+        path: '/themes',
+        prefetch: false,
+        icon: <BrainCircuitIcon />,
+      },
+      context,
+    ),
+    createLocalizedNavLink(
+      {
         text: 'Studio',
         path: '/studio',
         prefetch: false,

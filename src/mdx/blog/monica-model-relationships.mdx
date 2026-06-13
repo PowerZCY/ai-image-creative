@@ -41,8 +41,6 @@ date: 2026-06-11
 | --- | --- | --- |
 | `ThemeSubmission` | 主题提交 | 用户或管理员提交每日主题想法，进入审核和候选池 |
 | `Theme` | 正式主题 | 已采纳、排期或发布的每日主题 |
-| `CreationSession` | 创作会话 | 一次创作过程，串联页面来源、主题上下文、Assistant 和生成任务 |
-| `PromptLog` | Prompt 日志 | Assistant 的 ideas、improve、ask 等输入输出日志 |
 | `ReferenceImage` | 参考图 | 用户上传的本地参考图片，作为生成输入素材 |
 | `GenerationJob` | 生成任务 | 图片生成、变体、编辑的异步任务记录 |
 | `GeneratedImage` | 生成图片 | AI 生成出的用户私有图片资产 |
@@ -68,8 +66,6 @@ flowchart TD
 
   ThemeSubmission[ThemeSubmission-主题提交]
   Theme[Theme-正式主题]
-  CreationSession[CreationSession-创作会话]
-  PromptLog[PromptLog-Prompt日志]
   ReferenceImage[ReferenceImage-参考图]
   GenerationJob[GenerationJob-生成任务]
   GeneratedImage[GeneratedImage-生成图片]
@@ -90,18 +86,10 @@ flowchart TD
   User --> ThemeSubmission
   ThemeSubmission --> Theme
 
-  User --> CreationSession
-  Theme --> CreationSession
-  CreationSession --> PromptLog
-  User --> PromptLog
-  Theme --> PromptLog
-
   User --> ReferenceImage
-  CreationSession --> ReferenceImage
 
   User --> GenerationJob
   Theme --> GenerationJob
-  CreationSession --> GenerationJob
   ReferenceImage --> GenerationJob
   GenerationJob --> CreditAuditLog
 
@@ -154,13 +142,10 @@ flowchart LR
   title="4.2 图片生成链路"
   chart={`
 flowchart LR
-  User[User-用户] --> CreationSession[CreationSession-创作会话]
-  Theme[Theme-正式主题] --> CreationSession
-  CreationSession --> PromptLog[PromptLog-Prompt日志]
+  User[User-用户] --> GenerationJob[GenerationJob-生成任务]
+  Theme[Theme-正式主题] --> GenerationJob
   User --> ReferenceImage[ReferenceImage-参考图]
   ReferenceImage --> GenerationJob[GenerationJob-生成任务]
-  CreationSession --> GenerationJob
-  Theme --> GenerationJob
   GenerationJob --> CreditAuditLog[CreditAuditLog-积分流水]
   GenerationJob --> GeneratedImage[GeneratedImage-生成图片]
 `}
@@ -168,8 +153,7 @@ flowchart LR
 
 说明：
 
-- `CreationSession-创作会话` 记录用户从 Home、Theme Detail、Studio 或 Explore inspiration 进入创作的上下文。
-- `PromptLog-Prompt日志` 只记录 Assistant 中间过程，不是用户公开内容。
+- Assistant 中间过程不持久化；最终用于生成的 prompt 记录在 `GenerationJob-生成任务`。
 - `ReferenceImage-参考图` 是用户上传的输入素材，不是作品。
 - `GenerationJob-生成任务` 是调用 AI、记录供应商状态和预计/实际积分消耗的任务表。
 - `GeneratedImage-生成图片` 是 Studio 中展示的用户私有图片资产。
@@ -236,7 +220,6 @@ flowchart LR
 | `User-用户` | 1:N | `Transaction-订单交易` | 一个用户可有多笔订单 |
 | `User-用户` | 1:N | `CreditAuditLog-积分流水` | 一个用户有多条积分流水 |
 | `User-用户` | 1:N | `ThemeSubmission-主题提交` | 用户可提交多个主题想法 |
-| `User-用户` | 1:N | `CreationSession-创作会话` | 用户可有多次创作会话 |
 | `User-用户` | 1:N | `GenerationJob-生成任务` | 用户可创建多个生成任务 |
 | `User-用户` | 1:N | `GeneratedImage-生成图片` | 用户可拥有多张私有生成图 |
 | `User-用户` | 1:N | `ImageSubmission-作品投稿` | 用户可提交多个作品 |
@@ -253,7 +236,6 @@ flowchart LR
 | 来源 | 关系 | 目标 | 说明 |
 | --- | --- | --- | --- |
 | `ThemeSubmission-主题提交` | N:1 | `Theme-正式主题` | 多个提交可能被编辑、合并或采纳为正式主题 |
-| `Theme-正式主题` | 1:N | `CreationSession-创作会话` | 主题详情页创作会绑定主题上下文 |
 | `Theme-正式主题` | 1:N | `GenerationJob-生成任务` | 围绕主题生成的任务记录主题 |
 | `Theme-正式主题` | 1:N | `GeneratedImage-生成图片` | 生成图可带主题上下文 |
 | `Theme-正式主题` | 1:N | `ImageSubmission-作品投稿` | 用户把作品提交到某个主题 |
@@ -267,9 +249,6 @@ flowchart LR
 
 | 来源 | 关系 | 目标 | 说明 |
 | --- | --- | --- | --- |
-| `CreationSession-创作会话` | 1:N | `PromptLog-Prompt日志` | 一次创作会产生多个 Assistant 日志 |
-| `CreationSession-创作会话` | 1:N | `ReferenceImage-参考图` | 一次创作可上传多个参考图 |
-| `CreationSession-创作会话` | 1:N | `GenerationJob-生成任务` | 一次创作可发起多次生成 |
 | `ReferenceImage-参考图` | 1:N | `GenerationJob-生成任务` | 一个参考图可被多个生成任务使用 |
 | `GenerationJob-生成任务` | 1:N | `GeneratedImage-生成图片` | 一个任务可生成 1/2/4 张图片 |
 | `GeneratedImage-生成图片` | 1:N | `GenerationJob-生成任务` | 一张图可作为变体/编辑的来源图 |
@@ -304,8 +283,6 @@ flowchart LR
 | `Subscription-订阅` | 本人 / 系统 | 支付系统 / 系统 | 订阅状态 |
 | `ThemeSubmission-主题提交` | 本人 / 管理员 | 本人提交，管理员审核 | 用户提交主题想法 |
 | `Theme-正式主题` | 公开 | 管理员 / 系统 | 公开主题内容 |
-| `CreationSession-创作会话` | 本人 | 本人 / 系统 | 用户私有创作过程 |
-| `PromptLog-Prompt日志` | 系统 / 管理员 | 系统 | 内部日志，不直接给用户完整展示 |
 | `ReferenceImage-参考图` | 本人 | 本人 / 系统 | 用户上传的私有输入素材 |
 | `GenerationJob-生成任务` | 本人 | 本人创建，系统更新 | 用户私有异步任务 |
 | `GeneratedImage-生成图片` | 本人 | 系统 | 用户私有图片资产 |

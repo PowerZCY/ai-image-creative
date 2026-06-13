@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
       mimeType: readOptionalJsonString(body.mimeType),
       width: readOptionalJsonNumber(body.width),
       height: readOptionalJsonNumber(body.height),
-      sessionId: readOptionalJsonString(body.sessionId),
     });
 
     return NextResponse.json({ referenceImage });

@@ -15,6 +15,7 @@ import {
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaExploreCopy, MonicaThemeSummary } from './copy';
 import { monicaContentWidthClass } from './layout';
+import { slugifyThemeTitle } from './theme-routes';
 
 type PublicImage = {
   publicImageId: string;
@@ -379,6 +380,8 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
 }
 
 function ThemeCard({ theme, copy }: { theme: MonicaThemeSummary; copy: MonicaExploreCopy }) {
+  const themeHref = `/themes/${slugifyThemeTitle(theme.title)}`;
+
   return (
     <article className="overflow-hidden rounded-lg border border-border bg-card">
       {theme.coverImageUrl ? (
@@ -410,7 +413,7 @@ function ThemeCard({ theme, copy }: { theme: MonicaThemeSummary; copy: MonicaExp
         </div>
         <div className="flex gap-2">
           <Link
-            href="/theme"
+            href={themeHref}
             className="flex h-9 flex-1 items-center justify-center rounded-md border border-border text-sm text-foreground hover:bg-muted"
           >
             {copy.viewTheme}

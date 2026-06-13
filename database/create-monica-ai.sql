@@ -10,10 +10,10 @@ CREATE TABLE IF NOT EXISTS monica_ai.themes (
     status            VARCHAR(50)  NOT NULL DEFAULT 'draft',
     publish_date      DATE,
     cover_image_url   TEXT,
+    prompt_texts      TEXT[]       NOT NULL DEFAULT ARRAY[]::TEXT[],
     tags              JSONB,
     stats             JSONB,
     source_type       VARCHAR(50),
-    source_ref        JSONB,
     sort_order        INTEGER      NOT NULL DEFAULT 0,
     created_at        TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
     updated_at        TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.theme_submissions (
     id                   BIGSERIAL PRIMARY KEY,
     theme_submission_id  UUID         NOT NULL DEFAULT gen_random_uuid(),
     user_id              UUID         NOT NULL,
-    status               VARCHAR(50)  NOT NULL DEFAULT 'under_review',
+    status               VARCHAR(50)  NOT NULL DEFAULT 'draft',
     raw_title            VARCHAR(255) NOT NULL,
     raw_description      TEXT,
     trigger_type         VARCHAR(100),
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.theme_submissions (
     reviewed_by_user_id  UUID,
     review_reason        TEXT,
     source_type          VARCHAR(50)  NOT NULL DEFAULT 'user',
-    submitted_at         TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+    submitted_at         TIMESTAMPTZ,
     reviewed_at          TIMESTAMPTZ,
     selected_at          TIMESTAMPTZ,
     created_at           TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
@@ -54,57 +54,9 @@ CREATE INDEX IF NOT EXISTS idx_theme_submissions_user_submitted_at ON monica_ai.
 CREATE INDEX IF NOT EXISTS idx_theme_submissions_status_submitted_at ON monica_ai.theme_submissions (status, submitted_at);
 CREATE INDEX IF NOT EXISTS idx_theme_submissions_accepted_theme_id ON monica_ai.theme_submissions (accepted_theme_id);
 
-CREATE TABLE IF NOT EXISTS monica_ai.creation_sessions (
-    id              BIGSERIAL PRIMARY KEY,
-    session_id      UUID        NOT NULL DEFAULT gen_random_uuid(),
-    user_id         UUID,
-    theme_id        UUID,
-    source_page     VARCHAR(50) NOT NULL,
-    status          VARCHAR(50) NOT NULL DEFAULT 'active',
-    selected_model  VARCHAR(100),
-    selected_style  VARCHAR(100),
-    selected_ratio  VARCHAR(50),
-    selected_count  INTEGER,
-    context         JSONB,
-    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    deleted         INTEGER     NOT NULL DEFAULT 0,
-    CONSTRAINT creation_sessions_session_id_key UNIQUE (session_id),
-    CONSTRAINT creation_sessions_deleted_check CHECK (deleted = ANY (ARRAY[0, 1]))
-);
-
-CREATE INDEX IF NOT EXISTS idx_creation_sessions_user_created_at ON monica_ai.creation_sessions (user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_creation_sessions_theme_id ON monica_ai.creation_sessions (theme_id);
-CREATE INDEX IF NOT EXISTS idx_creation_sessions_source_page ON monica_ai.creation_sessions (source_page);
-
-CREATE TABLE IF NOT EXISTS monica_ai.prompt_logs (
-    id                   BIGSERIAL PRIMARY KEY,
-    prompt_log_id        UUID        NOT NULL DEFAULT gen_random_uuid(),
-    session_id           UUID,
-    user_id              UUID,
-    theme_id             UUID,
-    action_type          VARCHAR(50) NOT NULL,
-    input_prompt         TEXT,
-    output_prompt        TEXT,
-    input_payload        JSONB,
-    output_payload       JSONB,
-    provider             VARCHAR(100),
-    provider_model       VARCHAR(100),
-    used_for_generation  BOOLEAN     NOT NULL DEFAULT FALSE,
-    created_at           TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    deleted              INTEGER     NOT NULL DEFAULT 0,
-    CONSTRAINT prompt_logs_prompt_log_id_key UNIQUE (prompt_log_id),
-    CONSTRAINT prompt_logs_deleted_check CHECK (deleted = ANY (ARRAY[0, 1]))
-);
-
-CREATE INDEX IF NOT EXISTS idx_prompt_logs_session_created_at ON monica_ai.prompt_logs (session_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_prompt_logs_user_created_at ON monica_ai.prompt_logs (user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_prompt_logs_action_type ON monica_ai.prompt_logs (action_type);
-
 CREATE TABLE IF NOT EXISTS monica_ai.reference_images (
     id              BIGSERIAL PRIMARY KEY,
     reference_id    UUID        NOT NULL DEFAULT gen_random_uuid(),
-    session_id      UUID,
     user_id         UUID,
     storage_key     TEXT        NOT NULL,
     url             TEXT,
@@ -121,12 +73,10 @@ CREATE TABLE IF NOT EXISTS monica_ai.reference_images (
 );
 
 CREATE INDEX IF NOT EXISTS idx_reference_images_user_created_at ON monica_ai.reference_images (user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_reference_images_session_id ON monica_ai.reference_images (session_id);
 
 CREATE TABLE IF NOT EXISTS monica_ai.generation_jobs (
     id                 BIGSERIAL PRIMARY KEY,
     job_id             UUID         NOT NULL DEFAULT gen_random_uuid(),
-    session_id         UUID,
     user_id            UUID         NOT NULL,
     theme_id           UUID,
     reference_id       UUID,
@@ -145,8 +95,6 @@ CREATE TABLE IF NOT EXISTS monica_ai.generation_jobs (
     charged_credits    INTEGER      NOT NULL DEFAULT 0,
     provider           VARCHAR(100),
     provider_job_id    VARCHAR(255),
-    provider_request   JSONB,
-    provider_response  JSONB,
     failure_code       VARCHAR(100),
     failure_message    TEXT,
     qstash_message_id  VARCHAR(255),

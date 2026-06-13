@@ -11,7 +11,6 @@ export class ReferenceImageService {
     mimeType?: string;
     width?: number;
     height?: number;
-    sessionId?: string;
   }) {
     const safety = await safetyService.checkReferenceImages({
       mimeType: input.mimeType,
@@ -21,7 +20,6 @@ export class ReferenceImageService {
 
     return referenceImageRepository.create({
       userId,
-      sessionId: input.sessionId,
       storageKey: input.storageKey,
       url: input.url,
       mimeType: input.mimeType,
