@@ -252,7 +252,7 @@ export class GenerationService {
       return mode;
     }
 
-    return GENERATION_DISPATCH_MODE.QUEUE;
+    return GENERATION_DISPATCH_MODE.INLINE;
   }
 }
 
