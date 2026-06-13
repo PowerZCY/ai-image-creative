@@ -1,0 +1,801 @@
+---
+title: Monica AI 前端技术方案
+description: Monica AI 前端页面架构、组件选型、状态管理、异步轮询、样式规则和 i18n 落地方案
+date: 2026-06-13
+---
+
+## 1. 设计边界
+
+本文基于最新产品原型 `docs/index.html`、产品说明书、数据流设计、后端技术方案，以及现有组件体系输出前端技术方案。
+
+本文重点覆盖：
+
+- 页面和路由结构。
+- Server Component / Client Component 边界。
+- 创作面板、Assistant、生成任务、投稿、Explore、Studio 的组件拆分。
+- 异步生成任务的前端轮询策略。
+- 样式和交互规则。
+- 与 `@windrun-huaiin/*` 底层组件的使用边界。
+- i18n 文案组织。
+
+不覆盖：
+
+- AI Provider 参数细节。
+- 后端数据库迁移。
+- 管理后台完整设计。
+- 具体图片存储供应商 UI。
+
+## 2. 现有前端基础
+
+当前项目已经具备以下基础能力：
+
+- Next.js App Router。
+- React 19。
+- `next-intl` 多语言。
+- `@windrun-huaiin/base-ui`：基础图标、主题、样式工具。
+- `@windrun-huaiin/third-ui`：站点布局、Hero、按钮、弹窗、选择器、动效等通用组件。
+- `@windrun-huaiin/lib`：通用工具，如 `cn`。
+- `fumadocs` 风格的内容布局能力。
+
+现有首页 Hero 已经采用以下组件组合：
+
+```tsx
+import { ZapIcon } from '@windrun-huaiin/base-ui/icons';
+import { themeHeroEyesOnClass } from '@windrun-huaiin/base-ui/lib';
+import { GradientButton } from '@windrun-huaiin/third-ui/main/buttons';
+import { HeroMedia, HeroSection } from '@windrun-huaiin/third-ui/main/hero';
+import { cn } from '@windrun-huaiin/lib/utils';
+```
+
+结论：
+
+- Monica AI 不需要重建站点外壳、Hero、按钮、弹窗、选择器、图标和基础动效。
+- 前端实现重点应放在业务组件组合、状态流转和 API 数据适配。
+- 视觉风格应延续当前 `HeroSection + HeroMedia + GradientButton + themeHeroEyesOnClass` 的主题感，而不是重新做一套孤立 UI。
+
+## 3. 页面结构
+
+Monica AI 用户侧建议包含以下页面：
+
+<CheetTable title="页面结构">
+
+| 页面 | 路由建议 | 页面职责 |
+| --- | --- | --- |
+| Home | `/[locale]` 或 `/[locale]/create` | 通用创作入口、今日主题入口、创作结果展示 |
+| Theme Detail | `/[locale]/themes/[themeId]` | 主题详情、主题上下文创作、主题 Gallery |
+| Explore | `/[locale]/explore` | Themes / Images 浏览、筛选、图片详情 |
+| My Studio | `/[locale]/studio` | 个人创作、生成历史、投稿状态管理 |
+| Public Image Detail | 可用弹窗或 `/[locale]/images/[publicImageId]` | 公开图片详情、Use prompt、Like、Save |
+
+</CheetTable>
+
+MVP 可以先把 Public Image Detail 做成 Explore 和 Theme Gallery 内的弹窗。后续如果需要 SEO 或分享，再增加独立详情页。
+
+## 4. 布局方案
+
+### 4.1 根布局
+
+继续使用现有根布局和 `DocsRootProvider` / `SiteHomeLayout` 能力。
+
+页面组不重复配置主题。主题只在根 layout 配置：
+
+```tsx
+<DocsRootProvider
+  theme={{ mode: themeMode }}
+  i18n={{ locale, locales: generatedLocales, translations: fumaTranslations }}
+>
+  {children}
+</DocsRootProvider>
+```
+
+### 4.2 Home 组布局
+
+Monica AI 页面属于站点主体验，应继续挂在 `SiteHomeLayout` 下：
+
+- 使用现有 Header、Footer、GoToTop。
+- `floatingNav: true`。
+- 导航配置继续来自 `layout.nav.tsx` 和站点配置。
+- 不在业务页面内部重复实现顶栏。
+
+### 4.3 页面内容容器
+
+业务页面内部使用统一内容宽度：
+
+- 常规页面：`mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8`。
+- 创作工作台：允许 `max-w-[1400px]`，但必须保持移动端可用。
+- 创作面板和结果区用 CSS grid，而不是嵌套多层卡片。
+
+## 5. 视觉风格
+
+### 5.1 总体风格
+
+当前站点风格是：
+
+- 暗色或主题色友好的现代 SaaS / AI 工具风格。
+- 大标题 + 主题渐变强调。
+- 内容区简洁，避免过度装饰。
+- 使用真实媒体图或生成图作为视觉核心。
+- 操作按钮圆角胶囊，重点 CTA 使用主题渐变。
+
+Monica AI 应保持：
+
+- 创作工具优先，避免把首屏做成纯营销页。
+- 页面第一屏直接给用户可用的创作入口。
+- 主题色用于重点动作和焦点状态，不做大面积单色铺满。
+- 图片结果、主题封面、公开作品是视觉主体。
+
+### 5.2 Hero 规则
+
+Home 可以保留 Hero，但 Hero 必须服务创作入口：
+
+- 使用 `HeroSection` 和 `HeroMedia`。
+- H1 使用站点现有模式：普通标题 + `themeHeroEyesOnClass` 渐变强调。
+- CTA 使用 `GradientButton`。
+- Hero media 展示产品真实创作结果或主题作品，不使用抽象 SVG 装饰。
+- Hero 下方应立即接创作面板，让用户无需滚动太远即可开始生成。
+
+### 5.3 创作区视觉
+
+创作面板是产品核心，不应该设计成营销卡片。
+
+建议：
+
+- 使用大面积安静 surface：`bg-background`、`bg-muted/30`、`border-border/60`。
+- 主要输入区稳定高度，避免 Assistant 输出导致布局跳动。
+- Toolbar 和设置项尽量密集但清晰。
+- 结果图片区使用固定 aspect ratio，生成中保持 skeleton 占位。
+- 图片卡片允许使用轻边框和微弱阴影，不用多层嵌套卡片。
+
+## 6. 组件选型规则
+
+### 6.1 按钮
+
+遵循 `docs/skills/button-skills.mdx`。
+
+<CheetTable title="按钮组件选择">
+
+| 场景 | 组件 |
+| --- | --- |
+| 页面主 CTA，如 Start creating、Upgrade | `GradientButton` |
+| Generate、Submit、Download、Use prompt 等业务动作 | `XButton type="single"` |
+| 图片卡片主动作 + 更多动作 | `XButton type="split"` |
+| Home / Explore tab、Studio 状态切换 | `XToggleButton` |
+| 工具栏纯 icon，如关闭、移除参考图 | 原生 `button` + icon + `aria-label` |
+
+</CheetTable>
+
+规则：
+
+- 一组按钮中只允许一个主视觉重点。
+- 弹窗 footer 使用弹窗组件自带按钮语义，不套 `GradientButton`。
+- 长文案按钮设置稳定宽度，避免 loading 或状态切换导致布局跳动。
+- 纯 icon 按钮必须提供 `aria-label` 或 tooltip。
+
+### 6.2 选择器
+
+遵循 `docs/skills/select-skills.mdx`。
+
+<CheetTable title="选择器组件选择">
+
+| 场景 | 组件 |
+| --- | --- |
+| Model、Style、Aspect Ratio、Images | `XPillSelect mode="single"` 或 `XFormPills` |
+| Explore 多标签筛选 | `XPillSelect mode="multiple"` |
+| Gallery 排序：Featured / Most liked / Newest | `XToggleButton` |
+| Studio 状态：All / Generated / Under review | `XToggleButton` |
+| 自由输入 tags 或 negative keywords | `XTokenInput`，但 negative prompt 主体仍用 textarea |
+
+</CheetTable>
+
+选项结构统一：
+
+```ts
+type Option = {
+  label: string;
+  value: string;
+};
+```
+
+`value` 必须是稳定业务值，例如 `flux_pro`、`ratio_16_9`，不要用展示文案。
+
+### 6.3 弹窗
+
+遵循 `docs/skills/alter-dialog-skills.mdx`。
+
+<CheetTable title="弹窗组件选择">
+
+| 场景 | 组件 |
+| --- | --- |
+| 投稿确认 | `ConfirmDialog` 或业务封装的 Submit Dialog |
+| 图片详情 | 业务 Dialog，内部复用弹窗 surface 规则 |
+| 删除/撤回投稿 | `ConfirmDialog type="danger"` |
+| 生成失败提示 | `InfoDialog type="error"` |
+| 安全拦截提示 | `InfoDialog type="warn"` |
+| 放弃已编辑 prompt 或关闭未保存设置 | `ConfirmDialog emphasis="cancel"` |
+
+</CheetTable>
+
+规则：
+
+- Overlay 和 X 只关闭弹窗，不触发业务动作。
+- 异步 loading 绑定到具体 action。
+- 投稿提交、删除、撤回这类写操作使用 `loadingActions={['confirm']}`。
+- 业务错误由页面状态或 toast 处理，底层弹窗不理解业务错误。
+
+### 6.4 图标
+
+遵循 `docs/skills/global-icon-skills.mdx`。
+
+规则：
+
+- 已存在的公共 icon 可从 `@windrun-huaiin/base-ui/icons` 导入。
+- Monica 业务固定 icon 应在业务侧收口，例如 `src/features/monica/icons.tsx`。
+- 业务固定 icon 从 `lucide-react` 导入，再用 `createGlobalLucideIcon` 包一层。
+- 配置驱动 icon 才使用 `getGlobalIcon` / `getIconElement`。
+- 不因为 Monica 缺一个业务 icon 就推动底层 `base-ui` 发版。
+
+建议业务 icon：
+
+```tsx
+import { ImagePlus, Sparkles, Wand2 } from 'lucide-react';
+import { createGlobalLucideIcon } from '@windrun-huaiin/base-ui/icons';
+
+export const ImagePlusIcon = createGlobalLucideIcon(ImagePlus, 'ImagePlusIcon');
+export const SparklesIcon = createGlobalLucideIcon(Sparkles, 'SparklesIcon');
+export const WandIcon = createGlobalLucideIcon(Wand2, 'WandIcon');
+```
+
+### 6.5 动效
+
+遵循 `docs/skills/animate-skills.mdx`。
+
+`MotionBeamFrame` 可用于：
+
+- Home 创作面板外层的轻量 hover/focus 强调。
+- 当前主题重点入口。
+- 生成中面板的强调边界。
+
+不建议：
+
+- 每个图片卡片都常驻 beam 动效。
+- 大量列表项同时 active。
+- 用 beam frame 替代真实边框、背景和布局。
+
+`slot-text` 只用于短文本状态变化：
+
+- Copy / Copied。
+- Save / Saved。
+- Like count 小数字变化。
+- Generate 按钮短状态。
+
+不要用于长 prompt、Assistant 输出、图片列表批量状态。
+
+## 7. 前端模块拆分
+
+推荐目录：
+
+```text
+src/features/monica/
+  api/
+    assistant.client.ts
+    generation.client.ts
+    explore.client.ts
+    studio.client.ts
+    submission.client.ts
+  components/
+    creation-panel/
+      creation-panel.tsx
+      prompt-input.tsx
+      assistant-actions.tsx
+      assistant-output.tsx
+      generation-settings.tsx
+      reference-image-picker.tsx
+      generation-results.tsx
+    theme/
+      theme-hero.tsx
+      theme-card.tsx
+      theme-picker-dialog.tsx
+      theme-gallery.tsx
+    image/
+      generated-image-card.tsx
+      public-image-card.tsx
+      image-detail-dialog.tsx
+      submit-image-dialog.tsx
+    studio/
+      studio-shell.tsx
+      studio-image-grid.tsx
+      studio-status-tabs.tsx
+    explore/
+      explore-shell.tsx
+      explore-filters.tsx
+  hooks/
+    use-generation-job-polling.ts
+    use-creation-session.ts
+    use-assistant-actions.ts
+  copy/
+    monica-copy.ts
+  types.ts
+  constants.ts
+  icons.tsx
+```
+
+原则：
+
+- `features/monica/components` 只放业务组件。
+- `api` 层封装 fetch，不在组件里散写 endpoint 字符串。
+- `hooks` 处理客户端状态和轮询。
+- `copy` 将 i18n 消息转成组件可消费的数据结构。
+- `types.ts` 保持前端类型，不直接把 Prisma 类型暴露到组件。
+
+## 8. Server / Client 边界
+
+### 8.1 Server Component
+
+适合 Server Component：
+
+- 页面级数据首屏读取：今日主题、主题详情、Explore 初始列表、Studio 初始列表。
+- 获取 `next-intl` 翻译。
+- 构建结构化 copy。
+- SEO metadata。
+
+### 8.2 Client Component
+
+必须是 Client Component：
+
+- 创作面板。
+- Prompt 输入。
+- Assistant 输出交互。
+- Reference image 上传和本地预览。
+- Generate 按钮和任务轮询。
+- 图片详情弹窗。
+- 投稿弹窗。
+- Like / Save。
+- Studio tabs。
+
+### 8.3 数据传递
+
+页面 Server Component 负责：
+
+```tsx
+const t = await getTranslations({ locale, namespace: 'monica' });
+const copy = buildMonicaCopy(t);
+const todayTheme = await getTodayTheme();
+```
+
+Client Component 接收：
+
+```tsx
+<CreationPanel
+  copy={copy.creationPanel}
+  initialTheme={todayTheme}
+  sourcePage="home"
+/>
+```
+
+不要在深层共享组件里直接调用 `getTranslations` 或写 namespace key。
+
+## 9. 创作面板设计
+
+`CreationPanel` 是核心复用组件，出现在 Home、Theme Detail、My Studio。
+
+核心 props：
+
+```ts
+type CreationPanelProps = {
+  sourcePage: 'home' | 'theme_detail' | 'studio' | 'explore_image_detail';
+  initialTheme?: ThemeSummary | null;
+  initialPrompt?: string;
+  initialReferenceImage?: ReferenceImageDraft | null;
+  mode?: 'free' | 'theme';
+  copy: CreationPanelCopy;
+};
+```
+
+内部状态：
+
+- `prompt`
+- `negativePrompt`
+- `selectedModel`
+- `selectedStyle`
+- `selectedRatio`
+- `imageCount`
+- `referenceImages`
+- `assistantPanel`
+- `currentSessionId`
+- `activeJobIds`
+- `generatedImages`
+
+组件规则：
+
+- Prompt 输入是主控状态，Assistant 只能在用户点击 Use / Replace / Append 后修改 prompt。
+- Home 默认不绑定主题，今日主题只作为灵感入口。
+- Theme Detail 默认绑定当前主题。
+- Studio 默认不绑定主题，用户通过 Theme Picker 后才绑定。
+- Generate 后立即创建任务并进入轮询，不等待 Worker 完成。
+
+## 10. 异步生成轮询
+
+前端轮询 endpoint：
+
+```text
+GET /api/generation/jobs/:jobId
+```
+
+任务状态：
+
+- `pending`
+- `queued`
+- `running`
+- `succeeded`
+- `failed`
+- `blocked`
+- `cancelled`
+
+轮询策略：
+
+- 创建任务成功后立即把结果区置为 `queued`。
+- 初始 1-2 秒轮询一次。
+- 超过 30 秒后降频，例如 3-5 秒一次。
+- 超过产品定义的最大等待时间后显示“仍在生成，可稍后到 Studio 查看”。
+- 收到 `succeeded / failed / blocked / cancelled` 后停止轮询。
+
+Hook 设计：
+
+```ts
+type GenerationJobView = {
+  jobId: string;
+  status: 'pending' | 'queued' | 'running' | 'succeeded' | 'failed' | 'blocked' | 'cancelled';
+  estimatedCredits: number;
+  chargedCredits: number;
+  images: GeneratedImageView[];
+  failureCode?: string;
+  failureMessage?: string;
+};
+
+function useGenerationJobPolling(jobId: string | null, options?: {
+  enabled?: boolean;
+  onSuccess?: (job: GenerationJobView) => void;
+  onTerminal?: (job: GenerationJobView) => void;
+}) {
+  // 内部用 setTimeout 递归调度，避免 setInterval 与慢请求重叠
+}
+```
+
+显示规则：
+
+- `queued/running`：显示 skeleton 或进度状态。
+- `succeeded`：显示图片卡片，`chargedCredits` 应等于实际消耗。
+- `failed/blocked/cancelled`：显示错误状态和重试入口；业务语义是最终不消耗积分，返还由积分服务保证。
+- 不在前端实现积分返还逻辑。
+- 不在前端处理 OpenRouter base64 图片输出；前端只展示后端保存到 R2 后返回的 `imageUrl`。
+
+## 10.1 图片上传和 R2 URL 边界
+
+Reference image 上传属于前端交互，但存储和 Provider 可访问 URL 由后端负责。
+
+前端职责：
+
+- 校验文件类型和大小。
+- 生成本地 object URL 做即时预览。
+- 调用 `POST /api/images/reference` 上传文件。
+- 保存返回的 `referenceId` 和预览 URL。
+- Generate 时只提交 `referenceId`，不提交文件二进制、base64 或 R2 signed URL。
+
+后端职责：
+
+- 使用 R2 Explorer SDK 将上传文件保存到 R2。
+- 创建 `ReferenceImage`，保存 `storageKey`、mime type、尺寸和展示 URL。
+- Worker 调用 OpenRouter 前，根据 `storageKey` 临时生成可被 Provider 访问的 public/signed view URL。
+- OpenRouter 返回生成图后，后端将输出图片落 R2，再返回 `GeneratedImage.imageUrl` 给前端。
+
+前端不能依赖：
+
+- OpenRouter 返回的 base64 data URL。
+- 临时 signed URL 的长期有效性。
+- `protected.view` 这类需要站内鉴权的图片地址。
+
+因此前端组件只关心：
+
+```ts
+type ReferenceImageDraft = {
+  referenceId: string;
+  previewUrl: string;
+  filename: string;
+  mimeType: string;
+};
+
+type GeneratedImageView = {
+  imageId: string;
+  imageUrl: string;
+  thumbnailUrl?: string;
+  promptUsed?: string;
+};
+```
+
+## 11. Assistant 交互
+
+Assistant 是创作面板内部能力，不是独立聊天页。
+
+动作：
+
+- Get ideas。
+- More like this。
+- Improve prompt。
+- Ask assistant。
+
+组件：
+
+- `AssistantActions`：三个快捷动作。
+- `AssistantOutput`：ideas / improve / ask 的结果展示。
+- `AssistantIdeaCard`：单个方向，包含 Use / More like this。
+- `AskAssistantBox`：短对话输入。
+
+规则：
+
+- Assistant 输出必须围绕图片生成，不做开放闲聊。
+- Get Ideas 不自动生成图片。
+- Use 只填入 prompt。
+- Improve Prompt 必须展示 Original 和 Improved，用户明确选择 Replace 或 Append。
+- Assistant 如果收费，也走积分服务预扣减和失败返还；前端只展示消耗提示，不处理返还。
+
+## 12. 图片和投稿组件
+
+### 12.1 GeneratedImageCard
+
+展示：
+
+- 图片预览。
+- Prompt used。
+- 模型、比例、风格。
+- 状态。
+- Download。
+- Edit。
+- Variations。
+- Submit。
+
+按钮：
+
+- Download / Edit / Variations 用 `XButton type="single"`。
+- Submit 可作为重点业务动作。
+- 多个低频动作可收进 `XButton type="split"`。
+
+### 12.2 SubmitImageDialog
+
+职责：
+
+- 展示图片预览。
+- 展示目标主题。
+- 展示 prompt snapshot。
+- 输入 creator note。
+- 创建投稿。
+
+弹窗：
+
+- 使用 Confirm 语义。
+- `loadingActions={['confirm']}`。
+- 提交成功后关闭弹窗，并更新 Studio / 图片卡片状态为 `under_review`。
+
+### 12.3 ImageDetailDialog
+
+展示：
+
+- 大图。
+- 作者。
+- 所属主题。
+- Prompt。
+- 标签。
+- Like / Save 当前状态。
+
+动作：
+
+- Use as inspiration。
+- Use prompt。
+- Copy prompt。
+- Like。
+- Save。
+
+`Copy prompt` 和 `Save/Saved` 可使用 `slot-text` 做短文本状态动画。
+
+## 13. Explore 和 Studio
+
+### 13.1 Explore
+
+布局：
+
+- 顶部 tabs：Themes / Images，用 `XToggleButton`。
+- 筛选：`XFilterPills` 或 `XPillSelect`。
+- 列表：响应式 grid。
+- 图片详情：Dialog。
+
+数据：
+
+- Server Component 读取首屏列表。
+- Client Component 处理筛选变化和分页加载。
+- Like / Save 做乐观更新，但失败时回滚。
+
+### 13.2 My Studio
+
+布局：
+
+- 顶部保留创作面板。
+- 下方是个人图片库。
+- 状态 tabs：All / Generated / Submitted / Under review / Published / Rejected。
+
+规则：
+
+- Studio 主资产是 `GeneratedImage`。
+- Reference image 不进入 Studio 图片库。
+- 投稿状态来自 `GeneratedImage.status` 和最新 `ImageSubmission`。
+- 生成中任务可以在 Studio 中显示为 in-progress 卡片，点击后继续轮询或刷新状态。
+
+## 14. i18n 方案
+
+遵循 `docs/skills/i18n-skills.mdx`。
+
+推荐消息结构：
+
+```text
+messages/
+  en.json
+  monica/
+    monica.en.json
+    monica.zh.json
+```
+
+运行时 `i18n.ts` 增加 `monica` 目录白名单。
+
+文案通过 copy builder 输出：
+
+```ts
+export type CreationPanelCopy = {
+  promptPlaceholder: string;
+  generate: string;
+  getIdeas: string;
+  improvePrompt: string;
+  askAssistant: string;
+  safetyHint: string;
+};
+
+export function buildMonicaCopy(t: Translator): MonicaCopy {
+  return {
+    creationPanel: {
+      promptPlaceholder: t('creationPanel.promptPlaceholder'),
+      generate: t('creationPanel.generate'),
+      getIdeas: t('creationPanel.getIdeas'),
+      improvePrompt: t('creationPanel.improvePrompt'),
+      askAssistant: t('creationPanel.askAssistant'),
+      safetyHint: t('creationPanel.safetyHint'),
+    },
+  };
+}
+```
+
+规则：
+
+- 组件消费 copy，不直接消费 namespace。
+- 不在组件里写 `locale === 'zh'` 分支。
+- 页面专属文案和复用组件文案分组存放。
+
+## 15. API Client 约定
+
+前端 API client 只封装请求，不写 UI 状态。
+
+示例：
+
+```ts
+export async function createGenerationJob(input: CreateGenerationJobInput) {
+  const res = await fetch('/api/generation/jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    throw await toApiError(res);
+  }
+
+  return res.json() as Promise<CreateGenerationJobResult>;
+}
+```
+
+错误处理：
+
+- `INSUFFICIENT_CREDITS`：提示充值或降低图片数量。
+- `PROMPT_BLOCKED`：展示安全拦截说明。
+- `REFERENCE_IMAGE_BLOCKED`：提示更换参考图。
+- `GENERATION_JOB_FAILED`：展示重试入口。
+- `PROVIDER_UNAVAILABLE`：提示稍后重试。
+
+## 16. 样式实现规则
+
+### 16.1 Tailwind 和 className
+
+- 使用 Tailwind utility class。
+- 组合 class 使用 `cn`。
+- 优先使用 `bg-background`、`text-foreground`、`text-muted-foreground`、`border-border` 这类主题 token。
+- 不硬编码大面积颜色。
+- 可以在局部使用 `themeHeroEyesOnClass` 做重点文字渐变。
+
+### 16.2 圆角和卡片
+
+- 按钮默认胶囊或沿用组件默认。
+- 工具面板和卡片圆角保持克制，避免过度圆润。
+- 不做卡片套卡片。
+- 页面 section 不做漂浮卡片，重复项目才用卡片。
+
+### 16.3 响应式
+
+- 移动端创作面板单列。
+- 桌面端创作面板和结果区可以两列或上下结构。
+- Toolbar 在移动端允许横向滚动，但必须保留清晰焦点态。
+- 图片网格使用稳定 `aspect-ratio`。
+- 文本按钮在移动端避免溢出，必要时图标 + 短文案。
+
+### 16.4 可访问性
+
+- 所有输入必须有 label 或 `aria-label`。
+- 纯 icon button 必须有 `aria-label`。
+- Dialog 打开后焦点进入弹窗。
+- 生成中状态使用 `aria-live="polite"`。
+- 错误提示和安全提示不能只靠颜色表达。
+
+## 17. 前端状态原则
+
+状态分三层：
+
+- URL 状态：Explore tab、筛选、排序、分页。
+- 页面局部状态：CreationPanel prompt、settings、Assistant 输出、弹窗开关。
+- 服务端状态：GenerationJob、GeneratedImage、Submission、PublicImage like/save。
+
+规则：
+
+- 不引入全局状态库，除非后续跨页面状态明显复杂化。
+- 创作面板内部用 `useReducer` 管理复杂表单状态。
+- API 结果可以先用局部 state 管理；后续如果请求复用变多，再评估 query cache。
+- 生成任务轮询必须可取消，组件卸载时停止请求。
+
+## 18. 实施顺序
+
+### 18.1 第一阶段：页面骨架和组件基础
+
+- 建立 `features/monica` 目录。
+- 建立 copy builder 和消息文件。
+- 实现 Home 创作面板静态 UI。
+- 接入 `HeroSection` / `HeroMedia`。
+- 接入 Model / Style / Ratio / Count 选择器。
+
+### 18.2 第二阶段：Assistant 和生成任务
+
+- 实现 Assistant actions 和输出区。
+- 实现 `POST /api/generation/jobs` 调用。
+- 实现 `useGenerationJobPolling`。
+- 实现生成中 skeleton、成功结果、失败状态。
+
+### 18.3 第三阶段：Explore / Theme / Studio
+
+- Theme Detail。
+- Explore Themes / Images。
+- Image Detail Dialog。
+- Studio 图片库和状态 tabs。
+
+### 18.4 第四阶段：投稿和互动
+
+- SubmitImageDialog。
+- Like / Save。
+- Download。
+- Variation / Edit 入口。
+
+### 18.5 第五阶段：体验增强
+
+- SlotText 短文本状态动画。
+- MotionBeamFrame 重点区域 hover/focus 动效。
+- 更细的空状态、错误状态、离线或超时提示。
+
+## 19. 待确认项
+
+- Home 是否继续作为站点首页，还是将创作入口放到 `/create`。
+- 图片生成中的最长前端等待时间。
+- 生成任务超时后是否自动提示用户去 Studio 查看。
+- `slot-text` 是否作为默认依赖引入，还是只在局部组件懒加载使用。
+- 是否需要独立公开图片详情页用于 SEO 和分享。
+- 是否允许匿名用户生成图片。

@@ -171,9 +171,9 @@ flowchart LR
 - `CreationSession-创作会话` 记录用户从 Home、Theme Detail、Studio 或 Explore inspiration 进入创作的上下文。
 - `PromptLog-Prompt日志` 只记录 Assistant 中间过程，不是用户公开内容。
 - `ReferenceImage-参考图` 是用户上传的输入素材，不是作品。
-- `GenerationJob-生成任务` 是扣积分、调用 AI、记录供应商状态的任务表。
+- `GenerationJob-生成任务` 是调用 AI、记录供应商状态和预计/实际积分消耗的任务表。
 - `GeneratedImage-生成图片` 是 Studio 中展示的用户私有图片资产。
-- 生成扣费通过 `CreditAuditLog-积分流水` 追溯，余额仍由 `Credit-积分余额` 管理。
+- 生成任务创建时预扣减积分；失败、拦截或取消时由积分服务按 `GenerationJob.jobId` 返还。扣费和返还通过 `CreditAuditLog-积分流水` 追溯，余额仍由 `Credit-积分余额` 管理。
 
 ### 4.3 投稿与公开展示链路
 
@@ -220,7 +220,7 @@ flowchart LR
 - 购买、订阅、支付状态继续使用现有 `Transaction-订单交易` 和 `Subscription-订阅`。
 - 用户当前余额继续使用 `Credit-积分余额`。
 - 所有积分变动继续使用 `CreditAuditLog-积分流水`。
-- 图片生成消耗积分时，`CreditAuditLog.operationReferId` 可记录 `GenerationJob.jobId`。
+- 图片生成预扣减、最终消耗或失败返还时，`CreditAuditLog.operationReferId` 可记录 `GenerationJob.jobId`。
 - 主题提交奖励积分时，`CreditAuditLog.operationReferId` 可记录 `ThemeSubmission.themeSubmissionId`。
 
 ## 5. 核心关系清单
@@ -323,10 +323,9 @@ flowchart LR
 - `Credit-积分余额`、`CreditAuditLog-积分流水`、`Transaction-订单交易`、`Subscription-订阅` 已经完备，不需要为 Monica AI 新建积分或订单表。
 - `ThemeSubmission-主题提交` 是主题来源，普通用户和管理员走同一条主题生产链路。
 - `Theme-正式主题` 是创作上下文和投稿目标。
-- `GenerationJob-生成任务` 是积分消耗和 AI 供应商调用的核心任务表。
+- `GenerationJob-生成任务` 是 AI 供应商调用、异步状态、预计消耗和实际消耗记录的核心任务表。
 - `GeneratedImage-生成图片` 是 My Studio 的核心资产。
 - `ImageSubmission-作品投稿` 是从私有图进入公开展示前的审核层。
 - `PublicImage-公开图片` 是公开展示投影，不重复存储图片资产。
 - `ReferenceImage-参考图` 是生成输入素材，不是作品。
 - `ImageLike-图片点赞` 和 `ImageSave-图片收藏` 是用户与公开图片之间的关系表。
-

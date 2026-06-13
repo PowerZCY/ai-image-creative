@@ -107,6 +107,8 @@ src/server/monica/
     image-generation-provider.ts
     image-derivative-provider.ts
     assistant-provider.ts
+  storage/
+    r2-storage.service.ts
   validators/
     theme.validator.ts
     assistant.validator.ts
@@ -160,6 +162,29 @@ export interface ImageDerivativeProvider {
 
 具体 prompt、参数映射、供应商选择逻辑后续补充。
 
+### 3.4 OpenRouter 图片输入输出边界
+
+后续 AI model 统一通过 OpenRouter 接入时，图片输入输出必须按以下边界处理：
+
+- 图文生图的输入图片可以使用可访问 URL，也可以使用 base64 data URL。
+- 用户上传的 reference image 默认先落到 R2，再在 Worker 调用 AI 前生成可被 OpenRouter / Provider 访问的 public 或 signed view URL。
+- signed URL 的有效期必须覆盖 QStash 排队时间、Worker 执行时间、Provider 拉图时间和必要重试窗口。
+- 不把 `protected.view` 这类需要业务鉴权的 URL 传给 OpenRouter，因为第三方 Provider 不会携带站内鉴权 header。
+- 如果某些图片必须绝对私有，可在 Worker 内转成 base64 data URL 传入，但这不是默认策略。
+
+OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。每个 image item 里的 `image_url.url` 可能是 base64 data URL，而不是可长期访问的公网 HTTP URL。
+
+因此生成结果保存规则是：
+
+1. Worker 从 OpenRouter response 中读取 `message.images[]`。
+2. 遍历每个 `image.image_url.url`。
+3. 如果是 `data:image/...;base64,...`，解析 mime type 和 base64 内容。
+4. 将图片二进制上传到 R2。
+5. 保存 `GeneratedImage.storageKey`、`imageUrl`、`thumbnailUrl`、尺寸、模型和 prompt 摘要。
+6. 不把 OpenRouter 返回的完整 base64 写入 `GenerationJob.providerResponse`。
+
+一次生成多张图片时，Worker 按 `message.images[]` 创建多条 `GeneratedImage`。不要假设所有模型都支持多图输出，具体数量以模型能力和实际响应为准。
+
 ## 4. 新增数据 Model 设计
 
 ### 4.1 命名原则
@@ -207,7 +232,7 @@ export interface ImageDerivativeProvider {
 | `CreationSession` | 串联一次创作过程，记录来源页面、主题上下文、Assistant 行为和生成任务，便于排查和分析 |
 | `PromptLog` | 记录 Assistant 的 Get Ideas、Improve Prompt、Ask Assistant 输入输出；这是内部日志，不是用户可见版本历史 |
 | `ReferenceImage` | 保存用户上传的参考图输入，负责归属、安全审核和被生成任务引用 |
-| `GenerationJob` | 记录图片生成/变体/编辑任务，支撑异步状态、积分消耗、供应商任务、失败退款和结果回写 |
+| `GenerationJob` | 记录图片生成/变体/编辑任务，支撑异步状态、预计/实际消耗对账、供应商任务、失败原因和结果回写 |
 | `GeneratedImage` | 保存 AI 生成出的用户私有图片资产，是 My Studio、下载、投稿和后续编辑/变体的核心 |
 | `ImageSubmission` | 表示用户将私有生成图提交到某个主题的审核记录，支撑 Under review、Published、Rejected |
 | `ReviewRecord` | 记录自动审核和人工审核历史，支撑安全追溯、拒绝原因和管理端审计 |
@@ -771,11 +796,13 @@ ask(userId, input): Promise<AskAssistantResult>
 - 创建生成任务。
 - 校验用户额度。
 - 执行 prompt/reference 安全检查。
-- 扣减积分。
+- 预扣减积分。
 - 调用图片生成 Provider。
 - 回写任务状态。
 - 保存 GeneratedImage。
-- 失败时按规则退款。
+- 将 OpenRouter 返回的图片结果落到 R2。
+- 生成成功时记录实际消耗。
+- 生成失败、无结果、被拦截或超时时触发积分返还。
 - 通过 `generationType` 区分文生图、变体、编辑。
 - 通过 `sourceImageId` 记录变体/编辑的来源图片。
 
@@ -791,10 +818,12 @@ syncGenerationJob(jobId): Promise<void>
 积分规则：
 
 - 创建任务前使用现有 credit service 检查余额。
-- 任务进入供应商调用前扣减积分。
+- 创建任务时预扣减积分，避免用户并发生成时超额使用。
 - `operationReferId = jobId`。
 - `feature = ai_image_generation`。
-- 任务失败且供应商未产生成本时，调用现有积分退款能力。
+- 任务成功时 `chargedCredits = estimatedCredits`。
+- 任务失败、被拦截或取消时 `chargedCredits = 0`，由积分服务按 `jobId` 幂等返还预扣减积分。
+- `GenerationJob` 不表达积分内部状态，积分服务通过 `CreditAuditLog.operationReferId` 负责幂等、返还和审计。
 
 ### 6.6 ImageService
 
@@ -804,6 +833,8 @@ syncGenerationJob(jobId): Promise<void>
 - 校验图片归属。
 - 创建下载 URL。
 - 上传 reference image。
+- 调用 R2 Explorer SDK 保存 reference image 和 generated image。
+- 为 AI 调用生成可访问的 public/signed view URL。
 - 为 variations/edit 创建对应的 `GenerationJob`。
 
 关键方法：
@@ -812,9 +843,20 @@ syncGenerationJob(jobId): Promise<void>
 getPublicImageDetail(publicImageId, viewerUserId?)
 getMyImage(userId, imageId)
 uploadReferenceImage(userId, input)
+createProviderAccessibleImageUrl(referenceId): Promise<string>
+storeGeneratedImageFromProviderResult(input): Promise<GeneratedImage>
 createVariation(userId, imageId, input)
 createEdit(userId, imageId, input)
 ```
+
+R2 规则：
+
+- `ReferenceImage.storageKey` 保存 R2 object key。
+- `ReferenceImage.url` 可保存站内展示 URL 或最近一次 public view URL，但 AI 调用前应重新生成 signed/public URL。
+- `GeneratedImage.storageKey` 保存最终生成图的 R2 object key。
+- `GeneratedImage.imageUrl` 保存前端可展示的 R2 view URL。
+- `GeneratedImage.thumbnailUrl` 可在 MVP 先复用 `imageUrl`，后续再生成缩略图。
+- `GenerationJob.providerResponse` 只保存供应商响应摘要，不保存 base64 图片正文。
 
 ### 6.7 SubmissionService
 
@@ -881,22 +923,45 @@ getMyImagePrompt(userId, imageId)
 
 职责：
 
-- Prompt 安全检查。
-- Reference image 安全检查。
-- 生成图片安全检查。
-- 投稿内容安全检查。
-- 写入 ReviewRecord。
+- 为 AI 生成链路保留统一安全检查入口。
+- MVP 阶段做轻量规则和 Provider 拒绝结果归一化。
+- 后续可替换为自研 NSFW 审查、第三方审核、人工复核或 OpenAI moderation。
+- 不把审核状态机和积分状态机塞进 `GenerationJob`。
+- 必要时写入 `ReviewRecord`，用于审计和排查。
+
+MVP 阶段不实现复杂自研 NSFW 分类器。当前默认策略是：
+
+- Prompt：校验空内容、长度、明显违规关键词等基础规则。
+- Reference image：校验文件类型、大小、归属、存储可访问性；图片内容审核入口保留，默认可放行。
+- Provider result：默认信任 OpenRouter / 下游模型的安全策略；如果 Provider 明确因安全策略拒绝，归一化为 `blocked`。
+- Submission：投稿进入公开展示前仍保留审核记录，MVP 可先走轻量自动审核或人工审核。
+
+后续增强时只替换 `SafetyService` 实现，不改变 `GenerationService` 主流程、`GenerationJob.status` 语义和积分返还机制。
 
 AI/审核供应商实现留空。
 
 关键方法：
 
 ```ts
-checkPrompt(input): Promise<SafetyResult>
-checkImage(input): Promise<SafetyResult>
+checkGenerationRequest(input): Promise<SafetyResult>
+checkReferenceImages(input): Promise<SafetyResult>
+checkProviderResult(input): Promise<SafetyResult>
 checkSubmission(input): Promise<SafetyResult>
 checkThemeRelevance(input): Promise<RelevanceResult>
 ```
+
+`SafetyResult` 建议至少包含：
+
+```ts
+type SafetyResult = {
+  status: 'passed' | 'blocked' | 'needs_review' | 'skipped';
+  source: 'basic_rule' | 'provider_policy' | 'manual' | 'external_moderation';
+  reasonCode?: string;
+  detail?: Record<string, unknown>;
+};
+```
+
+`skipped` 表示 MVP 阶段预留了检查点但当前没有启用复杂审核，不等同于系统不支持后续 NSFW 审查。
 
 ## 7. API 设计
 
@@ -1110,9 +1175,10 @@ AI 内容：留空。
 - 校验 reference image 归属。
 - 校验安全。
 - 校验积分余额。
-- 扣减积分。
-- 写入 `GenerationJob`。
+- 写入 `GenerationJob(status=queued, estimatedCredits)`。
+- 预扣减积分并写入 `CreditAuditLog(operationReferId=jobId)`。
 - 触发异步生成。
+- 返回 `jobId`，前端通过状态接口轮询。
 
 AI 调用：留空，由 `runGenerationJob` 后续实现。
 
@@ -1124,6 +1190,8 @@ AI 调用：留空，由 `runGenerationJob` 后续实现。
 
 - 查询任务状态。
 - 返回生成结果列表。
+- 前端应按 `queued/running` 继续轮询，按 `succeeded/failed/blocked/cancelled` 停止轮询。
+- 返回 `estimatedCredits`、`chargedCredits`，用于展示预估消耗和最终实际消耗。
 
 #### `POST /api/generation/jobs/:jobId/sync`
 
@@ -1143,7 +1211,9 @@ AI 调用：留空，由 `runGenerationJob` 后续实现。
 职责：
 
 - 上传 reference image。
+- 使用 `src/lib/r2-explorer-sdk.ts` 的 R2 client 上传到 R2。
 - 创建 `ReferenceImage`。
+- 保存 `storageKey`、展示 URL、mime type、width、height。
 - 触发安全检查。
 
 #### `GET /api/images/public/:publicImageId`
@@ -1363,6 +1433,8 @@ sequenceDiagram
   participant Gen as GenerationService
   participant DB as Prisma
   participant Credit as CreditService
+  participant Queue as QStash FIFO Queue
+  participant WorkerAPI as POST /api/internal/monica/generation/run
   participant AI as ImageGenerationProvider
 
   FE->>API: prompt/settings/reference/theme
@@ -1372,13 +1444,19 @@ sequenceDiagram
   Gen->>DB: validate session/theme/reference
   Gen->>Gen: safety check placeholder
   Gen->>Credit: hasEnoughCredits
-  Gen->>DB: create GenerationJob
-  Gen->>Credit: consumeCredit(operationReferId=jobId)
-  Gen-->>API: job pending/queued
+  Gen->>DB: create GenerationJob(status=queued, estimatedCredits)
+  Gen->>Credit: reserve/consumeCredit(operationReferId=jobId)
+  Gen->>Queue: publishFIFOQueueMessage(jobId)
+  Gen-->>API: job queued
   API-->>FE: jobId/status
-  Gen->>AI: run async placeholder
+  FE->>API: poll GET /api/generation/jobs/:jobId
+  Queue->>WorkerAPI: signed callback with jobId
+  WorkerAPI->>Gen: runGenerationJob(jobId)
+  Gen->>DB: update GenerationJob running
+  Gen->>AI: provider call placeholder
   AI-->>Gen: provider result placeholder
-  Gen->>DB: create GeneratedImage/update job
+  Gen->>DB: create GeneratedImage
+  Gen->>DB: update GenerationJob succeeded/chargedCredits=estimatedCredits
 `}
 />
 
@@ -1436,54 +1514,154 @@ MVP 只在图片生成时消耗积分：
 
 1. `Estimate Generation Cost` 根据 model + imageCount 计算预估消耗。
 2. `Create Generation Job` 事务中检查余额。
-3. 调用现有 `creditService.consumeCredit` 扣减。
-4. `operationReferId` 使用 `GenerationJob.jobId`。
-5. `feature` 使用：
+3. 创建 `GenerationJob(status=queued, estimatedCredits)`。
+4. 调用现有 `creditService.consumeCredit` 或 reserve 能力做预扣减。
+5. `operationReferId` 使用 `GenerationJob.jobId`。
+6. `feature` 使用：
    - `ai_image_generation`
    - `ai_image_variation`
    - `ai_image_edit`
 
-### 10.3 退款策略
+### 10.3 失败返还策略
 
 需要区分失败类型：
 
-- 安全检查失败：不创建供应商任务，不扣积分。
+- 安全检查失败：不创建供应商任务，返还预扣减积分。
 - 余额不足：不创建任务或创建 `blocked` 任务，不扣积分。
-- 供应商调用前失败：如已扣积分，退款。
-- 供应商已产生成本但失败：按后续商业规则决定是否退款。
+- 供应商调用前失败：更新任务失败，返还预扣减积分。
+- 供应商调用后无可交付结果、超时或返回错误：更新任务失败，返还预扣减积分。
+- 返还失败不改变 `GenerationJob` 的任务语义，由积分服务重试或后台补偿保证最终成功。
 
-退款仍使用现有 credit service，不新增流水表。
+`GenerationJob` 只记录任务状态和 `estimatedCredits / chargedCredits`。积分返还、流水幂等和审计由现有 credit service 与 `CreditAuditLog` 负责，不新增流水表。
 
 ## 11. 异步任务方案
 
-MVP 可以先使用“API 创建任务 + 后台执行函数”的轻量方案；生产建议接入队列。
+异步任务优先使用已有 `@windrun-huaiin/backend-core` 的 Upstash / QStash 工具。QStash 负责把短请求变成可靠异步回调，前端仍以 `GenerationJob.status` 作为状态源轮询。
 
-### 11.1 MVP
+### 11.1 推荐方案：QStash FIFO Queue
 
 - API 创建 `GenerationJob`。
+- API 完成积分预扣减。
+- API 使用 QStash FIFO queue 投递 `jobId`。
+- QStash message body 只包含 `jobId`，不包含图片 base64、reference image URL 或 provider request。
 - 返回 `jobId`。
-- 服务端异步触发 `runGenerationJob(jobId)`。
+- QStash 回调内部 Worker API。
+- Worker API 校验 QStash 签名。
+- Worker API 调用 `runGenerationJob(jobId)`。
 - 前端轮询 `GET /api/generation/jobs/:jobId`。
+- 建议初始 1-2 秒轮询一次，超过 30 秒后降频；收到 `succeeded/failed/blocked/cancelled` 后停止。
 
-风险：
+使用导入：
 
-- Serverless 环境中长任务不稳定。
-- 供应商回调和超时处理弱。
+```ts
+import {
+  publishFIFOQueueMessage,
+  verifyQstashSignature,
+} from '@windrun-huaiin/backend-core/upstash/server';
+```
 
-### 11.2 推荐生产方案
+发布任务：
 
-- 使用队列处理生成任务。
-- `GenerationJob.status` 作为状态源。
-- Worker 负责 AI Provider 调用。
-- 回调或轮询同步供应商结果。
-- 失败任务支持重试次数和失败原因。
+```ts
+await publishFIFOQueueMessage({
+  queueName: 'monica_generation',
+  url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/internal/monica/generation/run`,
+  body: { jobId },
+});
+```
 
-可后续补充：
+不要在 QStash body 中放以下内容：
+
+- 用户上传图片的 base64。
+- R2 signed URL。
+- OpenRouter provider request 全量参数。
+- OpenRouter provider response。
+
+这些内容都应由 Worker 根据 `jobId` 从数据库读取或临时生成。
+
+QStash helper 会自动给 queue name 增加应用和环境前缀，实际 queue name 形如：
+
+```text
+{NEXT_PUBLIC_APP_NAME}_{live|test}_queue_monica_generation
+```
+
+### 11.2 Worker API
+
+建议新增内部路由：
+
+```text
+POST /api/internal/monica/generation/run
+```
+
+职责：
+
+- 读取 raw body。
+- 使用 `verifyQstashSignature` 校验签名。
+- 从 QStash envelope 中读取 `payload.jobId`。
+- 调用 `GenerationService.runGenerationJob(jobId)`。
+- 返回 2xx 表示本次消息处理完成。
+
+QStash body 会被底层 helper 包一层 envelope：
+
+```ts
+type QstashEnvelope<TBody> = {
+  source_msg_id: string;
+  payload: TBody;
+};
+```
+
+因此 Worker API 不应直接假设 body 根节点就是 `{ jobId }`，而应读取：
+
+```ts
+const { payload } = JSON.parse(rawBody) as QstashEnvelope<{ jobId: string }>;
+```
+
+签名校验：
+
+```ts
+const signature = request.headers.get('upstash-signature');
+await verifyQstashSignature({
+  signature,
+  body: rawBody,
+  url: request.url,
+});
+```
+
+本地开发如需跳过签名，可使用：
+
+```text
+SKIP_UPSTASH_QSTASH_VERIFY=true
+```
+
+该开关只在 `NODE_ENV=development` 下生效。
+
+### 11.3 幂等和重试
+
+QStash 可能因为超时、网络错误或非 2xx 响应重试消息，所以 Worker 必须幂等。
+
+必须保证：
+
+- 如果 `GenerationJob.status` 已经是 `succeeded / failed / blocked / cancelled`，Worker 直接返回成功，不重复处理。
+- 从 `queued` 更新到 `running` 时要带状态条件，避免并发 Worker 同时执行。
+- AI mock 结果写入 `GeneratedImage` 时按 `jobId` 幂等，避免重复创建图片。
+- OpenRouter 返回多张图片时，按 `jobId + providerImageIndex` 幂等写入。
+- 失败返还由积分服务按 `operationReferId = jobId` 幂等处理。
+
+可在 `GenerationJob` 后续补充：
 
 - `retryCount`
 - `nextRetryAt`
 - `lockedAt`
 - `lockedBy`
+
+### 11.4 本地和 Mock 策略
+
+MVP 如果本地没有 QStash 环境变量，`publishFIFOQueueMessage` 会返回 `null`。此时建议开发环境提供明确 fallback：
+
+- `NODE_ENV=development` 时，可以直接 `setTimeout(() => runGenerationJob(jobId), 0)` 执行 mock worker。
+- 生产环境不应静默 fallback，同步返回队列不可用错误或把任务标记为 `failed`。
+
+这样可以保证本地开发便利，同时生产任务通路仍然可靠。
 
 ## 12. 数据查询策略
 
@@ -1538,15 +1716,29 @@ Tab 映射：
 
 ### 13.1 安全检查点
 
-- Prompt 生成前检查。
-- Reference image 上传后检查。
-- 图片生成完成后检查。
-- 投稿时检查图片、prompt、creator note。
+安全检查点在主流程中固定保留，但 MVP 阶段可以使用轻量实现。
+
+- Prompt 生成前检查：MVP 做基础规则；后续可接文本 NSFW / 有害内容审查。
+- Reference image 上传后检查：MVP 做格式、大小、归属和可访问性校验；后续可接图片 NSFW / 暴力 / 版权风险审查。
+- Provider 调用结果检查：MVP 默认信任 OpenRouter / 下游模型安全策略；如果 Provider 明确拒绝，任务归一化为 `blocked`。
+- 生成图片完成后检查：MVP 可记录为 `skipped` 或 `passed`；后续可接输出图审核。
+- 投稿时检查图片、prompt、creator note：公开展示前必须有审核入口，MVP 可先轻量自动审核或人工审核。
 - 审核发布前检查主题相关性。
+
+当前阶段不要把复杂 NSFW 审查前置成必选依赖。正确边界是：系统拥有稳定的 `SafetyService` 入口，MVP 使用轻量策略，后续可以替换实现并补充 `ReviewRecord` 证据。
+
+Provider / OpenRouter 的安全策略只作为当前默认防线和补充防线，不作为 Monica 长期唯一的内容安全来源。
+
+被安全策略拦截时：
+
+- 未调用 Provider：`GenerationJob.status = blocked`，`chargedCredits = 0`。
+- Provider 明确安全拒绝：`GenerationJob.status = blocked`，`chargedCredits = 0`。
+- 已预扣减积分时，积分服务按 `GenerationJob.jobId` 幂等返还。
+- `GenerationJob` 不记录审核状态机；审核详情进入 `ReviewRecord` 或 `providerResponse` 摘要。
 
 ### 13.2 ReviewRecord 使用
 
-`ReviewRecord` 记录所有自动和人工审核结果。
+`ReviewRecord` 记录自动和人工审核结果。MVP 阶段不是每个检查点都必须写完整记录；当检查结果影响任务状态、投稿状态、公开展示或人工处理时，应写入 `ReviewRecord`。
 
 适用对象：
 
@@ -1568,6 +1760,14 @@ Tab 映射：
 - `safety_manual`
 - `theme_relevance`
 - `publish_manual`
+
+`result` 示例：
+
+- `passed`
+- `blocked`
+- `needs_review`
+- `skipped`
+- `provider_rejected`
 
 ## 14. 错误码建议
 
@@ -1610,7 +1810,7 @@ Tab 映射：
 - 实现 Assistant API，占位返回或接入 Provider 空实现。
 - 实现 Generation estimate。
 - 实现 GenerationJob 创建、状态查询。
-- 接入积分扣减。
+- 接入积分预扣减和失败返还。
 
 ### 15.3 第三阶段：图片和投稿
 
@@ -1633,6 +1833,5 @@ Tab 映射：
 - 管理员权限来源：环境变量白名单、Clerk metadata，还是新增角色表。
 - 匿名用户是否允许生成图片。
 - Assistant 是否消耗积分。
-- 图片生成失败后的退款边界。
 - 图片存储供应商和签名 URL 策略。
 - AI Provider 的具体模型列表、成本表和参数映射。

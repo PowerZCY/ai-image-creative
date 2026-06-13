@@ -20,7 +20,7 @@ date: 2026-06-11
 - 凡是调用 AI 的地方，都必须先进入 Redis 分布式锁。
 - 凡是调用 AI 且消耗积分的地方，都必须执行积分预扣减。
 - 积分预扣减操作的是现有 `Credit-积分余额` 和 `CreditAuditLog-积分流水`。
-- AI 异步任务失败时，需要根据失败阶段执行积分补偿。
+- AI 异步任务失败、被安全策略拦截、供应商无结果或超时时，必须由积分服务完成返还，最终业务语义是不消耗积分。
 
 ## 2. 同步与异步标记
 
@@ -29,8 +29,8 @@ date: 2026-06-11
 | 同步 | 用户请求内立即完成，接口返回前完成 |
 | 异步 | 接口先返回任务或状态，后续由 Worker / Queue / Provider callback 完成 |
 | 锁 | 使用 Redis 分布式锁保护并发 |
-| 预扣减 | AI 调用前先扣减积分 |
-| 补偿 | AI 失败后按规则退回积分或标记失败 |
+| 预扣减 | AI 调用前先扣减或占用积分 |
+| 返还 | AI 失败后由积分服务按 `operationReferId` 幂等返还预扣减积分 |
 
 ## 3. 场景 A：用户提交主题想法
 
@@ -121,7 +121,7 @@ sequenceDiagram
 
 ## 5. 场景 C：用户在首页自由生成图片
 
-用户在 Home 输入 prompt，选择模型、风格、比例和数量，点击 Generate。该流程调用 AI，需要 Redis 分布式锁和积分预扣减。
+用户在 Home 输入 prompt，选择模型、风格、比例和数量，点击 Generate。该流程调用 AI，需要 Redis 分布式锁、积分预扣减和异步任务状态轮询。
 
 涉及数据表：
 
@@ -145,6 +145,7 @@ sequenceDiagram
   participant DB as 数据库
   participant Queue as 任务队列
   participant Worker as AI Worker
+  participant Safety as SafetyService
   participant AI as AI Provider
 
   FE->>API: 点击 Generate(prompt/settings)
@@ -154,23 +155,32 @@ sequenceDiagram
   API->>DB: 同步创建/更新 CreationSession-创作会话(sourcePage=home)
   API->>DB: 同步创建 GenerationJob-生成任务(status=pending, generationType=text_to_image)
   API->>Credit: 同步检查并预扣减 Credit-积分余额
-  Credit->>DB: 同步写入 CreditAuditLog-积分流水(operationType=freeze/consume, operationReferId=jobId)
-  API->>DB: 同步更新 GenerationJob(status=queued, chargedCredits)
+  Credit->>DB: 同步写入 CreditAuditLog-积分流水(operationType=consume/reserve, operationReferId=jobId)
+  API->>DB: 同步更新 GenerationJob(status=queued, estimatedCredits)
   API->>Queue: 异步投递 jobId
   API->>Redis: 释放锁
   API-->>FE: 返回 jobId 和 queued 状态
 
+  loop 前端轮询任务状态
+    FE->>API: GET GenerationJob(jobId)
+    API->>DB: 查询 GenerationJob 和 GeneratedImage
+    API-->>FE: 返回 queued/running/succeeded/failed/blocked
+  end
+
   Worker->>DB: 异步读取 GenerationJob-生成任务
-  Worker->>DB: 异步写入 ReviewRecord-审核记录(prompt safety)
+  Worker->>Safety: checkGenerationRequest(prompt/settings)
+  Safety-->>Worker: passed/skipped/blocked
   Worker->>DB: 异步更新 GenerationJob(status=running)
   Worker->>AI: 调用 AI 生成图片
   AI-->>Worker: 返回图片结果
+  Worker->>Safety: checkProviderResult(provider response)
+  Safety-->>Worker: passed/skipped/blocked
   Worker->>DB: 异步创建 GeneratedImage-生成图片
-  Worker->>DB: 异步更新 GenerationJob(status=succeeded)
+  Worker->>DB: 异步更新 GenerationJob(status=succeeded, chargedCredits=estimatedCredits)
 `}
 />
 
-失败补偿：
+失败返还：
 
 <Mermaid
   title="5. 场景 C：用户在首页自由生成图片"
@@ -180,18 +190,18 @@ sequenceDiagram
   participant Worker as AI Worker
   participant DB as 数据库
   participant Credit as 积分服务
-
-  alt 安全检查失败且未调用 AI
-    Worker->>DB: 更新 GenerationJob(status=blocked)
-    Worker->>Credit: 退回预扣减积分
-    Worker->>DB: 写入 CreditAuditLog-积分流水(operationReferId=jobId)
+  alt SafetyService 在调用 AI 前 blocked
+    Worker->>DB: 更新 GenerationJob(status=blocked, chargedCredits=0)
+    Worker->>Credit: 按 jobId 幂等返还预扣减积分
+  else Provider 明确安全拒绝
+    Worker->>DB: 更新 GenerationJob(status=blocked, failureCode=provider_rejected, chargedCredits=0)
+    Worker->>Credit: 按 jobId 幂等返还预扣减积分
   else AI Provider 调用前失败
-    Worker->>DB: 更新 GenerationJob(status=failed)
-    Worker->>Credit: 退回预扣减积分
-    Worker->>DB: 写入 CreditAuditLog-积分流水(operationReferId=jobId)
-  else AI Provider 已产生成本但失败
-    Worker->>DB: 更新 GenerationJob(status=failed, failureCode)
-    Worker->>DB: 保留 CreditAuditLog-积分流水，是否退款按业务规则处理
+    Worker->>DB: 更新 GenerationJob(status=failed, chargedCredits=0)
+    Worker->>Credit: 按 jobId 幂等返还预扣减积分
+  else AI Provider 无可交付结果或超时
+    Worker->>DB: 更新 GenerationJob(status=failed, failureCode, chargedCredits=0)
+    Worker->>Credit: 按 jobId 幂等返还预扣减积分
   end
 `}
 />
@@ -199,8 +209,12 @@ sequenceDiagram
 关键状态变化：
 
 - `GenerationJob.status`: `pending -> queued -> running -> succeeded / failed / blocked`
+- `GenerationJob.estimatedCredits`: 创建任务时记录预计消耗，用于展示和对账
+- `GenerationJob.chargedCredits`: 成功时记录实际消耗；失败、拦截或取消时为 `0`
 - `GeneratedImage.status`: `generated`
 - `CreditAuditLog.operationReferId`: `GenerationJob.jobId`
+- `SafetyService` 是固定扩展入口；MVP 可返回 `skipped` 或轻量 `passed`，后续可替换为自研 NSFW 审查或第三方审核
+- `SafetyService.status = skipped` 表示当前阶段未启用复杂审查，不阻断流程；`blocked` 或 `provider_rejected` 才会终止任务并返还积分
 
 ## 6. 场景 D：用户使用主题灵感后生成图片
 
@@ -261,7 +275,7 @@ sequenceDiagram
   Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
   GenAPI->>Queue: 异步投递 jobId
   GenAPI->>Redis: 释放锁
-  GenAPI-->>FE: 返回 jobId
+  GenAPI-->>FE: 返回 jobId，前端轮询任务状态
 `}
 />
 
@@ -322,7 +336,7 @@ sequenceDiagram
   Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
   GenAPI->>Queue: 异步投递 jobId
   GenAPI->>Redis: 释放锁
-  GenAPI-->>FE: 返回 jobId
+  GenAPI-->>FE: 返回 jobId，前端轮询任务状态
 `}
 />
 
@@ -358,16 +372,22 @@ sequenceDiagram
   participant Redis as Redis分布式锁
   participant DB as 数据库
   participant Credit as 积分服务
+  participant R2 as R2存储
   participant Queue as 任务队列
   participant Worker as AI Worker
+  participant Safety as SafetyService
   participant AI as AI Provider
 
   FE->>UploadAPI: 上传参考图
-  UploadAPI->>DB: 同步创建 ReferenceImage(status=uploaded, safetyStatus=pending)
-  UploadAPI-->>FE: 返回 referenceId
+  UploadAPI->>R2: 上传原始参考图
+  R2-->>UploadAPI: 返回 storageKey 和展示 URL
+  UploadAPI->>DB: 同步创建 ReferenceImage(status=uploaded, safetyStatus=pending, storageKey)
+  UploadAPI-->>FE: 返回 referenceId 和预览 URL
 
-  UploadAPI->>DB: 异步/同步写入 ReviewRecord(reference image safety)
-  UploadAPI->>DB: 更新 ReferenceImage.safetyStatus=passed/failed
+  UploadAPI->>Safety: checkReferenceImages(reference image)
+  Safety-->>UploadAPI: passed/skipped/blocked
+  UploadAPI->>DB: 可选写入 ReviewRecord(reference image safety)
+  UploadAPI->>DB: 更新 ReferenceImage.safetyStatus=passed/skipped/failed
 
   FE->>GenAPI: 点击 Generate(prompt, referenceId)
   GenAPI->>Redis: 锁 userId + generation + requestKey
@@ -377,20 +397,34 @@ sequenceDiagram
   Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
   GenAPI->>Queue: 异步投递 jobId
   GenAPI->>Redis: 释放锁
-  GenAPI-->>FE: 返回 jobId
+  GenAPI-->>FE: 返回 jobId，前端轮询任务状态
 
-  Worker->>AI: 异步调用 AI，携带 reference image
-  AI-->>Worker: 返回图片
-  Worker->>DB: 创建 GeneratedImage
-  Worker->>DB: 更新 GenerationJob(status=succeeded)
+  Worker->>DB: 读取 GenerationJob 和 ReferenceImage
+  Worker->>Safety: checkGenerationRequest(prompt/referenceId/settings)
+  Safety-->>Worker: passed/skipped/blocked
+  Worker->>R2: 基于 storageKey 生成可被 Provider 访问的 public/signed view URL
+  Worker->>AI: 异步调用 AI，携带 prompt 和 reference image URL
+  AI-->>Worker: 返回 message.images[]，可能是 base64 data URL
+  loop 每张生成图
+    Worker->>R2: 将生成图片二进制上传到 R2
+    R2-->>Worker: 返回 storageKey 和 imageUrl
+    Worker->>Safety: checkProviderResult(imageUrl/provider response)
+    Safety-->>Worker: passed/skipped/blocked
+    Worker->>DB: 创建可交付 GeneratedImage(providerImageIndex, storageKey, imageUrl)
+  end
+  Worker->>DB: 更新 GenerationJob(status=succeeded, chargedCredits=estimatedCredits)
 `}
 />
 
 关键状态变化：
 
-- `ReferenceImage.safetyStatus`: `pending -> passed / failed`
+- `ReferenceImage.safetyStatus`: `pending -> passed / skipped / failed`
 - `GenerationJob.referenceId`: 关联参考图
 - `GeneratedImage` 是结果作品，`ReferenceImage` 仍只是输入素材
+- QStash 任务消息只传 `jobId`，不传 reference image URL 或 base64 图片
+- OpenRouter 输出如果是 base64 data URL，必须先落 R2，再保存 `GeneratedImage`
+- MVP 阶段 `SafetyService` 可以只做文件基础校验并返回 `skipped`；后续接入图片 NSFW 审查时不需要改变上传和生成主流程
+- `SafetyService.status = skipped` 不阻断流程；`blocked` 会让生成任务进入 `blocked` 并触发积分返还
 
 ## 9. 场景 G：用户基于已有图片生成变体或编辑图
 
@@ -426,12 +460,12 @@ sequenceDiagram
   Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
   API->>Queue: 异步投递 jobId
   API->>Redis: 释放锁
-  API-->>FE: 返回 jobId
+  API-->>FE: 返回 jobId，前端轮询任务状态
 
   Worker->>AI: 异步调用 AI，携带 source image 和 instruction
   AI-->>Worker: 返回新图片
   Worker->>DB: 异步创建 GeneratedImage(jobId=新任务)
-  Worker->>DB: 异步更新 GenerationJob(status=succeeded)
+  Worker->>DB: 异步更新 GenerationJob(status=succeeded, chargedCredits=estimatedCredits)
 `}
 />
 
@@ -598,15 +632,16 @@ flowchart TD
   B --> C[校验用户权限和资源归属]
   C --> D[估算积分成本]
   D --> E[预扣减 Credit-积分余额]
-  E --> F[写入 CreditAuditLog-积分流水]
-  F --> G[创建业务任务或日志]
-  G --> H[投递异步任务]
-  H --> I[释放 Redis 锁]
-  I --> J[Worker 调用 AI]
-  J --> K{AI 是否成功}
+  E --> F[创建业务任务或日志]
+  F --> G[投递异步任务]
+  G --> H[释放 Redis 锁]
+  H --> I[前端轮询任务状态]
+  H --> J[Worker 调用 AI]
+  J --> K{AI 是否成功且有可交付结果}
   K -->|成功| L[写入结果表并更新任务成功]
-  K -->|失败且需退款| M[补偿积分并写流水]
-  K -->|失败但不退款| N[记录失败原因]
+  L --> M[记录 chargedCredits=estimatedCredits]
+  K -->|失败| N[记录失败原因并更新任务失败]
+  N --> O[积分服务按 jobId 幂等返还预扣减积分]
 `}
 />
 
@@ -615,6 +650,7 @@ flowchart TD
 - 同一个用户同一个请求不能重复扣积分。
 - 预扣减和任务创建要有可追溯关联。
 - `CreditAuditLog.operationReferId` 必须指向业务任务 ID。
+- `GenerationJob` 不承载积分状态机，只通过 `estimatedCredits` 和 `chargedCredits` 辅助对账。
+- 失败返还由积分服务保证幂等和最终成功。
 - Worker 重试必须幂等。
 - AI 结果写入必须幂等，避免重复创建图片。
-

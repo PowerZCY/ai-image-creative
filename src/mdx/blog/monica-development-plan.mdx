@@ -1,0 +1,302 @@
+---
+title: Monica AI 开发实施计划
+description: Monica AI 前后端分阶段开发任务、依赖边界和验收标准
+date: 2026-06-13
+---
+
+## 1. 目标
+
+本文用于收拢 Monica AI 的开发实施范围，按阶段推进前后端开发，并作为后续确认进度的依据。
+
+核心策略：
+
+- 先打通“生成任务闭环”，再补 Studio、投稿、Explore 和真实 AI Provider。
+- 异步任务从第一版开始使用真实 Upstash QStash 链路，不做 mock queue。
+- Mock 只放在 AI Provider 层，用于模拟 OpenRouter 图片生成结果。
+- `GenerationJob` 只表达任务状态和预计/实际积分消耗，不承载积分状态机和审核状态机。
+- 内容安全保留 `SafetyService` 扩展入口，MVP 使用轻量策略，后续可替换为自研或第三方 NSFW 审查。
+
+## 2. 总体分段
+
+<CheetTable title="开发阶段总览">
+
+| 阶段 | 目标 | 主要产出 | 状态 |
+| --- | --- | --- | --- |
+| 1 | 数据模型和后端骨架 | Prisma models、server/monica 目录、基础 repository/service | 待开始 |
+| 2 | 真实 QStash 生成任务闭环 | 创建任务、投递队列、Worker webhook、mock AI、轮询查询 | 待开始 |
+| 3 | R2 图片上传和 Reference Image | 用户上传参考图、R2 存储、Provider 可访问 URL | 待开始 |
+| 4 | 前端创作主流程 | 创作 UI、生成任务轮询、结果展示、失败/拦截状态 | 待开始 |
+| 5 | Studio / 投稿 / Explore | 私有图片库、投稿审核、公开图片、点赞收藏 | 待开始 |
+| 6 | OpenRouter 真实 Provider | 替换 mock AI、解析多图输出、Provider 错误归一化 | 待开始 |
+| 7 | 硬化和验收 | 幂等、异常返还、权限、端到端回归、移动端检查 | 待开始 |
+
+</CheetTable>
+
+## 3. 阶段 1：数据模型和后端骨架
+
+目标：让核心业务实体可以落库，并建立稳定的后端模块边界。
+
+任务：
+
+- 更新 `prisma/schema.prisma`，新增 Monica 业务 Model。
+- 复用现有 `User`、`Credit`、`CreditAuditLog`、`Transaction`、`Subscription`。
+- 建立 `src/server/monica/` 目录结构。
+- 建立 repository、service、validator、provider placeholder、storage service。
+- 实现最小 repository/service：
+  - theme 查询。
+  - generation job 创建和查询。
+  - generated image 查询。
+  - credit 预扣减和失败返还封装。
+
+新增 Model：
+
+- `ThemeSubmission`
+- `Theme`
+- `CreationSession`
+- `PromptLog`
+- `ReferenceImage`
+- `GenerationJob`
+- `GeneratedImage`
+- `ImageSubmission`
+- `ReviewRecord`
+- `PublicImage`
+- `ImageLike`
+- `ImageSave`
+
+验收标准：
+
+- `pnpm prisma generate` 成功。
+- Type check 通过。
+- 基础 service 能创建和查询 `GenerationJob`。
+- 不新增 `CreditLedger`，积分流水继续使用 `CreditAuditLog`。
+
+## 4. 阶段 2：真实 QStash 生成任务闭环
+
+目标：不接真实 AI，先用真实 QStash webhook 链路跑通“创建任务 -> 入队 -> Worker -> mock AI -> 写入结果 -> 前端轮询”。
+
+明确边界：
+
+- 不做 mock 消息队列。
+- 不做 `setTimeout` 本地 worker fallback。
+- 本地开发也使用 Upstash QStash 线上 webhook 回调能力。
+- Mock 只存在于 `ImageGenerationProvider` 实现层。
+
+任务：
+
+- 实现 `POST /api/monica/generation/jobs`。
+- 实现 `GET /api/monica/generation/jobs/:jobId`。
+- 实现 `POST /api/internal/monica/generation/run`。
+- 使用 `publishFIFOQueueMessage` 投递 `{ jobId }`。
+- 使用 `verifyQstashSignature` 校验 QStash 回调。
+- Worker 从 QStash envelope 的 `payload.jobId` 读取任务 ID。
+- 实现 `GenerationService.runGenerationJob(jobId)`。
+- 实现 `MockImageGenerationProvider`。
+
+生成任务创建流程：
+
+1. 鉴权。
+2. 参数校验。
+3. 创建或更新 `CreationSession`。
+4. 估算积分。
+5. 创建 `GenerationJob(status=queued, estimatedCredits)`。
+6. 预扣减积分，`CreditAuditLog.operationReferId = jobId`。
+7. 投递 QStash FIFO queue，body 只包含 `{ jobId }`。
+8. 返回 `jobId` 和 `queued`。
+
+Worker 流程：
+
+1. 校验 QStash 签名。
+2. 读取 `payload.jobId`。
+3. 幂等检查终态任务。
+4. 条件更新 `queued -> running`。
+5. 调用 `SafetyService.checkGenerationRequest`。
+6. 调用 `MockImageGenerationProvider`。
+7. 写入 `GeneratedImage`。
+8. 更新 `GenerationJob(status=succeeded, chargedCredits=estimatedCredits)`。
+9. 失败、blocked、provider rejected、无结果或超时时，`chargedCredits=0`，由积分服务按 `jobId` 幂等返还。
+
+验收标准：
+
+- 创建任务 API 能返回 `jobId`。
+- QStash 能真实回调 Worker API。
+- 轮询接口能看到 `queued -> running -> succeeded`。
+- 重复 Worker 回调不会重复创建图片或重复扣积分。
+- `failed / blocked / provider_rejected` 路径能返还积分。
+
+## 5. 阶段 3：R2 图片上传和 Reference Image
+
+目标：用户参考图可以上传到 R2，并通过 `referenceId` 参与后续生成。
+
+任务：
+
+- 实现 `POST /api/monica/reference-images`。
+- 使用 `src/lib/r2-explorer-sdk.ts` 上传图片到 R2。
+- 保存 `ReferenceImage.storageKey`、mime type、width、height、展示 URL。
+- 返回 `referenceId` 和预览 URL。
+- 实现 `R2StorageService.createProviderAccessibleImageUrl(referenceId)`。
+- 生成任务支持 `referenceId`，Worker 调用 Provider 前临时生成 public/signed view URL。
+- QStash body 仍然只传 `{ jobId }`。
+
+验收标准：
+
+- 上传图片后前端可以预览。
+- 生成任务只传 `referenceId`，不传图片 base64 或 signed URL。
+- Worker 能根据 `jobId` 查到 `ReferenceImage` 并生成 Provider 可访问 URL。
+- `SafetyService.checkReferenceImages` 调用点存在，MVP 可返回 `skipped`。
+
+## 6. 阶段 4：前端创作主流程
+
+目标：完成用户可用的创作体验，接入真实后端任务状态和 mock AI 结果。
+
+任务：
+
+- 创作输入区：
+  - prompt。
+  - model。
+  - style。
+  - aspect ratio。
+  - image count。
+  - reference image 上传。
+  - 预估积分展示。
+- Generate 提交流程：
+  - 调用创建任务 API。
+  - 进入任务进行中状态。
+  - 禁用重复提交。
+- 实现 `useGenerationJobPolling`。
+- 展示状态：
+  - `queued`
+  - `running`
+  - `succeeded`
+  - `failed`
+  - `blocked`
+  - `cancelled`
+- 成功后展示生成图片。
+- 失败或拦截时显示重试入口和不消耗积分语义。
+
+样式边界：
+
+- 参考 `src/components/hero.tsx` 的视觉语言。
+- 使用 `docs/skills` 中现有组件规范。
+- 除 `slot-text` 外，优先复用 `windrun-huaiin*` 底层组件。
+- 第一屏应该是可创作体验，不做营销 landing。
+
+验收标准：
+
+- 桌面和移动端创作流程可用。
+- 轮询在终态后停止。
+- `failed / blocked / cancelled` 不展示为成功结果。
+- 前端只展示后端保存后的 R2/站内图片 URL，不直接使用 Provider base64。
+
+## 7. 阶段 5：Studio / 投稿 / Explore
+
+目标：把生成图片接入产品闭环，区分私有图片和公开展示。
+
+任务：
+
+- My Studio：
+  - 我的生成图片列表。
+  - 状态筛选。
+  - 查看 prompt。
+  - 下载。
+  - Variations / Edit 入口先占位或创建后续任务。
+- 投稿：
+  - `POST /api/monica/submissions`。
+  - 创建 `ImageSubmission`。
+  - 写入 `ReviewRecord`。
+  - MVP 可先使用轻量自动审核或人工审核。
+- Explore / Theme Gallery：
+  - 只展示 `PublicImage`。
+  - 实现 like/save。
+  - 支持 newest、most liked、featured 排序。
+
+验收标准：
+
+- 私有 `GeneratedImage` 不会直接公开。
+- 只有投稿审核通过后才创建 `PublicImage`。
+- 点赞和收藏幂等。
+- 投稿状态能在 Studio 中查看。
+
+## 8. 阶段 6：OpenRouter 真实 Provider
+
+目标：用真实 OpenRouter 替换 `MockImageGenerationProvider`，不改变业务主流程。
+
+任务：
+
+- 实现 `OpenRouterImageGenerationProvider`。
+- 支持文生图。
+- 支持图文生图。
+- 支持多图输出。
+- 解析 `message.images[]`。
+- 处理 base64 data URL 输出：
+  - 解析 mime type。
+  - 转二进制。
+  - 上传 R2。
+  - 创建 `GeneratedImage`。
+- 归一化 Provider 错误：
+  - 超时。
+  - 无结果。
+  - 安全拒绝。
+  - 参数不支持。
+  - 模型不可用。
+
+验收标准：
+
+- 文生图真实生成成功。
+- 图文生图真实生成成功。
+- 一次多图输出能创建多条 `GeneratedImage`。
+- Provider 安全拒绝映射为 `provider_rejected` 或 `blocked`，不消耗积分。
+- Provider 失败、超时、无结果路径能返还积分。
+
+## 9. 阶段 7：硬化和回归
+
+目标：补齐上线前必须的可靠性、权限和体验检查。
+
+任务：
+
+- Worker 幂等：
+  - 终态任务直接返回 2xx。
+  - `queued -> running` 带状态条件。
+  - `jobId + providerImageIndex` 防重复图片。
+- 积分幂等：
+  - 预扣减只执行一次。
+  - 返还按 `operationReferId = jobId` 幂等。
+  - 返还失败有补偿或后台重试入口。
+- 权限：
+  - 用户只能查询自己的任务和私有图片。
+  - PublicImage 才能匿名公开访问。
+  - 内部 Worker API 只接受 QStash 签名请求。
+- 前端：
+  - 移动端布局检查。
+  - 长 prompt 和长错误信息不撑破 UI。
+  - 任务状态切换不闪烁。
+- 观测：
+  - 记录 `GenerationJob.failureCode`。
+  - 记录 provider response 摘要。
+  - 记录 QStash message id。
+
+验收标准：
+
+- 主要 happy path 和失败路径都有手动验证记录。
+- 构建、type check、lint 或项目既有检查通过。
+- 异步任务重复投递不会造成重复扣费或重复图片。
+
+## 10. 当前优先级
+
+第一轮开发只推进到阶段 4：
+
+1. 数据模型和后端骨架。
+2. 真实 QStash 生成任务闭环。
+3. R2 reference image 上传。
+4. 前端创作主流程。
+
+阶段 5-7 等第一轮闭环稳定后再推进。
+
+## 11. 进度记录
+
+<CheetTable title="进度记录">
+
+| 日期 | 阶段 | 变更 | 结果 |
+| --- | --- | --- | --- |
+| 2026-06-13 | 计划 | 确认 QStash 使用真实链路，AI Provider 使用 mock | 已记录 |
+
+</CheetTable>
