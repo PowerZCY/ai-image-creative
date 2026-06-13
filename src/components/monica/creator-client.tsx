@@ -12,6 +12,7 @@ import {
   themeIconColor,
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
+import { dispatchCreditOverviewRefresh } from '@windrun-huaiin/third-ui/main/credit';
 import { createR2Client } from '@/lib/r2-explorer-sdk';
 import type { MonicaCreatorCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
@@ -125,6 +126,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const terminalCreditRefreshJobIdRef = useRef<string | null>(null);
   const r2Client = useMemo(() => createR2Client({
     baseUrl: r2BaseUrl,
     bucketName: r2BucketName,
@@ -148,6 +150,10 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
     setJob(data.job);
     if (terminalStatuses.has(data.job.status)) {
       setGenerating(false);
+      if (terminalCreditRefreshJobIdRef.current !== data.job.jobId) {
+        terminalCreditRefreshJobIdRef.current = data.job.jobId;
+        dispatchCreditOverviewRefresh();
+      }
     }
   }, []);
 
@@ -261,7 +267,9 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
       }
 
       const data = await response.json() as { job: GenerationJobView };
+      terminalCreditRefreshJobIdRef.current = null;
       setJob(data.job);
+      dispatchCreditOverviewRefresh();
       if (data.job?.jobId) {
         await pollJob(data.job.jobId);
       }

@@ -30,8 +30,8 @@ importers:
         specifier: 31.0.3
         version: 31.0.3(clsx@2.1.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.6.0)
       '@windrun-huaiin/third-ui':
-        specifier: 31.3.5
-        version: 31.3.5(@mdx-js/mdx@3.1.1)(@tailwindcss/oxide@4.3.0)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/mdx@2.0.14)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(clsx@2.1.1)(lucide-react@0.577.0(react@19.2.4))(next-intl@4.13.0(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(nprogress@0.2.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.6.0)(tailwindcss@4.3.0)
+        specifier: 31.3.6
+        version: 31.3.6(@mdx-js/mdx@3.1.1)(@tailwindcss/oxide@4.3.0)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/mdx@2.0.14)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(clsx@2.1.1)(lucide-react@0.577.0(react@19.2.4))(next-intl@4.13.0(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(nprogress@0.2.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.6.0)(tailwindcss@4.3.0)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -2045,6 +2045,19 @@ packages:
 
   '@windrun-huaiin/third-ui@31.3.5':
     resolution: {integrity: sha512-OyuQGCxt/Dk3/ZYtxlCWafozWVn4GZD4jfhBLios89wuV+q6gA8uQrbbdWNufpDc6YCdhUaGpcjptiPPHNcIlA==}
+    peerDependencies:
+      clsx: ^2.1.1
+      next: 16.1.6
+      next-intl: ^4.8.3
+      next-themes: ^0.4.6
+      nprogress: ^0.2.0
+      react: 19.2.4
+      react-dom: 19.2.4
+      tailwind-merge: ^3.5.0
+      tailwindcss: ^4.2.1
+
+  '@windrun-huaiin/third-ui@31.3.6':
+    resolution: {integrity: sha512-WxuW2AuE/zpw9qkur9n6E6MgyPqjrC7IrShJFeC0ESI0UvoCcxI+j69YSdq8d124wIuoS3Fh1cgji7nQN60L7g==}
     peerDependencies:
       clsx: ^2.1.1
       next: 16.1.6
@@ -6840,6 +6853,64 @@ snapshots:
       - supports-color
 
   '@windrun-huaiin/third-ui@31.3.5(@mdx-js/mdx@3.1.1)(@tailwindcss/oxide@4.3.0)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/mdx@2.0.14)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(clsx@2.1.1)(lucide-react@0.577.0(react@19.2.4))(next-intl@4.13.0(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(nprogress@0.2.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.6.0)(tailwindcss@4.3.0)':
+    dependencies:
+      '@clerk/localizations': 4.7.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@clerk/nextjs': 7.4.3(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@clerk/shared': 4.15.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@fingerprintjs/fingerprintjs': 5.2.0
+      '@windrun-huaiin/base-ui': 31.0.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(clsx@2.1.1)(next-intl@4.13.0(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.6.0)(tailwindcss@4.3.0)
+      '@windrun-huaiin/contracts': 31.0.0
+      '@windrun-huaiin/lib': 31.0.3(clsx@2.1.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.6.0)
+      animejs: 4.4.1
+      class-variance-authority: 0.7.1
+      clsx: 2.1.1
+      fumadocs-core: 16.8.2(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.17)(lucide-react@0.577.0(react@19.2.4))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.4.3)
+      fumadocs-ui: 16.8.2(@tailwindcss/oxide@4.3.0)(@types/mdx@2.0.14)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(fumadocs-core@16.8.2(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.17)(lucide-react@0.577.0(react@19.2.4))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.4.3))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.3.0)
+      hast-util-to-jsx-runtime: 2.3.6
+      katex: 0.16.47
+      mermaid: 11.12.1
+      motion: 12.40.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next-intl: 4.13.0(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      next-themes: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      nprogress: 0.2.0
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+      react-medium-image-zoom: 5.4.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      remark: 15.0.1
+      remark-gfm: 4.0.1
+      remark-parse: 11.0.0
+      remark-rehype: 11.1.2
+      roughjs: 4.6.6
+      swiper: 12.2.0
+      tailwind-merge: 3.6.0
+      tailwindcss: 4.3.0
+      tslib: 2.8.1
+      unified: 11.0.5
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@emotion/is-prop-valid'
+      - '@mdx-js/mdx'
+      - '@mixedbread/sdk'
+      - '@orama/core'
+      - '@oramacloud/client'
+      - '@tailwindcss/oxide'
+      - '@takumi-rs/image-response'
+      - '@tanstack/react-router'
+      - '@types/estree-jsx'
+      - '@types/hast'
+      - '@types/mdast'
+      - '@types/mdx'
+      - '@types/react'
+      - '@types/react-dom'
+      - algoliasearch
+      - flexsearch
+      - lucide-react
+      - react-router
+      - supports-color
+      - waku
+
+  '@windrun-huaiin/third-ui@31.3.6(@mdx-js/mdx@3.1.1)(@tailwindcss/oxide@4.3.0)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/mdx@2.0.14)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(clsx@2.1.1)(lucide-react@0.577.0(react@19.2.4))(next-intl@4.13.0(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(nprogress@0.2.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.6.0)(tailwindcss@4.3.0)':
     dependencies:
       '@clerk/localizations': 4.7.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@clerk/nextjs': 7.4.3(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
