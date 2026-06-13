@@ -41,6 +41,14 @@ type GenerationJobView = {
   images?: GeneratedImageView[];
 };
 
+type CreateGenerationJobResponse = {
+  job: GenerationJobView;
+  dispatchMode?: 'queue' | 'client-run' | 'inline';
+  runUrl?: string;
+};
+
+type GenerationDispatchMode = NonNullable<CreateGenerationJobResponse['dispatchMode']>;
+
 const ratioOptions = [
   { value: '1:1', label: '1:1' },
   { value: '4:5', label: '4:5' },
@@ -122,6 +130,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
   const [imageCount, setImageCount] = useState(1);
   const [referenceImage, setReferenceImage] = useState<ReferenceImageView | null>(null);
   const [job, setJob] = useState<GenerationJobView | null>(null);
+  const [activeDispatchMode, setActiveDispatchMode] = useState<GenerationDispatchMode | null>(null);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,8 +166,27 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
     }
   }, []);
 
+  const runJob = useCallback(async (runUrl: string) => {
+    const response = await fetch(runUrl, {
+      method: 'POST',
+      headers: { accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(await readError(response));
+    }
+
+    const data = await response.json() as { job: GenerationJobView };
+    setJob(data.job);
+    setGenerating(false);
+    if (terminalCreditRefreshJobIdRef.current !== data.job.jobId) {
+      terminalCreditRefreshJobIdRef.current = data.job.jobId;
+      dispatchCreditOverviewRefresh();
+    }
+  }, []);
+
   useEffect(() => {
-    if (!job?.jobId || terminalStatuses.has(job.status)) {
+    if (activeDispatchMode !== 'queue' || !job?.jobId || terminalStatuses.has(job.status)) {
       return;
     }
 
@@ -170,7 +198,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
     }, job.status === 'queued' ? 1500 : 2500);
 
     return () => window.clearInterval(interval);
-  }, [job?.jobId, job?.status, pollJob]);
+  }, [activeDispatchMode, job?.jobId, job?.status, pollJob]);
 
   async function handleUpload(file: File) {
     setUploading(true);
@@ -242,6 +270,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
     setGenerating(true);
     setError(null);
     setJob(null);
+    setActiveDispatchMode(null);
 
     try {
       const response = await fetch('/api/monica/generation/jobs', {
@@ -266,12 +295,18 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
         throw new Error(await readError(response));
       }
 
-      const data = await response.json() as { job: GenerationJobView };
+      const data = await response.json() as CreateGenerationJobResponse;
+      const dispatchMode = data.dispatchMode ?? 'queue';
       terminalCreditRefreshJobIdRef.current = null;
+      setActiveDispatchMode(dispatchMode);
       setJob(data.job);
       dispatchCreditOverviewRefresh();
-      if (data.job?.jobId) {
+      if (dispatchMode === 'client-run' && data.runUrl) {
+        await runJob(data.runUrl);
+      } else if (dispatchMode === 'queue' && data.job?.jobId) {
         await pollJob(data.job.jobId);
+      } else {
+        setGenerating(false);
       }
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : String(generateError));
