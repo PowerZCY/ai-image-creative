@@ -1014,8 +1014,161 @@
       gap: 24px;
     }
 
+    .theme-discovery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 24px;
+    }
+
     .workspace {
       grid-template-columns: minmax(0, 1fr);
+    }
+
+    .form-grid,
+    .review-list,
+    .admin-board,
+    .reward-table {
+      display: grid;
+      gap: 16px;
+    }
+
+    .form-grid {
+      max-width: 860px;
+    }
+
+    .form-field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .form-field textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .page-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 28px;
+      margin-top: 28px;
+    }
+
+    .table-card,
+    .review-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--panel-solid);
+      overflow: hidden;
+    }
+
+    .table-row,
+    .review-card {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.2fr) minmax(110px, .65fr) minmax(140px, .75fr) minmax(150px, .8fr);
+      gap: 16px;
+      align-items: center;
+      padding: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .table-row:first-child {
+      border-top: 0;
+    }
+
+    .table-head {
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .admin-layout {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+      margin-top: 28px;
+    }
+
+    .side-tabs {
+      display: grid;
+      gap: 8px;
+      position: sticky;
+      top: 96px;
+    }
+
+    .side-tabs button {
+      justify-content: flex-start;
+    }
+
+    .review-card {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .review-card.has-visual {
+      grid-template-columns: 108px minmax(0, 1fr) auto;
+    }
+
+    .review-copy {
+      display: grid;
+      gap: 8px;
+    }
+
+    .review-visual {
+      width: 108px;
+      aspect-ratio: 1 / 1;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .thumb-strip {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .thumb-strip .art {
+      width: 42px;
+      min-width: 42px;
+      aspect-ratio: 1 / 1;
+      border-radius: var(--radius-sm);
+    }
+
+    .readiness {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .readiness .chip {
+      text-transform: none;
+    }
+
+    .admin-theme-row {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.2fr) minmax(120px, .55fr) minmax(130px, .6fr) minmax(180px, .9fr) minmax(150px, .7fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .admin-theme-row:first-child {
+      border-top: 0;
+    }
+
+    .theme-discovery-card .card-body {
+      gap: 12px;
+    }
+
+    .theme-discovery-card .mini-gallery {
+      padding: 0;
+      min-height: 190px;
+    }
+
+    .theme-discovery-card .button-row {
+      margin-top: 4px;
     }
 
     .theme-picker-list {
@@ -1150,8 +1303,25 @@
         align-items: stretch;
       }
       .image-grid,
-      .explore-grid {
+      .explore-grid,
+      .theme-discovery-grid {
         grid-template-columns: 1fr;
+      }
+      .admin-layout {
+        grid-template-columns: 1fr;
+      }
+      .side-tabs {
+        position: static;
+      }
+      .table-row,
+      .review-card,
+      .review-card.has-visual,
+      .admin-theme-row {
+        grid-template-columns: 1fr;
+      }
+      .review-visual {
+        width: 100%;
+        max-width: 220px;
       }
     }
   </style>
@@ -1167,7 +1337,9 @@
         <nav class="nav" aria-label="Primary">
           <button class="selected" data-nav="home">Home</button>
           <button data-nav="explore">Explore</button>
+          <button data-nav="submit-theme">Submit a theme</button>
           <button data-nav="studio">My Studio</button>
+          <button data-nav="admin">Admin</button>
         </nav>
       </div>
     </header>
@@ -1314,8 +1486,56 @@
           </div>
         </div>
 
-        <div id="explore-themes" class="explore-grid" style="margin-top: 16px;"></div>
+        <div id="explore-themes" class="theme-discovery-grid" style="margin-top: 16px;"></div>
         <div id="explore-images" class="explore-grid hidden" style="margin-top: 16px;"></div>
+      </section>
+
+      <section id="submit-theme" class="page">
+        <div class="assistant-head">
+          <div>
+            <h1 class="section-title">Submit a theme</h1>
+            <p class="subtle">Share a daily theme idea that could inspire people to create AI images. Theme ideas are reviewed as text; images are submitted later from a theme page or My Studio.</p>
+          </div>
+          <span class="chip">Community ideas</span>
+        </div>
+
+        <div class="page-grid">
+          <div class="panel panel-pad">
+            <div class="form-grid">
+              <div>
+                <h2 class="compact-title">Submit a daily theme idea</h2>
+                <p class="subtle">Submit a text-only theme idea. If it is accepted, admins will turn it into a managed theme with full details, a publish date, and featured images.</p>
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="theme-name">Theme name</label>
+                <input id="theme-name" placeholder="A Scene You Cannot Explain Having Seen Before">
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="theme-details">Theme details</label>
+                <textarea id="theme-details" placeholder="Describe what people should create, what makes the theme open-ended, and what kind of visual thinking it invites."></textarea>
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="theme-reason">Why are you submitting this theme? optional</label>
+                <textarea id="theme-reason" placeholder="Optional: explain why this idea could make a strong daily theme."></textarea>
+              </div>
+              <div class="notice">Do not attach explanation images here. A theme idea is reviewed by its text only. If the theme is accepted, you can submit images to that theme from the theme page or My Studio.</div>
+              <div class="button-row">
+                <button class="primary" data-action="submit-theme-idea">Submit theme idea</button>
+                <button data-nav-target="explore">Browse themes</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel panel-pad">
+            <div class="assistant-head">
+              <div>
+                <h2 class="compact-title">My theme ideas</h2>
+                <p class="subtle">Track review status, admin notes, credits, and scheduled publish dates for your submitted ideas.</p>
+              </div>
+            </div>
+            <div id="my-theme-ideas" class="table-card" style="margin-top: 16px;"></div>
+          </div>
+        </div>
       </section>
 
       <section id="studio" class="page">
@@ -1340,6 +1560,23 @@
           </div>
         </div>
       </section>
+
+      <section id="admin" class="page">
+        <div>
+          <h1 class="section-title">Admin review</h1>
+          <p class="subtle">Manage theme submissions, theme records, publish dates, and featured images. Image submissions stay in their own moderation queue.</p>
+        </div>
+
+        <div class="admin-layout">
+          <div class="side-tabs">
+            <button class="selected" data-admin-tab="themes">Themes</button>
+            <button data-admin-tab="images">Image submissions</button>
+          </div>
+          <div class="panel panel-pad">
+            <div id="admin-board" class="admin-board"></div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -1354,7 +1591,7 @@
           <div id="submit-preview" class="art silence"></div>
           <div>
             <div class="field-label">Theme</div>
-            <div id="submit-theme" class="notice">After Putting On Glasses</div>
+            <div id="submit-image-theme" class="notice">After Putting On Glasses</div>
             <div class="field-label" style="margin-top: 14px;">Prompt</div>
             <textarea id="submit-prompt" rows="5"></textarea>
             <div class="field-label" style="margin-top: 14px;">Creation note optional</div>
@@ -1403,6 +1640,104 @@
     </div>
   </div>
 
+  <div id="theme-fields-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="theme-fields-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="theme-fields-title" class="compact-title">Edit theme fields</h2>
+        <button class="icon" data-close-modal="theme-fields-modal" aria-label="Close">x</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label" for="admin-theme-field">Theme</label>
+            <input id="admin-theme-field">
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-brief-field">Brief</label>
+            <textarea id="admin-brief-field"></textarea>
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-note-field">Theme note</label>
+            <textarea id="admin-note-field" placeholder="Long-form theme explanation shown on the theme detail page."></textarea>
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-seo-field">SEO title</label>
+            <input id="admin-seo-field" placeholder="After Putting On Glasses - Glasses and Perspective AI Art Prompt">
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-meta-field">Meta description</label>
+            <textarea id="admin-meta-field"></textarea>
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-tags-field">Tags</label>
+            <input id="admin-tags-field" placeholder="glasses, clear vision, visual metaphor">
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-keywords-field">SEO keywords</label>
+            <textarea id="admin-keywords-field"></textarea>
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-ideas-field">Generator ideas</label>
+            <textarea id="admin-ideas-field"></textarea>
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-image-seo-field">Image SEO notes</label>
+            <textarea id="admin-image-seo-field"></textarea>
+          </div>
+          <div class="button-row">
+            <button class="primary" data-close-modal="theme-fields-modal">Save fields</button>
+            <button data-close-modal="theme-fields-modal">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="featured-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="featured-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="featured-title" class="compact-title">Featured images</h2>
+        <button class="icon" data-close-modal="featured-modal" aria-label="Close">x</button>
+      </div>
+      <div class="modal-body">
+        <p id="featured-help" class="subtle">Choose 3 approved images to use as the Explore preview for this theme.</p>
+        <div id="featured-picker" class="image-grid" style="margin-top: 16px;"></div>
+        <div class="button-row" style="margin-top: 18px;">
+          <button class="primary" data-close-modal="featured-modal">Save featured images</button>
+          <button data-close-modal="featured-modal">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-submit-image-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="admin-submit-image-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="admin-submit-image-title" class="compact-title">Submit images to theme</h2>
+        <button class="icon" data-close-modal="admin-submit-image-modal" aria-label="Close">x</button>
+      </div>
+      <div class="modal-body">
+        <p id="admin-submit-image-help" class="subtle">Choose a generated image from this site, then add a title and optional description.</p>
+        <div id="admin-generated-picker" class="image-grid" style="margin-top: 16px;"></div>
+        <div class="form-grid" style="margin-top: 18px;">
+          <div class="form-field">
+            <label class="field-label" for="admin-image-title-field">Image title</label>
+            <input id="admin-image-title-field" placeholder="Cat With Glasses">
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="admin-image-description-field">Image description optional</label>
+            <textarea id="admin-image-description-field" placeholder="Describe what the image shows and why it fits this theme."></textarea>
+          </div>
+          <div class="notice">Only images generated on this site can be submitted to a theme. This demo uses existing generated images as the selectable pool.</div>
+          <div class="button-row">
+            <button class="primary" data-action="confirm-admin-image-submit">Submit image to this theme</button>
+            <button data-close-modal="admin-submit-image-modal">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="theme-picker-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="theme-picker-title">
     <div class="modal-card">
       <div class="modal-head">
@@ -1435,24 +1770,134 @@
         title: "After Putting On Glasses",
         date: "Jun 12, 2026",
         brief: "Show how glasses reveal details, clarity, or a whole new way of seeing.",
-        art: "cat-glasses",
+        featuredArts: ["cat-glasses", "poster", "silence"],
         stats: "156 creations · 51 creators · 21 featured"
+      },
+      {
+        title: "Dream Life",
+        date: "Jun 11, 2026",
+        brief: "Imagine the life you long for right now, from quiet routines to bold future dreams.",
+        featuredArts: ["poster", "lonely", "cat-glasses"],
+        stats: "289 creations · 83 creators · 18 featured"
       },
       {
         title: "A City Where the Rain Falls Upward",
         date: "Jun 8, 2026",
         brief: "Imagine a place where gravity forgot the rain.",
-        art: "rain",
+        featuredArts: ["rain", "poster", "silence"],
         stats: "348 creations · 72 creators · 24 featured"
       },
       {
         title: "The Architecture of Loneliness",
         date: "Jun 7, 2026",
         brief: "Use buildings, rooms, or streets to express isolation.",
-        art: "lonely",
+        featuredArts: ["lonely", "silence", "rain"],
         stats: "214 creations · 58 creators · 19 featured"
       }
     ];
+
+    const themeIdeas = [
+      {
+        title: "Dream Life in Reverse",
+        details: "Imagine the life someone used to want, then show why it no longer fits who they are now.",
+        why: "It turns a common dream-life idea into a reflective contrast.",
+        date: "Jun 14, 2026",
+        status: "Under review",
+        notes: "+20 first submission credits granted. Review pending."
+      },
+      {
+        title: "Show Silence",
+        details: "Create an image that makes silence visible without using text or obvious symbols.",
+        why: "It is simple, open-ended, and invites many visual interpretations.",
+        date: "Jun 10, 2026",
+        status: "Accepted",
+        notes: "+300 credits granted. Scheduled for Jun 22, 2026."
+      },
+      {
+        title: "Future City",
+        details: "A futuristic city with neon buildings and flying cars.",
+        why: "",
+        date: "Jun 9, 2026",
+        status: "Not selected",
+        notes: "Too broad for a daily theme."
+      },
+      {
+        title: "A Scene You Cannot Explain Having Seen Before",
+        details: "Show a scene that feels remembered, witnessed, or discovered, but cannot be logically explained.",
+        why: "It creates a strong prompt direction while leaving room for surreal interpretation.",
+        date: "Jun 6, 2026",
+        status: "Accepted",
+        notes: "+300 credits granted. Scheduled for Jun 28, 2026."
+      }
+    ];
+
+    const adminQueues = {
+      themes: [
+        {
+          title: "A Kitchen Designed for Your Dog",
+          user: "@juno",
+          detail: "A daily theme where people imagine domestic spaces built around a pet's logic, senses, and routines.",
+          reason: "It pushes perspective shift while staying easy to understand.",
+          status: "Needs review",
+          notes: "No decision yet."
+        },
+        {
+          title: "A Scene You Cannot Explain Having Seen Before",
+          user: "@min",
+          detail: "Create an image that feels like a memory, a dream, or evidence from a place nobody can explain.",
+          reason: "It leaves interpretation open but gives a strong creative action.",
+          status: "Accepted",
+          notes: "+300 credits granted. Notification sent."
+        }
+      ],
+      images: [
+        {
+          title: "Formula Glasses",
+          user: "@noor",
+          theme: "After Putting On Glasses",
+          prompt: "A student puts on symbolic glasses made of formulas, and the messy classroom turns into clear geometric patterns.",
+          art: "silence",
+          status: "Under review"
+        },
+        {
+          title: "Upward Rain Station",
+          user: "@sato",
+          theme: "A City Where the Rain Falls Upward",
+          prompt: "A neon train station where rain rises from the tracks into the night sky.",
+          art: "rain",
+          status: "Under review"
+        }
+      ],
+      managedThemes: [
+        {
+          title: "After Putting On Glasses",
+          brief: "Show how glasses reveal details, clarity, or a whole new way of seeing.",
+          source: "User submission",
+          publishDate: "Jun 12, 2026",
+          status: "Scheduled",
+          readiness: ["Content ok", "SEO ok", "Ideas ok", "Featured 3/3"],
+          featuredArts: ["cat-glasses", "poster", "silence"]
+        },
+        {
+          title: "Dream Life",
+          brief: "Imagine the life you long for right now, from quiet routines to bold future dreams.",
+          source: "Admin created",
+          publishDate: "",
+          status: "Draft",
+          readiness: ["Content ok", "Missing SEO", "Ideas ok", "Featured 2/3"],
+          featuredArts: ["poster", "lonely"]
+        },
+        {
+          title: "The Architecture of Loneliness",
+          brief: "Use buildings, rooms, or streets to express isolation.",
+          source: "User submission",
+          publishDate: "Jun 20, 2026",
+          status: "Draft",
+          readiness: ["Content ok", "SEO ok", "Missing ideas", "Featured 1/3"],
+          featuredArts: ["lonely"]
+        }
+      ]
+    };
 
     const galleryImages = [
       {
@@ -1584,6 +2029,8 @@
     };
 
     let activeDetail = galleryImages[0];
+    let activeAdminThemeIndex = 0;
+    let activeGeneratedImageIndex = 0;
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, char => ({
@@ -1995,26 +2442,314 @@
 
     function renderExplore() {
       document.getElementById("explore-themes").innerHTML = themes.map(theme => `
-        <article class="theme-card">
-          <div class="chip">${escapeHtml(theme.date)}</div>
-          <h2 class="compact-title">${escapeHtml(theme.title)}</h2>
-          <p class="subtle">${escapeHtml(theme.brief)}</p>
+        <article class="theme-card theme-discovery-card">
           <div class="mini-gallery">
-            <div class="art ${theme.art}"></div>
-            <div class="art poster"></div>
-            <div class="art lonely"></div>
+            ${(theme.featuredArts || ["poster", "lonely", "rain"]).slice(0, 3).map(art => `<div class="art ${art}"></div>`).join("")}
           </div>
-          <div class="meta-row"><span>${escapeHtml(theme.stats)}</span></div>
-          <div class="chip-row">
-            <span class="chip">glasses</span><span class="chip">clear vision</span><span class="chip">new perspective</span>
-          </div>
-          <div class="button-row">
-            <button data-nav-target="theme">View theme</button>
-            <button data-nav-target="theme">Create from this theme</button>
+          <div class="card-body">
+            <div class="chip">${escapeHtml(theme.date)}</div>
+            <h2 class="compact-title">${escapeHtml(theme.title)}</h2>
+            <p class="subtle">${escapeHtml(theme.brief)}</p>
+            <div class="meta-row"><span>${escapeHtml(theme.stats)}</span></div>
+            <div class="button-row">
+              <button class="primary" data-nav-target="theme">View theme</button>
+            </div>
           </div>
         </article>
       `).join("");
       document.getElementById("explore-images").innerHTML = galleryImages.map(imageCard).join("");
+    }
+
+    function renderThemeIdeas() {
+      document.getElementById("my-theme-ideas").innerHTML = `
+        <div class="table-row table-head">
+          <div>Submitted idea</div>
+          <div>Submitted</div>
+          <div>Status</div>
+          <div>Notes</div>
+        </div>
+        ${themeIdeas.map(item => `
+          <div class="table-row">
+            <div>
+              <strong>${escapeHtml(item.title)}</strong>
+              <p class="gallery-alt" style="margin-top: 6px;">${escapeHtml(item.details || "")}</p>
+              ${item.why ? `<p class="status-line" style="margin-top: 6px;"><strong>Why:</strong> ${escapeHtml(item.why)}</p>` : ""}
+            </div>
+            <div>${escapeHtml(item.date)}</div>
+            <div><span class="chip">${escapeHtml(item.status)}</span></div>
+            <div>${escapeHtml(item.notes)}</div>
+          </div>
+        `).join("")}
+      `;
+    }
+
+    function renderAdmin(tab = "themes") {
+      const board = document.getElementById("admin-board");
+      if (tab === "themes") {
+        board.innerHTML = `
+          <div>
+            <h2 class="compact-title">Themes</h2>
+            <p class="subtle">Review user-submitted ideas, then manage accepted and admin-created themes from one list.</p>
+            <div class="tabs" style="margin-top: 14px;">
+              <button class="selected" data-theme-admin-tab="submissions">User submissions</button>
+              <button data-theme-admin-tab="manage">Manage themes</button>
+            </div>
+          </div>
+          <div id="theme-admin-board"></div>
+        `;
+        renderThemeAdmin("submissions");
+        return;
+      }
+
+      if (tab === "images") {
+        board.innerHTML = `
+          <div>
+            <h2 class="compact-title">Image submissions</h2>
+            <p class="subtle">Approve images submitted under a theme before they appear in the public gallery.</p>
+          </div>
+          <div class="review-list">
+            ${adminQueues.images.map(item => `
+              <article class="review-card has-visual">
+                <div class="review-visual art ${escapeHtml(item.art)}"></div>
+                <div class="review-copy">
+                  <div class="meta-row"><span>${escapeHtml(item.user)}</span><span>${escapeHtml(item.theme)}</span><span class="chip">${escapeHtml(item.status)}</span></div>
+                  <h3 class="compact-title">${escapeHtml(item.title)}</h3>
+                  <p class="prompt-preview">${escapeHtml(item.prompt)}</p>
+                </div>
+                <div class="button-row">
+                  <button class="primary">Approve</button>
+                  <button>Reject</button>
+                  <button>Needs edit</button>
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        `;
+        return;
+      }
+
+      renderAdmin("themes");
+    }
+
+    function renderThemeAdmin(tab = "submissions") {
+      const board = document.getElementById("theme-admin-board");
+      if (!board) return;
+
+      if (tab === "submissions") {
+        board.innerHTML = `
+          <div class="review-list">
+            ${adminQueues.themes.map((item, index) => `
+              <article class="review-card">
+                <div class="review-copy">
+                  <div class="meta-row"><span>${escapeHtml(item.user)}</span><span class="chip">${escapeHtml(item.status)}</span></div>
+                  <h3 class="compact-title">${escapeHtml(item.title)}</h3>
+                  <p class="prompt-preview">${escapeHtml(item.detail)}</p>
+                  <p class="status-line">${escapeHtml(item.notes || item.reason)}</p>
+                </div>
+                <div class="button-row">
+                  ${item.status === "Accepted" ? `
+                    <button data-nav-target="admin">Open theme</button>
+                  ` : `
+                    <button class="primary" data-accept-submission="${index}">Accept as theme</button>
+                    <button data-edit-accept-submission="${index}">Edit and accept</button>
+                    <button data-reject-submission="${index}">Reject</button>
+                  `}
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        `;
+        return;
+      }
+
+      const managedThemes = sortedManagedThemes();
+
+      board.innerHTML = `
+        <div class="assistant-head" style="margin-bottom: 16px;">
+          <div>
+            <h3 class="compact-title">Manage themes</h3>
+            <p class="subtle">All accepted user themes and admin-created themes. Keep fields complete, set publish dates, and choose featured images per theme.</p>
+          </div>
+          <button class="primary" data-action="new-theme">New theme</button>
+        </div>
+        <div class="table-card">
+          <div class="admin-theme-row table-head">
+            <div>Theme</div>
+            <div>Source</div>
+            <div>Publish date</div>
+            <div>Required fields</div>
+            <div>Featured</div>
+            <div>Actions</div>
+          </div>
+          ${managedThemes.map(({ theme, index }) => `
+            <div class="admin-theme-row">
+              <div>
+                <strong>${escapeHtml(theme.title)}</strong>
+                <p class="gallery-alt" style="margin-top: 4px;">${escapeHtml(theme.brief)}</p>
+                <div class="meta-row" style="margin-top: 6px;"><span class="chip">${escapeHtml(theme.status)}</span></div>
+              </div>
+              <div>${escapeHtml(theme.source)}</div>
+              <div>${escapeHtml(theme.publishDate || "Not set")}</div>
+              <div class="readiness">
+                ${theme.readiness.map(item => `<span class="chip">${escapeHtml(item)}</span>`).join("")}
+              </div>
+              <div class="thumb-strip">
+                ${theme.featuredArts.map(art => `<div class="art ${escapeHtml(art)}"></div>`).join("")}
+              </div>
+              <div class="button-row">
+                <button data-edit-theme="${index}">Edit fields</button>
+                <button data-submit-theme-image="${index}">Submit images</button>
+                <button data-feature-theme="${index}">Featured images</button>
+                <button>Set date</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function sortedManagedThemes() {
+      return adminQueues.managedThemes
+        .map((theme, index) => ({ theme, index }))
+        .sort((a, b) => {
+          if (!a.theme.publishDate && !b.theme.publishDate) return 0;
+          if (!a.theme.publishDate) return -1;
+          if (!b.theme.publishDate) return 1;
+          return new Date(b.theme.publishDate) - new Date(a.theme.publishDate);
+        });
+    }
+
+    function openThemeFields(index = null) {
+      const theme = Number.isInteger(index) ? adminQueues.managedThemes[index] : null;
+      const draft = theme || {
+        title: "",
+        brief: "",
+        source: "Admin created",
+        publishDate: "Not set",
+        status: "Draft",
+        readiness: ["Missing content", "Missing SEO", "Missing ideas", "Featured 0/3"],
+        featuredArts: []
+      };
+      document.getElementById("theme-fields-title").textContent = draft.title ? `Edit ${draft.title}` : "New theme";
+      document.getElementById("admin-theme-field").value = draft.title || "";
+      document.getElementById("admin-brief-field").value = draft.brief || "";
+      document.getElementById("admin-note-field").value = "Theme note will explain the creative question, interpretation space, and examples for the theme detail page.";
+      document.getElementById("admin-seo-field").value = draft.title ? `${draft.title} - AI Art Prompt` : "";
+      document.getElementById("admin-meta-field").value = draft.brief || "";
+      document.getElementById("admin-tags-field").value = "conceptual AI art, daily theme, visual prompt";
+      document.getElementById("admin-keywords-field").value = `${draft.title || "daily theme"} AI art prompt\nAI image prompt ideas`;
+      document.getElementById("admin-ideas-field").value = "A concrete scene idea based on this theme.\nA symbolic interpretation of this theme.\nA wider environmental version of this theme.";
+      document.getElementById("admin-image-seo-field").value = "Use image-level titles, alt text, and tags for submitted or featured images.";
+      openModal("theme-fields-modal");
+    }
+
+    function openFeaturedImages(index = 0) {
+      const theme = adminQueues.managedThemes[index] || adminQueues.managedThemes[0];
+      const pool = galleryImages.filter(image => image.theme === theme.title);
+      const images = pool.length ? pool : galleryImages.slice(0, 4);
+      document.getElementById("featured-title").textContent = `Featured images: ${theme.title}`;
+      document.getElementById("featured-help").textContent = "Choose 3 approved images from this theme to use as the Explore preview. Current selections are marked Featured.";
+      document.getElementById("featured-picker").innerHTML = images.map((image, imageIndex) => {
+        const isFeatured = theme.featuredArts.includes(image.art || "");
+        const visual = image.src
+          ? `<img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt || image.title)}" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;">`
+          : `<div class="art ${escapeHtml(image.art)}"></div>`;
+        return `
+          <article class="image-card">
+            ${visual}
+            <div class="card-body">
+              <div class="chip-row">
+                <span class="chip">${isFeatured || imageIndex < 2 ? "Featured" : "Approved"}</span>
+                <span class="chip">${escapeHtml(image.author || "@admin")}</span>
+              </div>
+              <h3 class="compact-title">${escapeHtml(image.title || "Theme image")}</h3>
+              <div class="button-row">
+                <button class="${isFeatured || imageIndex < 2 ? "selected" : ""}">${isFeatured || imageIndex < 2 ? "Selected" : "Select"}</button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+      openModal("featured-modal");
+    }
+
+    function openAdminSubmitImages(index = 0) {
+      activeAdminThemeIndex = index;
+      activeGeneratedImageIndex = 0;
+      const theme = adminQueues.managedThemes[index] || adminQueues.managedThemes[0];
+      document.getElementById("admin-submit-image-title").textContent = `Submit images: ${theme.title}`;
+      document.getElementById("admin-submit-image-help").textContent = "Choose one generated image from this site, then submit it under this theme with a title and optional description.";
+      document.getElementById("admin-image-title-field").value = galleryImages[0]?.title || "";
+      document.getElementById("admin-image-description-field").value = galleryImages[0]?.alt || "";
+      renderAdminGeneratedPicker();
+      openModal("admin-submit-image-modal");
+    }
+
+    function renderAdminGeneratedPicker() {
+      document.getElementById("admin-generated-picker").innerHTML = galleryImages.slice(0, 6).map((image, index) => {
+        const isSelected = index === activeGeneratedImageIndex;
+        const visual = image.src
+          ? `<img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt || image.title)}" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;">`
+          : `<div class="art ${escapeHtml(image.art)}"></div>`;
+        return `
+          <article class="image-card">
+            ${visual}
+            <div class="card-body">
+              <div class="chip-row">
+                <span class="chip">Generated</span>
+                <span class="chip">${escapeHtml(image.author || "@admin")}</span>
+              </div>
+              <h3 class="compact-title">${escapeHtml(image.title || "Generated image")}</h3>
+              <p class="gallery-alt">${escapeHtml(image.alt || image.prompt || "")}</p>
+              <div class="button-row">
+                <button class="${isSelected ? "selected" : ""}" data-admin-generated-index="${index}">${isSelected ? "Selected" : "Select"}</button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function submitAdminImageToTheme() {
+      const theme = adminQueues.managedThemes[activeAdminThemeIndex] || adminQueues.managedThemes[0];
+      const source = galleryImages[activeGeneratedImageIndex] || galleryImages[0];
+      const title = document.getElementById("admin-image-title-field").value.trim() || source.title || "Theme image";
+      const description = document.getElementById("admin-image-description-field").value.trim();
+      galleryImages.unshift({
+        ...source,
+        title,
+        alt: description || source.alt || title,
+        theme: theme.title,
+        author: "@admin"
+      });
+      closeModal("admin-submit-image-modal");
+      alert(`Mock image submitted to ${theme.title}.`);
+    }
+
+    function acceptThemeSubmission(index, edited = false) {
+      const item = adminQueues.themes[index];
+      if (!item) return;
+      item.status = "Accepted";
+      item.notes = `${edited ? "Accepted after admin edits." : "Accepted."} +300 credits granted. Notification sent.`;
+      adminQueues.managedThemes.unshift({
+        title: item.title,
+        brief: item.detail,
+        source: "User submission",
+        publishDate: "",
+        status: "Draft",
+        readiness: ["Content ok", "Missing SEO", "Missing ideas", "Featured 0/3"],
+        featuredArts: []
+      });
+      renderThemeAdmin("submissions");
+      alert(`${item.title} accepted. +300 credits granted and notification sent.`);
+    }
+
+    function rejectThemeSubmission(index) {
+      const item = adminQueues.themes[index];
+      if (!item) return;
+      item.status = "Not selected";
+      item.notes = "Not selected. Too broad for a daily theme.";
+      renderThemeAdmin("submissions");
     }
 
     function imageCard(image) {
@@ -2129,6 +2864,25 @@
         document.getElementById(`${target.dataset.panel}-assistant`).classList.remove("active");
       }
       if (target.dataset.action === "open-theme-picker") openModal("theme-picker-modal");
+      if (target.dataset.action === "submit-theme-idea") {
+        const name = document.getElementById("theme-name").value.trim() || "Untitled theme idea";
+        const details = document.getElementById("theme-details").value.trim() || "No details provided.";
+        const why = document.getElementById("theme-reason").value.trim();
+        const getsFirstReward = !themeIdeas.some(item => item.notes.includes("first submission credits"));
+        themeIdeas.unshift({
+          title: name,
+          details,
+          why,
+          date: "Jun 14, 2026",
+          status: "Under review",
+          notes: getsFirstReward ? "+20 first submission credits granted. Review pending." : "Review pending."
+        });
+        document.getElementById("theme-name").value = "";
+        document.getElementById("theme-details").value = "";
+        document.getElementById("theme-reason").value = "";
+        renderThemeIdeas();
+        alert(getsFirstReward ? "Theme idea submitted. +20 credits granted for your first theme idea." : "Theme idea submitted. Status is Under review.");
+      }
       if (target.dataset.action === "confirm-submit") {
         closeModal("submit-modal");
         alert("Mock submission created: status is Under review.");
@@ -2171,7 +2925,7 @@
         const panel = target.dataset.panel;
         const theme = creators[panel].selectedTheme || "After Putting On Glasses";
         document.getElementById("submit-title").textContent = label;
-        document.getElementById("submit-theme").textContent = theme;
+        document.getElementById("submit-image-theme").textContent = theme;
         document.getElementById("submit-prompt").value = target.dataset.submit;
         document.getElementById("submit-preview").className = `art ${target.dataset.art}`;
         openModal("submit-modal");
@@ -2194,6 +2948,31 @@
         document.getElementById("explore-themes").classList.toggle("hidden", target.dataset.exploreTab !== "themes");
         document.getElementById("explore-images").classList.toggle("hidden", target.dataset.exploreTab !== "images");
       }
+      if (target.dataset.adminTab) {
+        document.querySelectorAll("[data-admin-tab]").forEach(button => button.classList.remove("selected"));
+        target.classList.add("selected");
+        renderAdmin(target.dataset.adminTab);
+      }
+      if (target.dataset.themeAdminTab) {
+        document.querySelectorAll("[data-theme-admin-tab]").forEach(button => button.classList.remove("selected"));
+        target.classList.add("selected");
+        renderThemeAdmin(target.dataset.themeAdminTab);
+      }
+      if (target.dataset.action === "new-theme") openThemeFields();
+      if (target.dataset.acceptSubmission) acceptThemeSubmission(Number(target.dataset.acceptSubmission));
+      if (target.dataset.editAcceptSubmission) acceptThemeSubmission(Number(target.dataset.editAcceptSubmission), true);
+      if (target.dataset.rejectSubmission) rejectThemeSubmission(Number(target.dataset.rejectSubmission));
+      if (target.dataset.editTheme) openThemeFields(Number(target.dataset.editTheme));
+      if (target.dataset.submitThemeImage) openAdminSubmitImages(Number(target.dataset.submitThemeImage));
+      if (target.dataset.featureTheme) openFeaturedImages(Number(target.dataset.featureTheme));
+      if (target.dataset.adminGeneratedIndex) {
+        activeGeneratedImageIndex = Number(target.dataset.adminGeneratedIndex);
+        const image = galleryImages[activeGeneratedImageIndex] || galleryImages[0];
+        document.getElementById("admin-image-title-field").value = image.title || "";
+        document.getElementById("admin-image-description-field").value = image.alt || "";
+        renderAdminGeneratedPicker();
+      }
+      if (target.dataset.action === "confirm-admin-image-submit") submitAdminImageToTheme();
       if (target.dataset.studioTab) {
         document.querySelectorAll("[data-studio-tab]").forEach(button => button.classList.remove("selected"));
         target.classList.add("selected");
@@ -2215,6 +2994,8 @@
     ["home", "theme", "studio"].forEach(renderCreator);
     renderThemeGallery();
     renderExplore();
+    renderThemeIdeas();
+    renderAdmin();
     renderStudio();
   </script>
 </body>
