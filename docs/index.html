@@ -861,6 +861,119 @@
       border-color: var(--line-strong);
     }
 
+    .generation-feed {
+      display: grid;
+      gap: 16px;
+      max-height: 760px;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+
+    .generation-batch {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+      gap: 16px;
+      align-items: stretch;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--panel-solid);
+      padding: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .batch-context {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      border-right: 1px solid var(--line);
+      padding-right: 16px;
+    }
+
+    .batch-prompt {
+      margin: 0;
+      color: var(--ink);
+      font-size: 0.95rem;
+      line-height: 1.45;
+      display: -webkit-box;
+      line-clamp: 4;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .reference-mini {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .reference-mini .art {
+      width: 42px;
+      min-width: 42px;
+      aspect-ratio: 1 / 1;
+      border-radius: var(--radius-sm);
+    }
+
+    .batch-images {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      align-content: start;
+    }
+
+    .batch-image {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      border-radius: var(--radius-sm);
+      background: var(--panel-soft);
+    }
+
+    .batch-image .art {
+      width: 100%;
+      min-height: 0;
+      border-radius: 0;
+    }
+
+    .image-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .batch-image:hover .image-actions {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .image-actions button {
+      width: 34px;
+      min-height: 34px;
+      padding: 0;
+      border-color: rgba(255,255,255,.75);
+      background: rgba(255,255,255,.9);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .image-status {
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      border-radius: var(--radius-full);
+      background: rgba(255,255,255,.9);
+      padding: 4px 8px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
     .art {
       aspect-ratio: 1 / 1;
       background: #f0f0f0;
@@ -1016,8 +1129,8 @@
 
     .theme-discovery-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 24px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 28px;
     }
 
     .workspace {
@@ -1158,17 +1271,52 @@
       border-top: 0;
     }
 
-    .theme-discovery-card .card-body {
-      gap: 12px;
+    .theme-discovery-card {
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.72fr);
+      align-items: center;
+      padding: 28px 32px;
+      min-height: 300px;
     }
 
-    .theme-discovery-card .mini-gallery {
+    .theme-discovery-card .card-body {
+      gap: 16px;
       padding: 0;
-      min-height: 190px;
+    }
+
+    .theme-discovery-card .compact-title {
+      font-size: clamp(1.65rem, 3vw, 2.5rem);
+      line-height: 1;
+      max-width: 760px;
+    }
+
+    .theme-discovery-card .subtle {
+      max-width: 640px;
+      font-size: 1.05rem;
+    }
+
+    .theme-discovery-card .meta-row {
+      margin-top: 4px;
     }
 
     .theme-discovery-card .button-row {
-      margin-top: 4px;
+      margin-top: 10px;
+    }
+
+    .theme-preview-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      min-width: 300px;
+    }
+
+    .theme-preview-row .art {
+      width: 100%;
+      min-height: 220px;
+      border: 0;
+      border-radius: var(--radius-md);
+      box-shadow: none;
+      transform: none;
+      transition: none;
     }
 
     .theme-picker-list {
@@ -1238,6 +1386,15 @@
       line-height: 1.55;
     }
 
+    .result-link {
+      min-height: 32px;
+      padding: 0 10px;
+      border-color: var(--line);
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
     @media (max-width: 900px) {
       .home-theme-panel { grid-template-columns: 1fr; gap: 40px; text-align: center; }
       .masonry-grid { column-count: 2; }
@@ -1247,6 +1404,14 @@
       .theme-poster-content { order: 2; }
       .hero-stack { order: 1; }
       .theme-strip { grid-template-columns: 1fr; }
+      .theme-discovery-card {
+        grid-template-columns: 1fr;
+        gap: 22px;
+        padding: 24px;
+      }
+      .theme-preview-row {
+        min-width: 0;
+      }
     }
 
     @media (max-width: 768px) {
@@ -1306,6 +1471,27 @@
       .explore-grid,
       .theme-discovery-grid {
         grid-template-columns: 1fr;
+      }
+      .theme-discovery-card {
+        padding: 18px;
+      }
+      .theme-preview-row {
+        gap: 8px;
+      }
+      .theme-preview-row .art {
+        min-height: 150px;
+      }
+      .generation-batch {
+        grid-template-columns: 1fr;
+      }
+      .batch-context {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding-right: 0;
+        padding-bottom: 14px;
+      }
+      .batch-images {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .admin-layout {
         grid-template-columns: 1fr;
@@ -1446,9 +1632,12 @@
         <div id="theme-results-panel" class="hidden" style="margin-top: 64px;">
           <div class="assistant-head" style="margin-bottom: 24px;">
             <h2 class="compact-title">Your results</h2>
-            <span id="theme-result-status" class="status-line">Ready</span>
+            <div class="button-row">
+              <span id="theme-result-status" class="status-line">Saved to Studio history too</span>
+              <button class="result-link" data-nav-target="studio">Open Studio</button>
+            </div>
           </div>
-          <div id="theme-results" class="image-grid"></div>
+          <div id="theme-results" class="generation-feed"></div>
         </div>
 
         <section id="featured-images" style="margin-top: 120px;">
@@ -1476,13 +1665,10 @@
           </div>
         </div>
 
-        <div class="panel panel-pad" style="margin-top: 16px;">
+        <div id="explore-theme-filters" class="panel panel-pad" style="margin-top: 16px;">
           <div class="button-row">
-            <input style="max-width: 340px;" placeholder="Search themes or prompts...">
-            <button class="selected">Latest</button>
-            <button>Popular</button>
-            <button>Cinematic</button>
-            <button>Surreal</button>
+            <button data-explore-submission-filter="submitted">Submitted</button>
+            <button data-explore-submission-filter="unsubmitted">Not submitted yet</button>
           </div>
         </div>
 
@@ -1546,17 +1732,12 @@
           <div class="panel panel-pad">
             <div class="assistant-head">
               <h2 class="compact-title">My images</h2>
-              <button data-action="open-theme-picker">Get ideas from a theme</button>
             </div>
             <div class="tabs" style="margin-top: 14px;">
               <button class="selected" data-studio-tab="All">All</button>
-              <button data-studio-tab="Generated">Generated</button>
               <button data-studio-tab="Submitted">Submitted</button>
-              <button data-studio-tab="Under review">Under review</button>
-              <button data-studio-tab="Published">Published</button>
-              <button data-studio-tab="Rejected">Rejected</button>
             </div>
-            <div id="studio-gallery" class="image-grid"></div>
+            <div id="studio-gallery" class="generation-feed"></div>
           </div>
         </div>
       </section>
@@ -1591,12 +1772,16 @@
           <div id="submit-preview" class="art silence"></div>
           <div>
             <div class="field-label">Theme</div>
-            <div id="submit-image-theme" class="notice">After Putting On Glasses</div>
-            <div class="field-label" style="margin-top: 14px;">Prompt</div>
-            <textarea id="submit-prompt" rows="5"></textarea>
+            <select id="submit-image-theme" style="margin-top: 8px;">
+              <option>After Putting On Glasses</option>
+              <option>Dream Life</option>
+              <option>A City Where the Rain Falls Upward</option>
+              <option>The Architecture of Loneliness</option>
+            </select>
+            <div class="field-label" style="margin-top: 14px;">English title</div>
+            <input id="submit-image-title" placeholder="A lonely figure under a red sun">
             <div class="field-label" style="margin-top: 14px;">Creation note optional</div>
-            <textarea rows="4" placeholder="Share your creative thinking behind this image..."></textarea>
-            <p class="subtle">Your image, prompt, and creation note will be public if approved.</p>
+            <textarea id="submit-creation-note" rows="4" placeholder="Share the idea, mood, or interpretation behind this image..."></textarea>
             <div class="button-row">
               <button class="primary" data-action="confirm-submit">Submit</button>
               <button data-close-modal="submit-modal">Cancel</button>
@@ -1796,6 +1981,56 @@
       }
     ];
 
+    const starterIdeasByTheme = {
+      "After Putting On Glasses": [
+        "A person puts on glasses and finally recognizes a familiar face across a busy street",
+        "A cat with glasses studies a human living room like a tiny scholar in a research lab",
+        "A city wearing giant transparent glasses, with only the view through the lenses becoming sharp and meaningful",
+        "A child tries on old glasses and sees hidden constellations in ordinary dust",
+        "A chef puts on glasses and suddenly understands the kitchen as a map of smells and movement",
+        "A quiet library where each pair of glasses reveals a different reader's memory"
+      ],
+      "Dream Life": [
+        "A tiny apartment transforms into the peaceful routine someone secretly wants",
+        "A person walks through several possible lives reflected in shop windows",
+        "A breakfast table on a balcony shows a future that feels close but unreachable",
+        "A dream home floating above a city made from old calendar pages"
+      ],
+      "A City Where the Rain Falls Upward": [
+        "A train platform where rain rises from the tracks into glowing clouds",
+        "Commuters hold umbrellas upside down as puddles lift into the sky",
+        "A quiet alley where upward rain reveals hidden neon signs",
+        "A child watches raindrops leave the ground like migrating birds"
+      ],
+      "The Architecture of Loneliness": [
+        "A narrow tower with one lit window seen from very far away",
+        "A huge waiting room where every chair faces a different direction",
+        "An apartment courtyard designed like a maze with no shared doors",
+        "A bridge crossing between two buildings but stopping before either side"
+      ]
+    };
+
+    const globalAvoidCliches = [
+      "avoid text overlays unless requested",
+      "avoid generic stock-photo compositions",
+      "avoid obvious symbols when a visual metaphor can carry the idea"
+    ];
+
+    const themeAvoidCliches = {
+      "After Putting On Glasses": [
+        "avoid simple before-and-after split screens",
+        "avoid only showing a close-up of glasses with no story"
+      ],
+      "A City Where the Rain Falls Upward": [
+        "avoid ordinary cyberpunk rain streets",
+        "avoid random floating water with no city logic"
+      ],
+      "The Architecture of Loneliness": [
+        "avoid broken-heart symbols",
+        "avoid empty speech bubbles"
+      ]
+    };
+
     const themeIdeas = [
       {
         title: "Dream Life in Reverse",
@@ -1857,7 +2092,7 @@
           theme: "After Putting On Glasses",
           prompt: "A student puts on symbolic glasses made of formulas, and the messy classroom turns into clear geometric patterns.",
           art: "silence",
-          status: "Under review"
+          status: "Submitted"
         },
         {
           title: "Upward Rain Station",
@@ -1865,7 +2100,7 @@
           theme: "A City Where the Rain Falls Upward",
           prompt: "A neon train station where rain rises from the tracks into the night sky.",
           art: "rain",
-          status: "Under review"
+          status: "Submitted"
         }
       ],
       managedThemes: [
@@ -1966,11 +2201,39 @@
       }
     ];
 
-    const studioImages = [
-      { art: "cat-glasses", status: "Generated", theme: "No theme", model: "GPT Image" },
-      { art: "rain", status: "Under review", theme: "A City Where the Rain Falls Upward", model: "Flux Pro" },
-      { art: "lonely", status: "Published", theme: "The Architecture of Loneliness", model: "Ideogram" },
-      { art: "poster", status: "Rejected", theme: "After Putting On Glasses", model: "Recraft" }
+    const generationBatches = [
+      {
+        id: "studio-1",
+        source: "studio",
+        prompt: "A cute white cat with glasses studies a human living room like a tiny scholar in a research lab, warm illustrated light, detailed plants and books.",
+        model: "GPT Image",
+        style: "Illustration",
+        ratio: "1:1",
+        theme: "After Putting On Glasses",
+        createdAt: "Just now",
+        referenceArt: "cat-glasses",
+        images: [
+          { art: "cat-glasses", status: "Generated" },
+          { art: "poster", status: "Submitted" },
+          { art: "silence", status: "Approved" },
+          { art: "rain", status: "Rejected", reviewNote: "Theme connection was too weak." }
+        ]
+      },
+      {
+        id: "studio-2",
+        source: "home",
+        prompt: "A quiet city map becomes sharp only through transparent eyeglass lenses, minimal poster design, crisp contrast, visual metaphor for clearer perspective.",
+        model: "Recraft",
+        style: "Auto",
+        ratio: "4:5",
+        theme: "No theme",
+        createdAt: "Earlier today",
+        referenceArt: null,
+        images: [
+          { art: "poster", status: "Generated" },
+          { art: "lonely", status: "Generated" }
+        ]
+      }
     ];
 
     const creators = {
@@ -2031,6 +2294,8 @@
     let activeDetail = galleryImages[0];
     let activeAdminThemeIndex = 0;
     let activeGeneratedImageIndex = 0;
+    let activeSubmittedStatus = "Submitted";
+    let activeExploreSubmissionFilter = "all";
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, char => ({
@@ -2101,9 +2366,12 @@
             <div id="${id}-inline-output" class="inline-output">
               <div class="assistant-head">
                 <h3 class="compact-title">Latest output</h3>
-                <span id="${id}-inline-status" class="status-line">Ready</span>
+                <div class="button-row">
+                  <span id="${id}-inline-status" class="status-line">Saved to Studio history too</span>
+                  <button class="result-link" data-nav-target="studio">Open Studio</button>
+                </div>
               </div>
-              <div id="${id}-inline-results" class="image-grid"></div>
+              <div id="${id}-inline-results" class="generation-feed"></div>
             </div>
           ` : ""}
         </div>
@@ -2169,15 +2437,25 @@
       }
       const state = creators[id];
       const theme = state.selectedTheme || state.theme || "today's theme";
-      const baseIdeas = seed ? [
+      state.ideaOffset = state.ideaOffset || 0;
+      const presetIdeas = starterIdeasByTheme[theme] || starterIdeasByTheme["After Putting On Glasses"];
+      let baseIdeas = seed ? [
         `Change the main subject while keeping the moment of clearer vision from ${seed}`,
         `Make a more symbolic version of ${seed} where the glasses represent a new skill or mindset`,
         `Keep the theme but shift the composition to a wider scene where only the view through the lenses is sharp`
-      ] : [
-        `A person puts on glasses and finally recognizes a familiar face across a busy street`,
-        `A cat with glasses studies a human living room like a tiny scholar in a research lab`,
-        `A city wearing giant transparent glasses, with only the view through the lenses becoming sharp and meaningful`
-      ];
+      ] : presetIdeas.slice(state.ideaOffset, state.ideaOffset + 3);
+      if (!seed && baseIdeas.length < 3) {
+        const avoid = [...globalAvoidCliches, ...(themeAvoidCliches[theme] || [])].join("; ");
+        baseIdeas = [
+          `A new AI-generated direction for ${theme} that avoids the obvious symbols`,
+          `A more personal interpretation of ${theme} based on a quiet everyday object`,
+          `A wider environmental scene for ${theme} with an unexpected focal point`
+        ];
+        state.ideaOffset = 0;
+        state.lastAvoidCliches = avoid;
+      } else if (!seed) {
+        state.ideaOffset += 3;
+      }
       const output = document.getElementById(`${id}-assistant`);
       output.classList.add("active");
       output.innerHTML = `
@@ -2359,18 +2637,14 @@
       const resultsPanel = document.getElementById(`${id}-results-panel`);
 
       if (safety) safety.textContent = "Safety check passed";
+      const batch = createGenerationBatch(id, prompt, count);
+      generationBatches.unshift(batch);
       if (id === "studio") {
-        studioImages.unshift({
-          art: creators.studio.selectedTheme ? "cat-glasses" : "poster",
-          status: "Generated",
-          theme: creators.studio.selectedTheme || "No theme",
-          model: state.model
-        });
         renderStudio("All");
         document.querySelectorAll("[data-studio-tab]").forEach(button => {
           button.classList.toggle("selected", button.dataset.studioTab === "All");
         });
-        if (safety) safety.textContent = "Mock image added to My images";
+        if (safety) safety.textContent = "Mock generation added to Studio history";
         return;
       }
       if (!results) {
@@ -2378,18 +2652,9 @@
         const inlineStatus = document.getElementById(`${id}-inline-status`);
         const inlineResults = document.getElementById(`${id}-inline-results`);
         if (inlineOutput && inlineResults) {
-          const arts = ["cat-glasses", "poster", "lonely", "rain"];
           inlineOutput.classList.add("active");
-          if (inlineStatus) inlineStatus.textContent = `${count} mock image${count > 1 ? "s" : ""} generated`;
-          inlineResults.innerHTML = Array.from({ length: count }, (_, index) => resultCard({
-            art: arts[index % arts.length],
-            prompt,
-            model: state.model,
-            style: state.style,
-            ratio: state.ratio,
-            submitLabel: "Submit to today's theme",
-            panel: id
-          })).join("");
+          if (inlineStatus) inlineStatus.textContent = `${count} mock image${count > 1 ? "s" : ""} generated · full history in Studio`;
+          inlineResults.insertAdjacentHTML("afterbegin", generationBatchRow(batch, id));
         }
         if (safety) safety.textContent = "Mock generation complete";
         return;
@@ -2397,42 +2662,73 @@
       if (status) status.textContent = "Generating mock images...";
       if (resultsPanel) resultsPanel.classList.remove("hidden");
       if (empty) empty.classList.add("hidden");
-      results.innerHTML = "";
 
       setTimeout(() => {
-        if (status) status.textContent = `${count} mock image${count > 1 ? "s" : ""} generated`;
-        const arts = ["cat-glasses", "poster", "lonely", "rain"];
-        results.innerHTML = Array.from({ length: count }, (_, index) => resultCard({
-          art: arts[index % arts.length],
-          prompt,
-          model: state.model,
-          style: state.style,
-          ratio: state.ratio,
-          submitLabel: state.context === "studio" && !state.selectedTheme ? "Submit to today's theme" : state.submitLabel,
-          panel: id
-        })).join("");
+        if (status) status.textContent = `${count} mock image${count > 1 ? "s" : ""} generated · full history in Studio`;
+        results.insertAdjacentHTML("afterbegin", generationBatchRow(batch, id));
       }, 420);
     }
 
-    function resultCard(item) {
+    function createGenerationBatch(id, prompt, count) {
+      const state = creators[id];
+      const arts = ["cat-glasses", "poster", "lonely", "rain"];
+      return {
+        id: `${id}-${Date.now()}`,
+        source: id,
+        prompt,
+        model: state.model,
+        style: state.style,
+        ratio: state.ratio,
+        theme: state.selectedTheme || (state.context === "theme" ? state.theme : "No theme"),
+        createdAt: "Just now",
+        referenceArt: id === "theme" ? "cat-glasses" : null,
+        images: Array.from({ length: count }, (_, index) => ({
+          art: arts[index % arts.length],
+          status: "Generated"
+        }))
+      };
+    }
+
+    function generationBatchRow(batch, panel = "studio") {
       return `
-        <article class="image-card">
-          <div class="art ${item.art}"></div>
-          <div class="card-body">
-            <div class="prompt-preview"><strong>Prompt used:</strong> ${escapeHtml(item.prompt)}</div>
+        <article class="generation-batch">
+          <div class="batch-context">
+            <div>
+              <div class="status-line">${escapeHtml(batch.createdAt)} · ${escapeHtml(batch.source === "home" ? "Home" : batch.source === "theme" ? "Theme detail" : "Studio")}</div>
+              <p class="batch-prompt">${escapeHtml(batch.prompt)}</p>
+            </div>
             <div class="chip-row">
-              <span class="chip">${escapeHtml(item.model)}</span>
-              <span class="chip">${escapeHtml(item.style)}</span>
-              <span class="chip">${escapeHtml(item.ratio)}</span>
+              <span class="chip">${escapeHtml(batch.model)}</span>
+              <span class="chip">${escapeHtml(batch.style)}</span>
+              <span class="chip">${escapeHtml(batch.ratio)}</span>
             </div>
-            <div class="button-row">
-              <button class="ghost">Download</button>
-              <button>Edit</button>
-              <button>Variations</button>
-              <button class="primary" data-submit="${escapeHtml(item.prompt)}" data-submit-label="${escapeHtml(item.submitLabel)}" data-art="${item.art}" data-panel="${item.panel}">${escapeHtml(item.submitLabel)}</button>
-            </div>
+            ${batch.referenceArt ? `
+              <div class="reference-mini">
+                <div class="art ${escapeHtml(batch.referenceArt)}"></div>
+                <span>Reference image used</span>
+              </div>
+            ` : ""}
+          </div>
+          <div class="batch-images">
+            ${batch.images.map((image, index) => batchImageTile(batch, image, index, panel)).join("")}
           </div>
         </article>
+      `;
+    }
+
+    function batchImageTile(batch, image, index, panel) {
+      const submitLabel = batch.theme && batch.theme !== "No theme" ? "Submit" : panel === "home" ? "Submit" : "Submit";
+      return `
+        <div class="batch-image">
+          <div class="art ${escapeHtml(image.art)}"></div>
+          <div class="image-actions">
+            <button title="Submit" data-submit-batch="${escapeHtml(batch.id)}" data-submit-index="${index}" data-submit-label="${escapeHtml(submitLabel)}" data-art="${escapeHtml(image.art)}" data-panel="${escapeHtml(panel)}">↑</button>
+            <button title="Delete">×</button>
+            <button title="Favorite">♡</button>
+            <button title="Download">↓</button>
+          </div>
+          <div class="image-status">${escapeHtml(image.status)}</div>
+        </div>
       `;
     }
 
@@ -2440,12 +2736,20 @@
       document.getElementById("theme-gallery").innerHTML = galleryImages.map(imageCard).join("");
     }
 
+    function hasSubmittedImageForTheme(themeTitle) {
+      return generationBatches.some(batch =>
+        batch.theme === themeTitle && batch.images.some(image => image.status !== "Generated")
+      );
+    }
+
     function renderExplore() {
-      document.getElementById("explore-themes").innerHTML = themes.map(theme => `
+      const filteredThemes = themes.filter(theme => {
+        if (activeExploreSubmissionFilter === "all") return true;
+        const submitted = hasSubmittedImageForTheme(theme.title);
+        return activeExploreSubmissionFilter === "submitted" ? submitted : !submitted;
+      });
+      document.getElementById("explore-themes").innerHTML = filteredThemes.length ? filteredThemes.map(theme => `
         <article class="theme-card theme-discovery-card">
-          <div class="mini-gallery">
-            ${(theme.featuredArts || ["poster", "lonely", "rain"]).slice(0, 3).map(art => `<div class="art ${art}"></div>`).join("")}
-          </div>
           <div class="card-body">
             <div class="chip">${escapeHtml(theme.date)}</div>
             <h2 class="compact-title">${escapeHtml(theme.title)}</h2>
@@ -2455,8 +2759,11 @@
               <button class="primary" data-nav-target="theme">View theme</button>
             </div>
           </div>
+          <div class="theme-preview-row" aria-hidden="true">
+            ${(theme.featuredArts || ["poster", "lonely", "rain"]).slice(0, 3).map(art => `<div class="art ${art}"></div>`).join("")}
+          </div>
         </article>
-      `).join("");
+      `).join("") : `<div class="notice">No themes in this filter.</div>`;
       document.getElementById("explore-images").innerHTML = galleryImages.map(imageCard).join("");
     }
 
@@ -2505,7 +2812,7 @@
         board.innerHTML = `
           <div>
             <h2 class="compact-title">Image submissions</h2>
-            <p class="subtle">Approve images submitted under a theme before they appear in the public gallery.</p>
+            <p class="subtle">Review submitted images before they appear in a theme gallery. Most valid submissions should be approved.</p>
           </div>
           <div class="review-list">
             ${adminQueues.images.map(item => `
@@ -2514,12 +2821,13 @@
                 <div class="review-copy">
                   <div class="meta-row"><span>${escapeHtml(item.user)}</span><span>${escapeHtml(item.theme)}</span><span class="chip">${escapeHtml(item.status)}</span></div>
                   <h3 class="compact-title">${escapeHtml(item.title)}</h3>
-                  <p class="prompt-preview">${escapeHtml(item.prompt)}</p>
+                  <p class="prompt-preview"><strong>Creation note:</strong> ${escapeHtml(item.note || "The image interprets the theme through a clear visual metaphor.")}</p>
+                  <p class="status-line"><strong>Prompt metadata:</strong> ${escapeHtml(item.prompt)}</p>
+                  <textarea rows="2" placeholder="Review note, required when rejecting"></textarea>
                 </div>
                 <div class="button-row">
                   <button class="primary">Approve</button>
                   <button>Reject</button>
-                  <button>Needs edit</button>
                 </div>
               </article>
             `).join("")}
@@ -2768,24 +3076,39 @@
     }
 
     function renderStudio(filter = "All") {
-      const images = filter === "All" ? studioImages : studioImages.filter(item => item.status === filter);
-      document.getElementById("studio-gallery").innerHTML = images.map(item => `
-        <article class="image-card">
-          <div class="art ${item.art}"></div>
-          <div class="card-body">
-            <div class="chip-row">
-              <span class="chip">${escapeHtml(item.status)}</span>
-              <span class="chip">${escapeHtml(item.model)}</span>
-            </div>
-            <p class="prompt-preview">Theme: ${escapeHtml(item.theme)}</p>
-            <div class="button-row">
-              <button>View prompt</button>
-              <button>Edit</button>
-              <button class="primary">Submit</button>
-            </div>
+      const gallery = document.getElementById("studio-gallery");
+      if (filter === "Submitted") {
+        const statuses = [
+          { value: "Submitted", label: "Pending review" },
+          { value: "Approved", label: "Approved" },
+          { value: "Rejected", label: "Rejected" }
+        ];
+        const batches = generationBatches
+          .map(batch => ({
+            ...batch,
+            images: batch.images.filter(image => image.status === activeSubmittedStatus)
+          }))
+          .filter(batch => batch.images.length > 0);
+        const count = batches.reduce((total, batch) => total + batch.images.length, 0);
+        gallery.innerHTML = `
+          <div class="tabs" style="margin-bottom: 12px;">
+            ${statuses.map(status => `
+              <button class="${activeSubmittedStatus === status.value ? "selected" : ""}" data-submitted-status="${status.value}">
+                ${escapeHtml(status.label)}
+              </button>
+            `).join("")}
           </div>
-        </article>
-      `).join("");
+          <div class="assistant-head" style="margin-bottom: 10px;">
+            <h3 class="compact-title">${escapeHtml(statuses.find(status => status.value === activeSubmittedStatus)?.label || "Pending review")}</h3>
+            <span class="status-line">${count} images</span>
+          </div>
+          ${batches.length ? batches.map(batch => generationBatchRow(batch, "studio")).join("") : `<div class="notice">No ${escapeHtml((statuses.find(status => status.value === activeSubmittedStatus)?.label || "pending review").toLowerCase())} images.</div>`}
+        `;
+        return;
+      }
+      gallery.innerHTML = generationBatches.length
+        ? generationBatches.map(batch => generationBatchRow(batch, "studio")).join("")
+        : `<div class="notice">No images yet.</div>`;
     }
 
     function openModal(id) {
@@ -2884,8 +3207,19 @@
         alert(getsFirstReward ? "Theme idea submitted. +20 credits granted for your first theme idea." : "Theme idea submitted. Status is Under review.");
       }
       if (target.dataset.action === "confirm-submit") {
+        const modal = document.getElementById("submit-modal");
+        const title = document.getElementById("submit-image-title").value.trim();
+        if (!title) {
+          alert("Please add an English title before submitting.");
+          return;
+        }
+        const batch = generationBatches.find(item => item.id === modal.dataset.batchId);
+        const image = batch?.images[Number(modal.dataset.imageIndex)];
+        if (image) image.status = "Submitted";
+        renderStudio("All");
+        renderExplore();
         closeModal("submit-modal");
-        alert("Mock submission created: status is Under review.");
+        alert("Mock submission created: status is Submitted.");
       }
       if (target.dataset.action === "detail-inspiration") {
         closeModal("image-modal");
@@ -2925,9 +3259,28 @@
         const panel = target.dataset.panel;
         const theme = creators[panel].selectedTheme || "After Putting On Glasses";
         document.getElementById("submit-title").textContent = label;
-        document.getElementById("submit-image-theme").textContent = theme;
-        document.getElementById("submit-prompt").value = target.dataset.submit;
+        document.getElementById("submit-image-theme").value = theme;
+        document.getElementById("submit-image-title").value = "";
+        document.getElementById("submit-creation-note").value = "";
         document.getElementById("submit-preview").className = `art ${target.dataset.art}`;
+        openModal("submit-modal");
+      }
+      if (target.dataset.submitBatch) {
+        const batch = generationBatches.find(item => item.id === target.dataset.submitBatch);
+        const image = batch?.images[Number(target.dataset.submitIndex)];
+        if (!batch || !image) return;
+        if (image.status !== "Generated") {
+          alert("This image has already been submitted to a theme. Please choose another image.");
+          return;
+        }
+        const theme = batch.theme && batch.theme !== "No theme" ? batch.theme : "After Putting On Glasses";
+        document.getElementById("submit-title").textContent = "Submit image";
+        document.getElementById("submit-image-theme").value = theme;
+        document.getElementById("submit-image-title").value = "";
+        document.getElementById("submit-creation-note").value = "";
+        document.getElementById("submit-preview").className = `art ${image.art}`;
+        document.getElementById("submit-modal").dataset.batchId = batch.id;
+        document.getElementById("submit-modal").dataset.imageIndex = target.dataset.submitIndex;
         openModal("submit-modal");
       }
       if (target.dataset.openImage) openImageDetail(Number(target.dataset.openImage));
@@ -2947,6 +3300,15 @@
         target.classList.add("selected");
         document.getElementById("explore-themes").classList.toggle("hidden", target.dataset.exploreTab !== "themes");
         document.getElementById("explore-images").classList.toggle("hidden", target.dataset.exploreTab !== "images");
+        document.getElementById("explore-theme-filters").classList.toggle("hidden", target.dataset.exploreTab !== "themes");
+      }
+      if (target.dataset.exploreSubmissionFilter) {
+        activeExploreSubmissionFilter = activeExploreSubmissionFilter === target.dataset.exploreSubmissionFilter
+          ? "all"
+          : target.dataset.exploreSubmissionFilter;
+        document.querySelectorAll("[data-explore-submission-filter]").forEach(button => button.classList.remove("selected"));
+        target.classList.toggle("selected", activeExploreSubmissionFilter !== "all");
+        renderExplore();
       }
       if (target.dataset.adminTab) {
         document.querySelectorAll("[data-admin-tab]").forEach(button => button.classList.remove("selected"));
@@ -2977,6 +3339,10 @@
         document.querySelectorAll("[data-studio-tab]").forEach(button => button.classList.remove("selected"));
         target.classList.add("selected");
         renderStudio(target.dataset.studioTab);
+      }
+      if (target.dataset.submittedStatus) {
+        activeSubmittedStatus = target.dataset.submittedStatus;
+        renderStudio("Submitted");
       }
     });
 

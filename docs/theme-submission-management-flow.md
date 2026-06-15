@@ -37,41 +37,45 @@
 ```mermaid
 flowchart TD
   A[Theme source] --> B{Source type}
-
   B --> C[User submits theme idea]
   B --> D[Admin creates theme]
 
-  C --> E[User submission inbox]
-  E --> F{Admin review}
-  F -->|Reject| G[Rejected or duplicate]
-  F -->|Edit and accept| H[Managed theme created]
-  F -->|Accept as theme| H
+  C --> E[Create submission record]
+  E --> F{First theme submission?}
+  F -->|Yes| G[Grant +20 credits and show popup]
+  F -->|No| H[No first-submission reward]
+  G --> I[User submissions inbox]
+  H --> I
 
-  D --> H
+  I --> J{Admin review}
+  J -->|Reject| K[Not selected and update Notes]
+  J -->|Accept as theme| L[Create managed theme]
+  J -->|Edit and accept| L
 
-  H --> I[Manage themes list]
-  I --> J[Edit required theme fields]
-  I --> K[Set publish date]
-  I --> L[Submit generated images to theme]
-  I --> M[Manage featured images]
+  L --> M[Grant +300 credits]
+  M --> N[Send in-app notification]
+  N --> O[Update user's Notes]
+  O --> P[Draft theme in Manage themes]
 
-  N[Users submit generated images to theme] --> O[Theme image pool]
-  L --> O
-  O --> M
+  D --> P
 
-  M --> R{3 Explore preview images selected?}
-  J --> S{Required fields complete?}
-  K --> T{Publish date set?}
+  P --> Q[Edit required fields]
+  P --> R[Set publish date]
+  P --> S[Submit generated images to theme]
+  P --> T[Choose featured images]
 
-  R --> U[Theme ready]
-  S --> U
-  T --> U
+  U[Users submit generated images from Theme Detail or My Studio] --> V[Theme image pool]
+  S --> V
+  V --> T
 
-  U --> V{Admin schedules theme}
-  V -->|Not ready| I
-  V -->|Schedule| W[Scheduled theme]
+  Q --> W[Check theme readiness]
+  R --> W
+  T --> W
 
-  W --> X[Shown on Explore and theme detail when date arrives]
+  W --> X{Fields complete + publish date set + 3 featured images?}
+  X -->|No| P
+  X -->|Yes| Y[Scheduled theme]
+  Y --> Z[Shown on Explore and theme detail when publish date arrives]
 ```
 
 ## 用户侧 Submit a Theme

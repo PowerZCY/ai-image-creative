@@ -250,11 +250,41 @@ Images
 1. 用户点击 `Get ideas from a theme`。
 2. 系统打开主题选择器。
 3. 用户选择 `Today's theme` 或任意历史主题。
-4. Assistant 基于该主题生成 3-6 个创作方向。
+4. Assistant 从该主题预置的 6 条 `starterIdeas` 中随机展示 3 条。
 5. 用户点击某个方向的 `Use`。
 6. 系统把方向改写成完整 prompt，并填入输入框。
 7. 生成结果记录所选 `theme_id`，但不会自动提交。
 8. 用户生成后仍需要点击 `Submit to this theme`。
+
+主题灵感使用“预置 + AI 生成”的混合策略：
+
+- 每个主题默认预置 6 条 `starterIdeas`，用于低成本、快速、稳定地给用户第一屏灵感。
+- 用户点击 `Get ideas` 时，从 6 条预置 ideas 中随机展示 3 条。
+- 如果用户反复点击 `Get ideas`，可以继续随机 3 条，但尽量避免和当前屏完全一样。
+- 用户点击 `More ideas` 时，直接调用 AI 生成更多方向，不再继续分页展示剩余预置 ideas。
+- AI 生成时带上当前主题、6 条预置 ideas、已展示过的 ideas，以及合并后的 avoid-cliche 列表，避免重复和俗套。
+- 不需要告诉用户哪些 idea 是预置、哪些是 AI 生成；界面统一展示为 `Try one`。
+
+主题创意配置可以保持简单：
+
+```ts
+type ThemeCreativeConfig = {
+  starterIdeas: string[];
+  themeAvoidCliches?: string[];
+};
+
+type GlobalCreativeConfig = {
+  globalAvoidCliches: string[];
+};
+```
+
+AI 生成更多 ideas 时合并：
+
+```text
+avoidCliches = globalAvoidCliches + themeAvoidCliches
+```
+
+`themeAvoidCliches` 不是每个主题都必须填，只在某个主题特别容易俗套或跑偏时填写。
 
 主题选择器：
 
@@ -285,11 +315,11 @@ Recent themes
 - Assistant 围绕该主题提供方向。
 - 生成图片可以提交到该主题。
 
-`My Studio` 下方是用户图片库：
+`My Studio` 下方是用户图片库和提交状态管理：
 
 ```text
 Tabs:
-[All] [Generated] [Submitted] [Under review] [Published] [Rejected]
+[All] [Submitted]
 ```
 
 每张图展示：
@@ -300,12 +330,24 @@ Tabs:
 Model: Flux Pro
 Generated: Jun 9, 2026
 Theme: Show Silence / No theme
-Status: Not submitted / Under review / Published
+Status: Generated / Submitted / Approved / Rejected
 
-[View prompt] [Edit] [Submit]
+[Edit] [Submit]
 ```
 
+`Submitted` tab 内部再按 `Submitted` / `Approved` / `Rejected` 分组展示，而不是把审核结果做成顶层 tab。
+
+更具体的 UI 是在 `Submitted` tab 下放二级切换：
+
+```text
+[Pending review] [Approved] [Rejected]
+```
+
+其中 `Pending review` 对应内部状态 `Submitted`。
+
 `My Studio` 的重点不是营销和引导，而是个人创作管理。
+
+命名上，`Studio` 比 `Create` 更适合作为导航页面名，因为这个页面不只是生成，还包括历史、提交状态和审核反馈。`Create` 更适合用作 Studio 页面里的生成器区块标题。
 
 ## 生成器里的创作助手如何体现
 
@@ -614,49 +656,43 @@ MVP 设置要简单。
 
 ## 生成后操作
 
-图片生成后不要只给下载。
+图片生成后不要只给下载，也不要把一次生成拆成几个互不相关的单图卡片。
 
-每张生成图片都应该有自己的操作区。
+生成结果应该按 generation batch 展示。每次点击 `Generate` 生成一个结果行，最新生成排在最上方。
 
-首页生成结果卡片：
-
-```text
-[Generated image]
-
-Prompt used:
-A quiet empty room with a single chair near a window...
-
-Model: Flux Pro
-Style: Cinematic
-Aspect ratio: 16:9
-
-[Download] [Edit] [Use as reference]
-[Submit to today's theme]
-```
-
-详情页生成结果卡片：
+统一结果行：
 
 ```text
-[Generated image]
-
-Prompt used:
-A quiet empty room with a single chair near a window...
-
-Model: Flux Pro
-Style: Cinematic
-Aspect ratio: 16:9
-
-[Download] [Edit] [Use as reference]
-[Submit to this theme]
+[Prompt / settings / reference summary]    [Image 1] [Image 2] [Image 3] [Image 4]
 ```
 
-如果卡片空间不足，`Prompt used` 可以默认折叠：
+左侧展示：
+
+- prompt 摘要。
+- model。
+- style。
+- aspect ratio。
+- created time。
+- reference image 缩略图，如果有。
+
+如果没有 reference image，不显示任何 reference 信息。主题信息作为提交和元数据使用，不在生成结果左侧显式展示。
+
+右侧展示：
+
+- 最多 4 张图片。
+- 鼠标悬浮每张图片时，右上角出现操作区。
+- 操作区包含 `Submit` / `Delete` / `Favorite` / `Download`。
+
+首页和主题详情页的结果区使用同一套结果行样式，但只显示当前页面会话生成的结果。用户进入主题详情页后，每一次生成都追加到该页结果区，最新生成排在最上方，不只显示最近一次。结果区设定固定高度，超过后内部上下滚动，并提示用户完整历史可在 Studio 查看。
+
+提示需要带直接跳转入口：
 
 ```text
-[View prompt]
+These results are saved in Studio.
+[Open Studio]
 ```
 
-但用户必须能看到每张图实际使用的 prompt。
+首页生成的图片会立即展示在首页结果区，同时也进入 Studio 历史。主题详情页生成的图片会立即展示在详情页结果区，同时也进入 Studio 历史。
 
 其他可选操作：
 
@@ -677,8 +713,9 @@ Aspect ratio: 16:9
 
 用户可以把生成图片提交到某个主题下。
 
-- 首页生成：默认不关联公开主题，但生成结果可以直接 `Submit to today's theme`。
-- 详情页生成：默认关联当前主题，用户可选择 `Submit to this theme`。
+- 首页生成：默认自由生成，结果可以提交到今日主题或用户选择的主题。
+- 详情页生成：默认关联当前主题，提交弹窗默认勾选当前主题。
+- Studio 生成：默认自由生成；如果用户通过 `Get ideas from a theme` 选择了主题，本次创作上下文会记录该主题，提交弹窗默认勾选该主题。
 
 提交入口应该放在每张生成图片上，而不是只放一个全局提交按钮。
 
@@ -690,55 +727,33 @@ Aspect ratio: 16:9
 
 点击提交后打开轻量提交弹窗。
 
-详情页提交弹窗：
+提交弹窗：
 
 ```text
-Submit to this theme
+Submit image
 
 [Image preview]
 
-Theme:
-The Architecture of Loneliness
+English title *
+[ A lonely figure under a red sun ]
 
-Prompt:
-[current prompt, editable or read-only depending on policy]
+Theme *
+[ Theme selector ]
 
 Creation note optional:
-[ Share your creative thinking behind this image... ]
-
-Note:
-Your image, prompt, and creation note will be public if approved.
+[ Share the idea, mood, or interpretation behind this image... ]
 
 [Submit]
 ```
 
-首页提交弹窗：
+提交弹窗不展示 prompt。Prompt、negative prompt、model、style、aspect ratio、reference image 等生成元数据由系统随图片自动保存。
 
-```text
-Submit to today's theme
+MVP 规则：
 
-[Image preview]
-
-Theme:
-Today's theme
-
-Prompt:
-[current prompt, editable or read-only depending on policy]
-
-Creation note optional:
-[ Share your creative thinking behind this image... ]
-
-Note:
-Your image, prompt, and creation note will be public if approved.
-
-[Submit]
-```
-
-MVP 可以简化：
-
-- 详情页只允许提交到当前主题。
-- 首页只提供 `Submit to today's theme`。
-- 不做复杂多主题投稿。
+- `English title` 必填，用作公开图片标题和 alt 信息。
+- `Theme` 必选。
+- `Creation note` 可选，用来表达创作思路。
+- 如果图片已经提交到某个主题下，不管是否通过，都提示用户换一张图片。
 
 提交规则：
 
@@ -746,7 +761,7 @@ MVP 可以简化：
 - MVP 不提供 `Show prompt` / `Hide prompt` 选择。
 - `Creation note` 是公开的创作思路，用来说明用户如何理解这个主题。
 - `Creation note` 可选，不要求用户填写。
-- 审核通过后，图片、prompt、creation note 一起展示在主题页。
+- 审核通过后，图片、英文标题、creation note 和必要的图片元数据用于主题页展示。
 - Ask assistant 对话和 Improve prompt 中间过程不公开。
 - 中间过程作为系统日志保存，用于排障、审核、分析和复现。
 
@@ -964,10 +979,12 @@ Tags: cinematic, surreal, neon, lonely
 
 MVP 控件：
 
-- Search themes。
-- Sort by `Latest`。
-- Sort by `Popular`。
-- Filter by style tag。
+- 默认展示全部 themes，不选中任何提交状态筛选。
+- 在 `Themes` tab 下展示两个可取消筛选按钮：
+  - `Submitted`：只看当前用户已经提交过图片的 themes。
+  - `Not submitted yet`：只看当前用户还没有提交过图片的 themes。
+- 再次点击已选中的提交状态筛选，取消筛选并回到全部 themes。
+- 提交状态筛选只属于 `Themes` view；切到 `Images` view 时隐藏，不作用于图片流。
 
 后续可加：
 
@@ -1350,18 +1367,16 @@ Featured
 
 ### 提交审核
 
-状态流：
+用户侧状态保持简单：
 
 ```text
-created
-generated
-submitted
-auto_approved
-needs_review
-rejected
-featured
-hidden
+Generated
+Submitted
+Approved
+Rejected
 ```
+
+`Withdrawn` 可以作为内部预留状态，用于特殊情况下下架已通过图片，但第一版不在普通用户界面展示。
 
 自动审核检查：
 
@@ -1577,7 +1592,7 @@ Submitted images from others
 - `My Studio` generator。
 - `Get ideas from a theme` in My Studio。
 - Theme picker opened from `Get ideas from a theme`。
-- My Studio tabs: `All` / `Generated` / `Submitted` / `Under review` / `Published` / `Rejected`。
+- My Studio tabs: `All` / `Submitted`。
 - Featured images。
 - `Like`。
 - `Save`。
