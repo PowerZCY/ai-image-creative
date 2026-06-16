@@ -153,11 +153,6 @@ export interface ImageGenerationProvider {
   createGeneration(input: unknown): Promise<unknown>;
   getGenerationResult(input: unknown): Promise<unknown>;
 }
-
-export interface ImageDerivativeProvider {
-  createVariation(input: unknown): Promise<unknown>;
-  createEdit(input: unknown): Promise<unknown>;
-}
 ```
 
 具体 prompt、参数映射、供应商选择逻辑后续补充。
@@ -180,7 +175,7 @@ OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。�
 2. 遍历每个 `image.image_url.url`。
 3. 如果是 `data:image/...;base64,...`，解析 mime type 和 base64 内容。
 4. 将图片二进制上传到 R2。
-5. 保存 `GeneratedImage.storageKey`、`imageUrl`、`thumbnailUrl`、尺寸、模型和 prompt 摘要。
+5. 保存 `GeneratedImage.sourceImageUrl`，如果结果已迁移到 R2，则同时保存 `cdnImagePrefix`、`storageKey` 和尺寸。
 6. 不把 OpenRouter 返回的完整 base64 或原始响应写入 `GenerationJob`；如需排查，仅写入脱敏后的 `Apilog` 摘要。
 
 一次生成多张图片时，Worker 按 `message.images[]` 创建多条 `GeneratedImage`。不要假设所有模型都支持多图输出，具体数量以模型能力和实际响应为准。
@@ -191,8 +186,10 @@ OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。�
 
 - 业务表全部放在 `monica-ai` schema。
 - 主键使用 `BigInt @id @default(autoincrement())`，延续现有风格。
-- 对外暴露使用 `xxxId String @db.Uuid`，默认 `gen_random_uuid()`。
-- 与现有用户关联统一使用 `userId String @db.Uuid`，引用 `User.userId`。
+- 简单业务数据优先只使用 BigInt 主键，例如 `Theme`、`ThemeSubmission`。
+- 会出现在图片 URL、任务轮询、公开图片分享或外部引用中的数据，可额外保留 `xxxId String @db.Uuid`，例如 `GenerationJob`、`GeneratedImage`、`PublicImage`。
+- 与现有用户关联统一保存 `userId String @db.Uuid` 标量字段；Monica AI 业务表不在 `User` Model 上声明反向 relation，需要用户信息时由 service 显式查询。
+- Monica AI 业务表之间不声明 Prisma relation，只保存 scalar id 和索引；列表页需要扩展展示信息时，由 repository/service 按 id 集合显式查询并组装。来源追溯字段如 `Theme.sourceSubmissionId`、`PublicImage.sourceSubmissionId` 只作为标量查询条件。
 - 状态字段使用 `String @db.VarChar(50)`，不使用 Prisma enum，保持和现有 `User.status`、`Transaction.orderStatus` 一致。
 - 审核详情、生成结果图片元数据等非核心展示字段可使用 `Json?`。
 - 供应商原始 request/response 不进入业务表；如需排查，写入脱敏后的 `Apilog` 或外部日志系统。
@@ -208,7 +205,6 @@ OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。�
 - `GenerationJob`
 - `GeneratedImage`
 - `ImageSubmission`
-- `ReviewRecord`
 - `PublicImage`
 - `ImageLike`
 - `ImageSave`
@@ -218,7 +214,7 @@ OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。�
 - `CreditLedger`：使用现有 `CreditAuditLog`。
 - `Order`：使用现有 `Transaction`。
 - `Author`：使用现有 `User`。
-- `ImageEdit`：不单独建表。图片编辑/变体先作为一种 `GenerationJob.generationType`，通过 `sourceImageId` 追溯来源图。
+- `ImageEdit` / `ImageVariation`：当前版本不设计 AI 图片编辑或变体任务；后续需要时重新设计并新建表。
 
 ### 4.3 Model 建立理由
 
@@ -226,13 +222,12 @@ OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。�
 
 | Model | 建立理由 |
 | --- | --- |
-| `ThemeSubmission` | 统一承接普通用户和管理员提交主题想法，保存草稿、原始提交、审核状态、编辑后版本、来源类型、采纳结果和积分奖励依据 |
-| `Theme` | 表示管理员采纳后的正式主题，用于今日主题、主题详情、主题创作上下文、快捷提示词、Theme Gallery 和投稿目标；普通用户不能直接创建 |
+| `ThemeSubmission` | 承接用户提交的主题文本想法，保存原始标题、详情、提交理由、审核状态、用户侧 Notes、采纳结果和奖励发放依据 |
+| `Theme` | 表示管理员创建或采纳后的正式主题，独立保存前台展示、SEO、生成器灵感、发布日期、精选图片和统计字段；普通用户不能直接创建 |
 | `ReferenceImage` | 保存用户上传的参考图输入，负责归属、安全审核和被生成任务引用 |
-| `GenerationJob` | 记录图片生成/变体/编辑任务，保存最终生成参数、异步状态、预计/实际消耗、供应商摘要、失败原因和结果回写 |
-| `GeneratedImage` | 保存 AI 生成出的用户私有图片资产，是 My Studio、下载、投稿和后续编辑/变体的核心 |
-| `ImageSubmission` | 表示用户将私有生成图提交到某个主题的审核记录，支撑 Under review、Published、Rejected |
-| `ReviewRecord` | 记录自动审核和人工审核历史，支撑安全追溯、拒绝原因和管理端审计 |
+| `GenerationJob` | 记录图片生成任务，保存最终生成参数、异步状态、预计/实际消耗、失败原因和结果回写；Provider/QStash/锁细节不进入业务表 |
+| `GeneratedImage` | 保存 AI 生成出的用户私有图片资产，是 My Studio、下载和投稿的核心 |
+| `ImageSubmission` | 表示用户将私有生成图提交到某个主题的候选作品，保存公开英文标题、创作说明、当前审核状态和 `reviewFlow` 审批流节点，支撑 Submitted、Approved、Rejected |
 | `PublicImage` | 表示已发布图片的公开展示投影，单独承载点赞数、收藏数、精选分、公开状态等展示层数据 |
 | `ImageLike` | 记录用户点赞关系，支持取消点赞、当前用户 liked 状态和排序统计 |
 | `ImageSave` | 记录用户收藏关系，支持取消收藏、当前用户 saved 状态和个人收藏扩展 |
@@ -248,7 +243,7 @@ OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。�
 | Model | 是否存储图片资产 | 来源 | 主要用途 |
 | --- | --- | --- | --- |
 | `ReferenceImage` | 是 | 用户本地上传 | 作为生成参考图，归属于用户和创作会话，需要安全审核 |
-| `GeneratedImage` | 是 | AI 生成结果 | 用户私有图片资产，服务 My Studio、下载、投稿、后续编辑/变体 |
+| `GeneratedImage` | 是 | AI 生成结果 | 用户私有图片资产，服务 My Studio、下载和投稿 |
 | `PublicImage` | 否，不重复存图 | `GeneratedImage` 投稿审核通过后创建 | 公开展示投影，服务 Explore、Theme Gallery、点赞、收藏、精选排序 |
 
 </CheetTable>
@@ -257,9 +252,9 @@ OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。�
 
 - `ReferenceImage` 是输入素材，不是作品，不进入 Studio Gallery，也不能直接投稿。
 - `GeneratedImage` 是生成结果，是 Studio 的核心图片资产。
-- `PublicImage` 不是另一份图片文件，它引用 `GeneratedImage.imageId`，只保存公开展示层需要的数据，如 `likeCount`、`saveCount`、`featuredScore`、`promptPublic`。
+- `PublicImage` 不是另一份图片文件，它引用 `GeneratedImage.imageId`，只保存公开展示层需要的数据，如 `likeCount`、`saveCount`、`viewCount`、`uniqueViewCount`、`featuredScore`、`promptPublic`。
 - 用户自己本地上传的图片如果只是参考图，进入 `ReferenceImage`。
-- 后续如果支持“用户上传自己的作品参与投稿”，再单独讨论是否新增 `UploadedImage` 或让 `GeneratedImage` 扩展 `sourceType = uploaded`。当前产品原型是 AI 图片创作，投稿对象默认来自 AI 生成结果。
+- 后续如果支持“用户上传自己的作品参与投稿”，再单独讨论是否新增 `UploadedImage`。当前产品原型是 AI 图片创作，投稿对象默认来自 AI 生成结果。
 
 ### 4.5 主题类 Model 边界
 
@@ -269,356 +264,97 @@ OpenRouter 图像生成输出按官方文档应按 `message.images[]` 处理。�
 
 | Model | 谁创建 | 是否公开展示 | 主要用途 |
 | --- | --- | --- | --- |
-| `ThemeSubmission` | 普通用户或管理员 | 否，仅提交人和管理员可见 | 主题想法、草稿、审核、重复判断、采纳来源和积分奖励依据 |
-| `Theme` | 管理员采纳后创建或关联 | 是，按状态展示 | 今日主题、历史主题、创作上下文、快捷提示词、主题 Gallery 和作品投稿目标 |
+| `ThemeSubmission` | 普通用户提交 | 否，仅提交人和管理员可见 | 用户原始主题想法、审核结果、用户侧 Notes、采纳来源和积分奖励依据 |
+| `Theme` | 管理员直接创建，或接受用户提交后创建 | 是，按发布日期和状态展示 | 今日主题、历史主题、创作上下文、生成器灵感、主题 Gallery、SEO 和作品投稿目标 |
 
 </CheetTable>
 
 关键规则：
 
 - 普通用户不能直接创建 `Theme`。
-- 普通用户只能创建、编辑和提交自己的 `ThemeSubmission`。
-- `ThemeSubmission` 提交前可编辑；提交后普通用户不可再修改。
-- 管理员也通过 `ThemeSubmission` 创建主题想法，后端根据权限写入 `sourceType = admin`。
-- 管理员可以审核所有 `ThemeSubmission`，包括自己提交的提案。
-- 只有管理员采纳 `ThemeSubmission` 后，才创建或关联正式 `Theme`，并回写 `ThemeSubmission.acceptedThemeId`。
-- `ThemeSubmission.sourceType` 使用简单来源类型，如 `user`、`admin`、`system`、`other`，不保存复杂来源对象。
-- My Studio 图片卡片上的“从图片创建主题提案”只创建 `ThemeSubmission`，并用 `triggerType` 或 `sourceType` 记录粗粒度来源，不会创建 `ImageSubmission`，也不会创建正式 `Theme`。
-- 正式 `Theme.promptTexts` 保存可供用户快捷使用的提示词文本数组，Assistant 获取主题灵感、改写 prompt 或聊天时可把这些文本作为主题上下文的一部分。
+- 普通用户提交主题时只写入 `ThemeSubmission.title`、`details`、`submitReason`。
+- `ThemeSubmission` 不保存正式主题的 SEO、tags、generator ideas、featured images，也不保存管理员编辑后的正式标题/简介/说明。
+- 管理员可以审核所有 `ThemeSubmission`，接受后创建一条独立的正式 `Theme`，由 `Theme.sourceSubmissionId` 指向原提交。
+- 管理员也可以在 `Manage themes` 直接创建 `Theme`，不需要先伪造一条用户提交。
+- 正式 `Theme` 的字段可由管理员基于提交内容初始化，但后续允许独立修改，不和 `ThemeSubmission` 字段耦合。
+- `Theme.sourceSubmissionId` 只用于归因和奖励审计，正式主题展示一律读取 `Theme` 自己的字段。
+- 正式 `Theme.generatorIdeas` 保存主题页和 Assistant 可直接使用的预设灵感；`avoidCliches` 保存该主题额外规避项。
 
-### 4.6 Prisma Schema 草案
+### 4.6 当前 Schema 真源
 
-以下为建议追加到 `prisma/schema.prisma` 的业务 Model 草案。字段不是最终迁移脚本，但已经按当前项目 Prisma 风格设计。
+当前业务表结构以 `prisma/schema.prisma` 和 `database/create-monica-ai.sql` 为准。本文只保留字段边界，避免技术方案和可执行 schema 分叉。
 
-```prisma
-model ThemeSubmission {
-  id              BigInt    @id @default(autoincrement())
-  themeSubmissionId String  @unique @default(dbgenerated("gen_random_uuid()")) @map("theme_submission_id") @db.Uuid
-  userId          String    @map("user_id") @db.Uuid
-  status          String    @default("draft") @db.VarChar(50)
-  rawTitle        String    @map("raw_title") @db.VarChar(255)
-  rawDescription  String?   @map("raw_description") @db.Text
-  triggerType     String?   @map("trigger_type") @db.VarChar(100)
-  editedTitle     String?   @map("edited_title") @db.VarChar(255)
-  editedBrief     String?   @map("edited_brief") @db.Text
-  editedDescription String? @map("edited_description") @db.Text
-  acceptedThemeId String?   @map("accepted_theme_id") @db.Uuid
-  reviewedByUserId String?  @map("reviewed_by_user_id") @db.Uuid
-  reviewReason    String?   @map("review_reason") @db.Text
-  sourceType      String    @default("user") @map("source_type") @db.VarChar(50)
-  submittedAt     DateTime? @map("submitted_at") @db.Timestamptz(6)
-  reviewedAt      DateTime? @map("reviewed_at") @db.Timestamptz(6)
-  selectedAt      DateTime? @map("selected_at") @db.Timestamptz(6)
-  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted         Int       @default(0)
+<CheetTable title="关键字段边界">
 
-  user          User   @relation("ThemeSubmissionUser", fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  reviewedBy    User?  @relation("ThemeSubmissionReviewer", fields: [reviewedByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  acceptedTheme Theme? @relation("AcceptedThemeSubmission", fields: [acceptedThemeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+| Model | 关键字段 | 边界说明 |
+| --- | --- | --- |
+| `ThemeSubmission` | `title`、`details`、`submitReason`、`status`、`reviewFlow` | 只保存用户提交文本、当前审核状态和审批流节点，不保存正式主题运营字段 |
+| `Theme` | `title`、`brief`、`themeNote`、`seoTitle`、`seoMetaDescription`、`seoKeywords`、`generatorIdeas`、`avoidCliches`、`featuredImageIds`、`sourceSubmissionId` | 正式主题完整数据表，管理员可独立编辑，不和提交字段耦合 |
+| `ReferenceImage` | `referenceId`、`userId`、`cdnImagePrefix`、`storageKey`、`mimeType`、`width`、`height`、`safetyStatus` | 用户本地上传的参考图，只保存 R2 定位，不保存最终展示 URL |
+| `GeneratedImage` | `imageId`、`jobId`、`providerImageIndex`、`userId`、`imageType`、`status`、`isLocked`、`sourceImageUrl`、`cdnImagePrefix`、`storageKey`、`width`、`height`、`safetyStatus` | AI 生成结果资产；优先使用 AI 原始 URL，迁移 R2 后按 CDN base + prefix + key 拼接；`isLocked` 冗余保存用户是否可操作 |
+| `ImageSubmission` | `userId`、`imageId`、`themeId`、`title`、`creationNote`、`promptSnapshot`、`status`、`reviewFlow` | 单张图片投稿候选表；prompt 只作为后台元数据快照，不在提交弹窗中展示；审核节点写入 `reviewFlow` |
+| `PublicImage` | `sourceSubmissionId`、`imageId`、`themeId`、`title`、`altText`、`creationNote`、`promptPublic`、`featuredScore`、`likeCount`、`saveCount`、`viewCount`、`uniqueViewCount` | 审核通过后的公开展示投影，不重复存储图片文件，来源投稿通过 `sourceSubmissionId` 追溯；计数字段由 Redis 实时计数后异步落库 |
 
-  @@index([userId, submittedAt], map: "idx_theme_submissions_user_submitted_at")
-  @@index([status, submittedAt], map: "idx_theme_submissions_status_submitted_at")
-  @@index([acceptedThemeId], map: "idx_theme_submissions_accepted_theme_id")
-  @@map("theme_submissions")
-  @@schema("monica_ai")
-}
+</CheetTable>
 
-model Theme {
-  id              BigInt    @id @default(autoincrement())
-  themeId         String    @unique @default(dbgenerated("gen_random_uuid()")) @map("theme_id") @db.Uuid
-  title           String    @db.VarChar(255)
-  brief           String?   @db.Text
-  description     String?   @db.Text
-  status          String    @default("draft") @db.VarChar(50)
-  publishDate     DateTime? @map("publish_date") @db.Date
-  coverImageUrl   String?   @map("cover_image_url") @db.Text
-  promptTexts     String[]  @default([]) @map("prompt_texts")
-  tags            Json?
-  stats           Json?
-  sourceType      String?   @map("source_type") @db.VarChar(50)
-  sortOrder       Int       @default(0) @map("sort_order")
-  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted         Int       @default(0)
+`ThemeSubmission.reviewFlow` 是面向前端展示的审批流节点数组，不替代 `User` 归属字段，也不承担强审计职责。MVP 建议结构：
 
-  generationJobs   GenerationJob[]
-  generatedImages  GeneratedImage[]
-  submissions      ImageSubmission[]
-  publicImages     PublicImage[]
-  acceptedSubmissions ThemeSubmission[] @relation("AcceptedThemeSubmission")
-
-  @@index([status, publishDate], map: "idx_themes_status_publish_date")
-  @@index([publishDate], map: "idx_themes_publish_date")
-  @@map("themes")
-  @@schema("monica_ai")
-}
-
-model ReferenceImage {
-  id             BigInt    @id @default(autoincrement())
-  referenceId    String    @unique @default(dbgenerated("gen_random_uuid()")) @map("reference_id") @db.Uuid
-  userId         String?   @map("user_id") @db.Uuid
-  storageKey     String    @map("storage_key") @db.Text
-  url            String?   @db.Text
-  mimeType       String?   @map("mime_type") @db.VarChar(100)
-  width          Int?
-  height         Int?
-  status         String    @default("uploaded") @db.VarChar(50)
-  safetyStatus   String    @default("pending") @map("safety_status") @db.VarChar(50)
-  safetyResult   Json?     @map("safety_result")
-  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  deleted        Int       @default(0)
-
-  user    User?            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  generationJobs GenerationJob[]
-
-  @@index([userId, createdAt], map: "idx_reference_images_user_created_at")
-  @@map("reference_images")
-  @@schema("monica_ai")
-}
-
-model GenerationJob {
-  id                BigInt    @id @default(autoincrement())
-  jobId             String    @unique @default(dbgenerated("gen_random_uuid()")) @map("job_id") @db.Uuid
-  userId            String    @map("user_id") @db.Uuid
-  themeId           String?   @map("theme_id") @db.Uuid
-  referenceId       String?   @map("reference_id") @db.Uuid
-  sourceImageId     String?   @map("source_image_id") @db.Uuid
-  status            String    @default("pending") @db.VarChar(50)
-  sourcePage        String?   @map("source_page") @db.VarChar(50)
-  generationType    String    @default("text_to_image") @map("generation_type") @db.VarChar(50)
-  prompt            String    @db.Text
-  negativePrompt    String?   @map("negative_prompt") @db.Text
-  editInstruction   String?   @map("edit_instruction") @db.Text
-  model             String    @db.VarChar(100)
-  style             String?   @db.VarChar(100)
-  ratio             String?   @db.VarChar(50)
-  imageCount        Int       @default(1) @map("image_count")
-  estimatedCredits  Int       @default(0) @map("estimated_credits")
-  chargedCredits    Int       @default(0) @map("charged_credits")
-  provider          String?   @db.VarChar(100)
-  providerJobId     String?   @map("provider_job_id") @db.VarChar(255)
-  safetyStatus      String    @default("pending") @map("safety_status") @db.VarChar(50)
-  safetyResult      Json?     @map("safety_result")
-  failureCode       String?   @map("failure_code") @db.VarChar(100)
-  failureMessage    String?   @map("failure_message") @db.Text
-  startedAt         DateTime? @map("started_at") @db.Timestamptz(6)
-  completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
-  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted           Int       @default(0)
-
-  user           User             @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  theme          Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  referenceImage ReferenceImage?  @relation(fields: [referenceId], references: [referenceId], onDelete: NoAction, onUpdate: NoAction)
-  sourceImage    GeneratedImage?  @relation("GenerationSourceImage", fields: [sourceImageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
-  images         GeneratedImage[]
-
-  @@index([userId, createdAt], map: "idx_generation_jobs_user_created_at")
-  @@index([status, createdAt], map: "idx_generation_jobs_status_created_at")
-  @@index([themeId], map: "idx_generation_jobs_theme_id")
-  @@index([sourceImageId], map: "idx_generation_jobs_source_image_id")
-  @@index([providerJobId], map: "idx_generation_jobs_provider_job_id")
-  @@map("generation_jobs")
-  @@schema("monica_ai")
-}
-
-model GeneratedImage {
-  id              BigInt    @id @default(autoincrement())
-  imageId         String    @unique @default(dbgenerated("gen_random_uuid()")) @map("image_id") @db.Uuid
-  jobId           String?   @map("job_id") @db.Uuid
-  userId          String    @map("user_id") @db.Uuid
-  themeId         String?   @map("theme_id") @db.Uuid
-  status          String    @default("generated") @db.VarChar(50)
-  storageKey      String    @map("storage_key") @db.Text
-  imageUrl        String?   @map("image_url") @db.Text
-  thumbnailUrl    String?   @map("thumbnail_url") @db.Text
-  width           Int?
-  height          Int?
-  promptUsed      String?   @map("prompt_used") @db.Text
-  model           String?   @db.VarChar(100)
-  style           String?   @db.VarChar(100)
-  ratio           String?   @db.VarChar(50)
-  safetyStatus    String    @default("pending") @map("safety_status") @db.VarChar(50)
-  safetyResult    Json?     @map("safety_result")
-  metadata        Json?
-  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted         Int       @default(0)
-
-  job          GenerationJob?    @relation(fields: [jobId], references: [jobId], onDelete: NoAction, onUpdate: NoAction)
-  user         User              @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  theme        Theme?            @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  usedAsSourceJobs GenerationJob[] @relation("GenerationSourceImage")
-  submissions  ImageSubmission[]
-  publicImage  PublicImage?
-
-  @@index([userId, createdAt], map: "idx_generated_images_user_created_at")
-  @@index([themeId], map: "idx_generated_images_theme_id")
-  @@index([status, createdAt], map: "idx_generated_images_status_created_at")
-  @@map("generated_images")
-  @@schema("monica_ai")
-}
-
-model ImageSubmission {
-  id                 BigInt    @id @default(autoincrement())
-  submissionId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("submission_id") @db.Uuid
-  userId             String    @map("user_id") @db.Uuid
-  imageId            String    @map("image_id") @db.Uuid
-  themeId            String    @map("theme_id") @db.Uuid
-  status             String    @default("under_review") @db.VarChar(50)
-  promptSnapshot     String?   @map("prompt_snapshot") @db.Text
-  creatorNote        String?   @map("creator_note") @db.Text
-  safetyStatus       String    @default("pending") @map("safety_status") @db.VarChar(50)
-  relevanceStatus    String    @default("pending") @map("relevance_status") @db.VarChar(50)
-  reviewSummary      String?   @map("review_summary") @db.Text
-  submittedAt        DateTime? @default(now()) @map("submitted_at") @db.Timestamptz(6)
-  reviewedAt         DateTime? @map("reviewed_at") @db.Timestamptz(6)
-  publishedAt        DateTime? @map("published_at") @db.Timestamptz(6)
-  createdAt          DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted            Int       @default(0)
-
-  user    User           @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  image   GeneratedImage @relation(fields: [imageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
-  theme   Theme          @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  reviews ReviewRecord[]
-  publicImage PublicImage?
-
-  @@index([userId, submittedAt], map: "idx_image_submissions_user_submitted_at")
-  @@index([themeId, status], map: "idx_image_submissions_theme_status")
-  @@index([imageId], map: "idx_image_submissions_image_id")
-  @@map("image_submissions")
-  @@schema("monica_ai")
-}
-
-model ReviewRecord {
-  id             BigInt    @id @default(autoincrement())
-  reviewId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("review_id") @db.Uuid
-  submissionId   String?   @map("submission_id") @db.Uuid
-  targetType     String    @map("target_type") @db.VarChar(50)
-  targetId       String    @map("target_id") @db.Uuid
-  reviewerUserId String?   @map("reviewer_user_id") @db.Uuid
-  reviewType     String    @map("review_type") @db.VarChar(50)
-  result         String    @db.VarChar(50)
-  reason         String?   @db.Text
-  detail         Json?
-  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  deleted        Int       @default(0)
-
-  submission ImageSubmission? @relation(fields: [submissionId], references: [submissionId], onDelete: NoAction, onUpdate: NoAction)
-  reviewer   User?            @relation(fields: [reviewerUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-
-  @@index([targetType, targetId], map: "idx_review_records_target")
-  @@index([submissionId], map: "idx_review_records_submission_id")
-  @@map("review_records")
-  @@schema("monica_ai")
-}
-
-model PublicImage {
-  id             BigInt    @id @default(autoincrement())
-  publicImageId  String    @unique @default(dbgenerated("gen_random_uuid()")) @map("public_image_id") @db.Uuid
-  imageId        String    @unique @map("image_id") @db.Uuid
-  submissionId   String?   @unique @map("submission_id") @db.Uuid
-  userId         String    @map("user_id") @db.Uuid
-  themeId        String?   @map("theme_id") @db.Uuid
-  status         String    @default("published") @db.VarChar(50)
-  title          String?   @db.VarChar(255)
-  promptPublic   Boolean   @default(true) @map("prompt_public")
-  tags           Json?
-  likeCount      Int       @default(0) @map("like_count")
-  saveCount      Int       @default(0) @map("save_count")
-  viewCount      Int       @default(0) @map("view_count")
-  featuredScore  Int       @default(0) @map("featured_score")
-  publishedAt    DateTime? @default(now()) @map("published_at") @db.Timestamptz(6)
-  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted        Int       @default(0)
-
-  image      GeneratedImage   @relation(fields: [imageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
-  submission ImageSubmission? @relation(fields: [submissionId], references: [submissionId], onDelete: NoAction, onUpdate: NoAction)
-  user       User             @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  theme      Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  likes      ImageLike[]
-  saves      ImageSave[]
-
-  @@index([status, publishedAt], map: "idx_public_images_status_published_at")
-  @@index([themeId, featuredScore], map: "idx_public_images_theme_featured_score")
-  @@index([likeCount], map: "idx_public_images_like_count")
-  @@map("public_images")
-  @@schema("monica_ai")
-}
-
-model ImageLike {
-  id            BigInt    @id @default(autoincrement())
-  publicImageId String    @map("public_image_id") @db.Uuid
-  userId        String    @map("user_id") @db.Uuid
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  deleted       Int       @default(0)
-
-  publicImage PublicImage @relation(fields: [publicImageId], references: [publicImageId], onDelete: NoAction, onUpdate: NoAction)
-  user        User        @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-
-  @@unique([publicImageId, userId], map: "image_likes_public_image_user_key")
-  @@index([userId, createdAt], map: "idx_image_likes_user_created_at")
-  @@map("image_likes")
-  @@schema("monica_ai")
-}
-
-model ImageSave {
-  id            BigInt    @id @default(autoincrement())
-  publicImageId String    @map("public_image_id") @db.Uuid
-  userId        String    @map("user_id") @db.Uuid
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  deleted       Int       @default(0)
-
-  publicImage PublicImage @relation(fields: [publicImageId], references: [publicImageId], onDelete: NoAction, onUpdate: NoAction)
-  user        User        @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-
-  @@unique([publicImageId, userId], map: "image_saves_public_image_user_key")
-  @@index([userId, createdAt], map: "idx_image_saves_user_created_at")
-  @@map("image_saves")
-  @@schema("monica_ai")
-}
+```json
+[
+  {
+    "status": "under_review",
+    "action": "submitted",
+    "actorType": "user",
+    "actorUserId": "user-uuid",
+    "actorName": "Alice",
+    "actorTitle": "Creator",
+    "message": "Submitted theme idea.",
+    "createdAt": "2026-06-16T10:00:00Z"
+  },
+  {
+    "status": "accepted",
+    "action": "accepted_as_theme",
+    "actorType": "admin",
+    "actorUserId": "admin-uuid",
+    "actorName": "Monica Admin",
+    "actorTitle": "Theme reviewer",
+    "message": "Accepted as a daily theme. +300 credits granted.",
+    "themeId": 123,
+    "creditAuditLogId": 456,
+    "createdAt": "2026-06-17T08:00:00Z"
+  }
+]
 ```
-
-实际落地时需要在已有 `User` Model 中补充反向 relation 字段，或者将上面的 relation 简化为无反向关系的外键字段。推荐补充反向 relation，便于 Prisma 查询。
 
 ## 5. 状态机
 
-### 5.1 Theme.status
+### 5.1 Theme 发布与可见性
 
-- `draft`：草稿。
-- `scheduled`：已排期。
-- `published`：已发布。
-- `archived`：归档。
-- `hidden`：隐藏。
+正式主题不使用 `status` 字段。
+
+- 可见性由 `deleted = 0` 控制。
+- 是否排期由 `publishDate` 是否为空控制。
+- 是否今日主题或历史主题由 `publishDate` 和当前日期判断。
 
 今日主题查询规则：
 
-- `status = published`
-- `publishDate <= today`
+- `deleted = 0`
+- `publishDate = today`
 - 取 `publishDate` 最新的一条。
 
 ### 5.2 ThemeSubmission.status
 
-- `draft`：用户正在编辑，尚未提交审核。
 - `under_review`：已提交，等待审核。
-- `accepted_to_pool`：审核通过，进入候选主题池。
-- `duplicate`：与已有主题或候选题重复。
-- `rejected`：审核拒绝。
-- `selected`：被选为正式主题。
-- `published`：关联的正式主题已发布。
+- `accepted`：管理员已接受为正式主题，并创建或关联 `Theme`。
+- `not_selected`：未被采纳，可覆盖重复、质量不足、不安全或暂不适合等原因。
 
 主题来源统一规则：
 
-- 普通用户创建主题想法时先创建 `ThemeSubmission(status=draft)`。
-- 普通用户提交审核后，`ThemeSubmission.status` 从 `draft` 变为 `under_review`，提交后普通用户不可再修改。
-- 管理员创建主题也先创建 `ThemeSubmission`，但 `sourceType = admin`，审核路径可直接进入 `accepted_to_pool` 或 `selected`。
-- 管理员可以审核所有主题提案，包括自己提交的提案。
-- 当候选题被采纳为每日主题时，创建或关联 `Theme`，并回写 `ThemeSubmission.acceptedThemeId`。
+- 普通用户提交即创建 `ThemeSubmission(status=under_review)`，用户侧不需要草稿状态。
+- 用户侧只展示 `Under review`、`Accepted`、`Not selected`。
+- 管理员接受提交时创建正式 `Theme(sourceSubmissionId=themeSubmission.id)`，更新 `ThemeSubmission.status=accepted`，并把审核、奖励和主题关联节点写入 `reviewFlow`。
+- 管理员直接创建主题时写入 `Theme`，不需要创建 `ThemeSubmission`。
 - 普通用户不能直接创建 `Theme`；图片投稿不能自动创建 `Theme`。
-- 从 Studio 图片创建主题提案时，`ThemeSubmission.triggerType` 可记录 `from_image` 或 `from_studio`，图片不进入投稿审核。
 - 积分奖励依据来自 `ThemeSubmission.status` 的变化，不新增积分模型，仍写入现有 `CreditAuditLog`。
 
 ### 5.3 GenerationJob.status
@@ -634,26 +370,28 @@ model ImageSave {
 
 `GenerationJob.generationType`：
 
-- `text_to_image`：普通文生图。
-- `image_variation`：基于已有图片生成变体，使用 `sourceImageId` 关联来源图。
-- `image_edit`：基于已有图片和编辑指令生成新图，使用 `sourceImageId` 和 `editInstruction`。
+- `text_to_image`：当前版本的图片生成任务。
+
+`generationType` 保留为任务类型扩展口，但当前不承载图片编辑、变体或来源图片设计。后续 AI 图片编辑需要重新设计任务表或独立业务表。
 
 ### 5.5 GeneratedImage.status
 
 - `generated`：已生成，未投稿。
-- `submitted`：已投稿。
-- `under_review`：审核中。
-- `published`：已公开。
+- `submitted`：已投稿，等待审核，用户不可删除或再次投稿。
+- `approved`：投稿审核通过，并已创建公开投影，用户不可直接删除，只能申请撤销公开。
 - `rejected`：投稿被拒。
-- `hidden`：隐藏。
+- `withdrawal_requested`：用户已申请撤销公开，等待管理员审核。
+- `withdrawn`：管理员同意撤销，公开记录已下架。
+- `hidden`：系统或管理员隐藏，用户不可操作。
+
+`GeneratedImage.isLocked` 是状态判断的冗余字段，用于用户侧和服务端快速判断是否允许删除、再次投稿等操作。只有 `generated`、`rejected` 对应 `isLocked=false`；其他状态都对应 `isLocked=true`。
 
 ### 5.6 ImageSubmission.status
 
-- `under_review`：审核中。
+- `submitted`：已提交，等待人工审核。
 - `needs_review`：自动审核命中，需要人工复核。
-- `published`：审核通过并发布。
+- `approved`：审核通过，并创建 `PublicImage`。
 - `rejected`：审核拒绝。
-- `withdrawn`：用户撤回。
 
 ### 5.7 safetyStatus
 
@@ -669,31 +407,27 @@ model ImageSave {
 
 职责：
 
-- 创建、编辑和提交用户或管理员的主题想法。
-- 自动审核主题质量、安全性和重复度。
-- 支持人工审核、编辑后通过、标记重复、拒绝。
-- 将通过审核的主题想法放入候选池。
-- 将候选题采纳为正式 `Theme`。
+- 创建用户提交的主题想法。
+- 支持人工接受、编辑后接受或拒绝。
+- 接受用户提交后创建正式 `Theme`，并保留提交记录用于归因。
 - 触发主题提交相关积分奖励。
 
 关键方法：
 
 ```ts
-createThemeSubmissionDraft(userId, input): Promise<ThemeSubmission>
-updateThemeSubmissionDraft(userId, submissionId, input): Promise<ThemeSubmission>
-submitThemeSubmission(userId, submissionId): Promise<ThemeSubmission>
-reviewThemeSubmission(reviewerUserId, input): Promise<ThemeSubmission>
-acceptToPool(submissionId, reviewerUserId, input): Promise<ThemeSubmission>
-selectAsTheme(submissionId, reviewerUserId, input): Promise<Theme>
+submitThemeIdea(userId, input): Promise<ThemeSubmission>
 listMyThemeSubmissions(userId, input): Promise<PagedResult<ThemeSubmission>>
+rejectThemeSubmission(reviewerUserId, input): Promise<ThemeSubmission>
+acceptThemeSubmission(reviewerUserId, input): Promise<Theme>
+createManagedTheme(adminUserId, input): Promise<Theme>
 ```
 
 编辑规则：
 
-- `draft` 状态下，提交人可以编辑 `rawTitle`、`rawDescription` 和 `triggerType`。
-- `under_review` 及之后状态，普通用户不可修改。
-- 管理员审核时可写入 `editedTitle`、`editedBrief`、`editedDescription` 和 `reviewReason`。
-- 采纳为正式主题时，优先使用管理员编辑后的字段创建 `Theme`。
+- 用户提交后不可编辑，只能查看状态和 Notes。
+- 管理员不修改 `ThemeSubmission.title/details/submitReason`，这些字段作为用户原始输入保存。
+- 管理员接受时可以用提交内容初始化 `Theme.title/brief/themeNote`，但正式主题字段独立保存和编辑。
+- 拒绝时更新 `ThemeSubmission.status=not_selected`，并把拒绝节点写入 `reviewFlow`。
 
 ### 6.2 ThemeService
 
@@ -710,8 +444,8 @@ listMyThemeSubmissions(userId, input): Promise<PagedResult<ThemeSubmission>>
 ```ts
 getTodayTheme(): Promise<Theme | null>
 listThemes(input): Promise<PagedResult<Theme>>
-getThemeDetail(themeId: string): Promise<ThemeDetail>
-listThemeImages(themeId: string, input): Promise<PagedResult<PublicImage>>
+getThemeDetail(themeId: number): Promise<ThemeDetail>
+listThemeImages(themeId: number, input): Promise<PagedResult<PublicImage>>
 ```
 
 ### 6.3 AssistantService
@@ -750,8 +484,7 @@ ask(userId, input): Promise<AskAssistantResult>
 - 将 OpenRouter 返回的图片结果落到 R2。
 - 生成成功时记录实际消耗。
 - 生成失败、无结果、被拦截或超时时触发积分返还。
-- 通过 `generationType` 区分文生图、变体、编辑。
-- 通过 `sourceImageId` 记录变体/编辑的来源图片。
+- 当前 `generationType = text_to_image`；字段保留为后续生成类任务扩展口。
 
 关键方法：
 
@@ -782,7 +515,6 @@ syncGenerationJob(jobId): Promise<void>
 - 上传 reference image。
 - 调用 R2 Explorer SDK 保存 reference image 和 generated image。
 - 为 AI 调用生成可访问的 public/signed view URL。
-- 为 variations/edit 创建对应的 `GenerationJob`。
 
 关键方法：
 
@@ -792,17 +524,17 @@ getMyImage(userId, imageId)
 uploadReferenceImage(userId, input)
 createProviderAccessibleImageUrl(referenceId): Promise<string>
 storeGeneratedImageFromProviderResult(input): Promise<GeneratedImage>
-createVariation(userId, imageId, input)
-createEdit(userId, imageId, input)
 ```
 
 R2 规则：
 
+- `ReferenceImage` 只保存用户本地上传的参考图。
+- `ReferenceImage.cdnImagePrefix` 保存 CDN 路径前缀或业务目录。
 - `ReferenceImage.storageKey` 保存 R2 object key。
-- `ReferenceImage.url` 可保存站内展示 URL 或最近一次 public view URL，但 AI 调用前应重新生成 signed/public URL。
-- `GeneratedImage.storageKey` 保存最终生成图的 R2 object key。
-- `GeneratedImage.imageUrl` 保存前端可展示的 R2 view URL。
-- `GeneratedImage.thumbnailUrl` 可在 MVP 先复用 `imageUrl`，后续再生成缩略图。
+- `ReferenceImage` 不保存最终展示 URL；业务代码按 `IMAGE_CDN_BASE_URL + cdnImagePrefix + storageKey` 生成展示 URL，AI 调用前按需生成 Provider 可访问 URL。
+- `GeneratedImage.sourceImageUrl` 保存 AI Provider 返回的原始图片 URL；如果该字段不为空，前端和服务端优先直接使用它。
+- `GeneratedImage.cdnImagePrefix` 和 `GeneratedImage.storageKey` 保存生成图迁移到 R2 后的位置；当 `sourceImageUrl` 为空时，业务代码按 `IMAGE_CDN_BASE_URL + cdnImagePrefix + storageKey` 生成展示 URL。
+- `GeneratedImage` 不保存缩略图 URL；如后续需要缩略图，单独设计派生资产或缓存策略。
 - `GenerationJob` 不保存供应商原始响应；必要排查信息写入脱敏后的 `Apilog` 摘要。
 
 ### 6.6 SubmissionService
@@ -814,6 +546,7 @@ R2 规则：
 - 自动审核。
 - 人工审核。
 - 发布 PublicImage。
+- 追加 `ImageSubmission.reviewFlow` 审核节点。
 - 更新 GeneratedImage 状态。
 
 关键方法：
@@ -821,8 +554,8 @@ R2 规则：
 ```ts
 createSubmission(userId, input): Promise<ImageSubmission>
 reviewSubmission(adminUserId, input): Promise<ImageSubmission>
-publishSubmission(submissionId): Promise<PublicImage>
-rejectSubmission(submissionId, reason): Promise<ImageSubmission>
+publishSubmission(imageSubmissionId: number): Promise<PublicImage>
+rejectSubmission(imageSubmissionId: number, reason): Promise<ImageSubmission>
 ```
 
 ### 6.7 ExploreService
@@ -847,7 +580,7 @@ Like / Save 要求：
 
 - 登录后才能操作。
 - 使用唯一键避免重复。
-- 软删除或恢复时同步 `likeCount` / `saveCount`。
+- 软删除或恢复时同步用户关系状态，并通过 Redis/异步任务刷新 `likeCount` / `saveCount`。
 
 ### 6.8 StudioService
 
@@ -874,14 +607,14 @@ getMyImagePrompt(userId, imageId)
 - MVP 阶段做轻量规则和 Provider 拒绝结果归一化。
 - 后续可替换为自研 NSFW 审查、第三方审核、人工复核或 OpenAI moderation。
 - 不把审核状态机和积分状态机塞进 `GenerationJob`。
-- 必要时写入 `ReviewRecord`，用于审计和排查。
+- 投稿相关审核结果写入 `ImageSubmission.reviewFlow`，用于用户侧状态展示和管理端排查。
 
 MVP 阶段不实现复杂自研 NSFW 分类器。当前默认策略是：
 
 - Prompt：校验空内容、长度、明显违规关键词等基础规则。
 - Reference image：校验文件类型、大小、归属、存储可访问性；图片内容审核入口保留，默认可放行。
 - Provider result：默认信任 OpenRouter / 下游模型的安全策略；如果 Provider 明确因安全策略拒绝，归一化为 `blocked`。
-- Submission：投稿进入公开展示前仍保留审核记录，MVP 可先走轻量自动审核或人工审核。
+- Submission：投稿进入公开展示前仍保留审核节点，MVP 可先走轻量自动审核或人工审核。
 
 后续增强时只替换 `SafetyService` 实现，不改变 `GenerationService` 主流程、`GenerationJob.status` 语义和积分返还机制。
 
@@ -962,7 +695,7 @@ type SafetyResult = {
 
 - 返回今日主题。
 - Home 和 Assistant 取今日主题上下文使用。
-- 返回 `promptTexts` 作为快捷提示词和 Assistant 上下文。
+- 返回 `generatorIdeas` 作为预设灵感，返回 `avoidCliches` 作为 Assistant 约束。
 
 #### `GET /api/themes`
 
@@ -979,21 +712,29 @@ Query：
 
 - Explore Themes。
 - Theme Picker。
-- 主题卡片可返回少量 `promptTexts` 供快速预览或快捷使用。
+- 主题卡片返回 3 张精选图、brief、统计信息和必要标签。
 
 #### `GET /api/themes/:themeId`
 
 鉴权：Public
 
+路径参数：
+
+- `themeId` 是 `Theme.id` 数字 ID。
+
 职责：
 
 - 返回主题详情。
 - 返回统计信息。
-- 返回完整 `promptTexts`。
+- 返回完整 `themeNote`、`tags`、`generatorIdeas`、`avoidCliches` 和精选 gallery。
 
 #### `GET /api/themes/:themeId/images`
 
 鉴权：Optional Auth
+
+路径参数：
+
+- `themeId` 是 `Theme.id` 数字 ID。
 
 Query：
 
@@ -1014,31 +755,11 @@ Query：
 
 职责：
 
-- 创建主题提案草稿。
-- 用户和管理员都使用该接口创建主题想法，后端根据管理员身份写入 `sourceType = admin`。
-- 创建 `ThemeSubmission(status=draft)`。
-
-#### `PATCH /api/theme-submissions/:themeSubmissionId`
-
-鉴权：Owner Required
-
-职责：
-
-- 编辑当前用户自己的主题提案草稿。
-- 只允许 `status = draft` 的提案被普通用户编辑。
-- 支持修改标题、说明和触发来源。
-
-#### `POST /api/theme-submissions/:themeSubmissionId/submit`
-
-鉴权：Owner Required
-
-职责：
-
-- 提交主题提案进入审核。
-- 将 `ThemeSubmission.status` 从 `draft` 更新为 `under_review`。
-- 写入 `submittedAt`。
-- 触发自动安全、重复和质量检查。
-- 提交后普通用户不可再修改。
+- 创建主题提交记录。
+- 输入只包含 `title`、`details`、`submitReason?`。
+- 创建 `ThemeSubmission(status=under_review)`。
+- 如果是用户第一次提交主题，发放 +20 credits，并把奖励节点写入 `reviewFlow`。
+- 提交后普通用户不可修改。
 
 #### `GET /api/theme-submissions/my`
 
@@ -1047,31 +768,33 @@ Query：
 职责：
 
 - 查询当前用户提交过的主题想法。
-- 返回用户侧状态，如 Draft、Under review、Accepted、Selected、Published、Duplicate、Rejected。
+- 返回用户侧状态：Under review、Accepted、Not selected。
 
 #### `POST /api/admin/theme-submissions/:themeSubmissionId/review`
 
 鉴权：Admin Required
 
+路径参数：
+
+- `themeSubmissionId` 是 `ThemeSubmission.id` 数字 ID。
+
 职责：
 
 - 人工审核主题想法。
-- 支持接受进候选池、拒绝、标记重复、编辑后接受。
-- 管理员可以审核自己提交的主题提案。
-- 审核通过时可触发有效提交积分奖励。
+- 支持 `Accept as theme`、`Edit and accept`、`Reject`。
+- 接受时创建正式 `Theme(sourceSubmissionId=themeSubmission.id)`，更新 `ThemeSubmission(status=accepted)`，并把审核、奖励和主题关联节点写入 `reviewFlow`。
+- 拒绝时更新 `ThemeSubmission(status=not_selected)`，并把拒绝节点写入 `reviewFlow`。
+- 接受时发放 +300 credits、发送站内信，并更新用户侧 Notes。
 
-#### `POST /api/admin/theme-submissions/:themeSubmissionId/select`
+#### `POST /api/admin/themes`
 
 鉴权：Admin Required
 
 职责：
 
-- 将候选主题采纳为正式 `Theme`。
-- 创建或关联 `Theme`。
-- 回写 `ThemeSubmission.acceptedThemeId` 和状态。
-- 优先使用 `editedTitle`、`editedBrief`、`editedDescription` 创建正式主题。
-- 支持设置正式主题的 `promptTexts`。
-- 可触发主题被采纳积分奖励。
+- 管理员直接创建正式主题。
+- 写入 `Theme`，发布排期由 `publishDate` 表达，可见性由 `deleted` 表达。
+- 支持编辑 `title`、`brief`、`themeNote`、SEO、tags、`generatorIdeas`、`avoidCliches`、`publishDate`、精选图。
 
 ### 7.5 Assistant API
 
@@ -1187,7 +910,8 @@ AI 调用：留空，由 `runGenerationJob` 后续实现。
 - 上传 reference image。
 - 使用 `src/lib/r2-explorer-sdk.ts` 的 R2 client 上传到 R2。
 - 创建 `ReferenceImage`。
-- 保存 `storageKey`、展示 URL、mime type、width、height。
+- 保存 `cdnImagePrefix`、`storageKey`、mime type、width、height。
+- 返回 `referenceId` 和由业务代码拼接出的预览 URL，不把预览 URL 写入 DB。
 - 触发安全检查。
 
 #### `GET /api/images/public/:publicImageId`
@@ -1216,27 +940,6 @@ AI 调用：留空，由 `runGenerationJob` 后续实现。
 - 返回图片生成时使用的 prompt。
 - 用于 Studio 的 `View prompt`。
 
-#### `POST /api/images/:imageId/variations`
-
-鉴权：Owner Required
-
-职责：
-
-- 创建 `GenerationJob`，`generationType = image_variation`。
-- 使用 `sourceImageId` 记录来源图片。
-- 具体 AI 编辑调用留空。
-
-#### `POST /api/images/:imageId/edit`
-
-鉴权：Owner Required
-
-职责：
-
-- 创建 `GenerationJob`，`generationType = image_edit`。
-- 使用 `sourceImageId` 记录来源图片。
-- 使用 `editInstruction` 记录编辑指令。
-- 具体 AI 编辑调用留空。
-
 ### 7.8 Submission API
 
 #### `POST /api/submissions`
@@ -1254,7 +957,7 @@ AI 调用：留空，由 `runGenerationJob` 后续实现。
 - 更新 `GeneratedImage.status`。
 - 触发安全和主题相关性检查。
 
-#### `GET /api/submissions/:submissionId`
+#### `GET /api/submissions/:imageSubmissionId`
 
 鉴权：Owner Required
 
@@ -1270,7 +973,7 @@ AI 调用：留空，由 `runGenerationJob` 后续实现。
 
 - 查询当前用户投稿列表。
 
-#### `POST /api/admin/submissions/:submissionId/review`
+#### `POST /api/admin/submissions/:imageSubmissionId/review`
 
 鉴权：Admin Required
 
@@ -1278,8 +981,7 @@ AI 调用：留空，由 `runGenerationJob` 后续实现。
 
 - 人工审核投稿。
 - 通过时创建 `PublicImage`。
-- 拒绝时更新状态和原因。
-- 写入 `ReviewRecord`。
+- 拒绝时更新状态，并把审核备注写入 `ImageSubmission.reviewFlow`。
 
 ### 7.9 Explore API
 
@@ -1307,7 +1009,8 @@ Query：
 职责：
 
 - 点赞或取消点赞。
-- 同步 `PublicImage.likeCount`。
+- 写入 `ImageLike` 用户关系。
+- Redis 实时维护 like 计数，异步刷新 `PublicImage.likeCount`。
 
 #### `POST /api/explore/images/:publicImageId/save`
 
@@ -1316,7 +1019,8 @@ Query：
 职责：
 
 - 收藏或取消收藏。
-- 同步 `PublicImage.saveCount`。
+- 写入 `ImageSave` 用户关系。
+- Redis 实时维护 save 计数，异步刷新 `PublicImage.saveCount`。
 
 ### 7.10 Studio API
 
@@ -1326,7 +1030,8 @@ Query：
 
 Query：
 
-- `status=all|generated|submitted|under_review|published|rejected`
+- `status=all|submitted`
+- `submittedStatus=pending_review|approved|rejected`
 - `page`
 - `pageSize`
 
@@ -1350,7 +1055,7 @@ Query：
 公开可访问：
 
 - 已发布主题。
-- `PublicImage.status = published` 的图片。
+- `PublicImage.deleted = 0` 的图片。
 - 已公开图片的作者展示名、主题、公开 prompt。
 
 不可公开：
@@ -1358,7 +1063,7 @@ Query：
 - 用户未发布生成图片。
 - Assistant 临时输入输出。
 - 供应商原始 request/response。
-- ReviewRecord detail。
+- `ImageSubmission.reviewFlow` 中的内部审核细节。
 - 用户积分和订单数据。
 
 ### 8.2 用户私有资源
@@ -1391,7 +1096,7 @@ where: {
 - 正式主题编辑/排期/发布/隐藏/归档。
 - 投稿审核。
 - PublicImage 下架/精选。
-- ReviewRecord 查询。
+- ImageSubmission reviewFlow 查询。
 
 MVP 可先预留接口，不在用户侧开放。
 
@@ -1399,7 +1104,7 @@ MVP 可先预留接口，不在用户侧开放。
 
 ### 9.1 主题产生流程
 
-正式主题只从 `ThemeSubmission` 采纳产生。普通用户提交的是主题提案，不直接创建 `Theme`。
+用户提交的是主题想法，不直接创建 `Theme`。正式主题可以由管理员接受用户提交后创建，也可以由管理员在 `Manage themes` 直接创建。
 
 <Mermaid
   title="9.1 主题产生流程"
@@ -1409,24 +1114,17 @@ sequenceDiagram
   participant API as ThemeSubmission API
   participant Admin as Admin Theme API
   participant DB as Prisma
-  participant Review as Review/Safety
   participant Credit as CreditService
 
-  FE->>API: create draft(title/description/triggerType)
-  API->>DB: create ThemeSubmission(status=draft)
-  API-->>FE: themeSubmissionId
-  FE->>API: update draft before submit
-  API->>DB: validate owner and status=draft
-  API->>DB: update ThemeSubmission draft fields
-  FE->>API: submit theme idea
-  API->>DB: update ThemeSubmission(status=under_review, submittedAt)
-  API->>Review: quality/safety/duplicate check
-  Review->>DB: update ThemeSubmission(accepted_to_pool/rejected/duplicate)
-  Admin->>Admin: review/edit candidate
-  Admin->>DB: update editedTitle/editedBrief/editedDescription
-  Admin->>DB: create Theme(status=draft/scheduled/published)
-  Admin->>DB: update ThemeSubmission(status=selected/published, acceptedThemeId)
-  Admin->>Credit: optional reward by themeSubmissionId
+  FE->>API: submit theme idea(title/details/submitReason?)
+  API->>DB: create ThemeSubmission(status=under_review)
+  API->>Credit: first submission reward when eligible
+  API-->>FE: Under review
+  Admin->>Admin: review submission
+  Admin->>DB: accept/reject ThemeSubmission
+  Admin->>DB: create Theme(sourceSubmissionId)
+  Admin->>DB: update ThemeSubmission(status=accepted)
+  Admin->>Credit: accepted theme reward by themeSubmission.id
 `}
 />
 
@@ -1482,16 +1180,16 @@ sequenceDiagram
   participant DB as Prisma
   participant Review as Safety/Review
 
-  FE->>API: imageId/themeId/prompt/creatorNote
+  FE->>API: imageId/themeId/title/creationNote
   API->>Auth: requireAuthWithUser
   Auth-->>API: user
   API->>Sub: createSubmission
   Sub->>DB: validate image owner and theme
-  Sub->>DB: create ImageSubmission
-  Sub->>DB: update GeneratedImage under_review
+  Sub->>DB: create ImageSubmission(status=submitted, promptSnapshot=metadata)
+  Sub->>DB: update GeneratedImage(status=submitted, isLocked=true)
   Sub->>Review: auto review placeholder
   Review-->>Sub: passed/needs_review/rejected
-  Sub->>DB: update submission status
+  Sub->>DB: update submission status and append reviewFlow node
   API-->>FE: submission status
 `}
 />
@@ -1502,10 +1200,10 @@ sequenceDiagram
   title="9.3 审核通过发布"
   chart={`
 flowchart TD
-  A[Admin review pass] --> B[Update ImageSubmission published]
-  B --> C[Update GeneratedImage published]
-  C --> D[Create PublicImage]
-  D --> E[Write ReviewRecord]
+  A[Admin review pass] --> B[Update ImageSubmission approved]
+  B --> C[Update GeneratedImage approved]
+  C --> D[Create PublicImage sourceSubmissionId]
+  D --> E[Append ImageSubmission reviewFlow publish node]
   E --> F[Theme stats async refresh]
 `}
 />
@@ -1517,7 +1215,7 @@ flowchart TD
 MVP 只在图片生成时消耗积分：
 
 - Assistant 暂不消耗，或后续按配置开启。
-- Variation/Edit 如果接入，也按生成类任务消耗。
+- AI 图片编辑和变体当前不在 MVP 后端模型范围内；后续需要时重新设计。
 
 ### 10.2 消耗策略
 
@@ -1526,10 +1224,7 @@ MVP 只在图片生成时消耗积分：
 3. 创建 `GenerationJob(status=queued, estimatedCredits)`。
 4. 调用现有 `creditService.consumeCredit` 或 reserve 能力做预扣减。
 5. `operationReferId` 使用 `GenerationJob.jobId`。
-6. `feature` 使用：
-   - `ai_image_generation`
-   - `ai_image_variation`
-   - `ai_image_edit`
+6. `feature` 使用 `ai_image_generation`。
 
 ### 10.3 失败返还策略
 
@@ -1657,12 +1352,7 @@ QStash 可能因为超时、网络错误或非 2xx 响应重试消息，所以 W
 - OpenRouter 返回多张图片时，按 `jobId + providerImageIndex` 幂等写入。
 - 失败返还由积分服务按 `operationReferId = jobId` 幂等处理。
 
-可在 `GenerationJob` 后续补充：
-
-- `retryCount`
-- `nextRetryAt`
-- `lockedAt`
-- `lockedBy`
+Provider 原始 request/response、QStash message id、Worker 重试次数和锁信息不进入 `GenerationJob`。需要排查时写入脱敏后的 `Apilog` 或外部日志；如果未来确实需要业务级重试编排，再单独补字段或建任务执行日志表。
 
 ### 11.4 本地和 Mock 策略
 
@@ -1679,10 +1369,11 @@ MVP 如果本地没有 QStash 环境变量，`publishFIFOQueueMessage` 会返回
 
 查询 `PublicImage`：
 
-- `status = published`
 - `deleted = 0`
 - 按 `publishedAt`、`likeCount`、`featuredScore` 排序。
-- Include `image`、`theme`、`user` 基础展示信息。
+- 当前页 `imageId` 集合对应的 `GeneratedImage` 基础展示字段。
+- 当前页 `themeId` 集合对应的 `Theme` 基础展示字段。
+- 当前页作者信息按 `userId` 集合显式批量查询 `User` 基础展示字段。
 
 登录用户额外查询：
 
@@ -1701,19 +1392,20 @@ MVP 如果本地没有 QStash 环境变量，`publishFIFOQueueMessage` 会返回
 
 Tab 映射：
 
-- `All`：不限制 status。
-- `Generated`：`generated`。
-- `Submitted`：`submitted`。
-- `Under review`：`under_review`。
-- `Published`：`published`。
-- `Rejected`：`rejected`。
+- `All`：不限制 status，展示完整生成历史。
+- `Submitted`：展示已投稿图片，并提供二级筛选。
+
+Submitted 二级筛选：
+
+- `Pending review`：`ImageSubmission.status = submitted`
+- `Approved`：`ImageSubmission.status = approved`
+- `Rejected`：`ImageSubmission.status = rejected`
 
 ### 12.3 Theme Gallery
 
 查询 `PublicImage`：
 
-- `themeId = theme.themeId`
-- `status = published`
+- `themeId = theme.id`
 - `deleted = 0`
 
 排序：
@@ -1732,10 +1424,10 @@ Tab 映射：
 - Reference image 上传后检查：MVP 做格式、大小、归属和可访问性校验；后续可接图片 NSFW / 暴力 / 版权风险审查。
 - Provider 调用结果检查：MVP 默认信任 OpenRouter / 下游模型安全策略；如果 Provider 明确拒绝，任务归一化为 `blocked`。
 - 生成图片完成后检查：MVP 可记录为 `skipped` 或 `passed`；后续可接输出图审核。
-- 投稿时检查图片、prompt、creator note：公开展示前必须有审核入口，MVP 可先轻量自动审核或人工审核。
+- 投稿时检查图片、prompt metadata、English title 和 creation note：公开展示前必须有审核入口，MVP 可先轻量自动审核或人工审核。
 - 审核发布前检查主题相关性。
 
-当前阶段不要把复杂 NSFW 审查前置成必选依赖。正确边界是：系统拥有稳定的 `SafetyService` 入口，MVP 使用轻量策略，后续可以替换实现并补充 `ReviewRecord` 证据。
+当前阶段不要把复杂 NSFW 审查前置成必选依赖。正确边界是：系统拥有稳定的 `SafetyService` 入口，MVP 使用轻量策略，投稿相关审核过程写入 `ImageSubmission.reviewFlow`。
 
 Provider / OpenRouter 的安全策略只作为当前默认防线和补充防线，不作为 Monica 长期唯一的内容安全来源。
 
@@ -1744,27 +1436,13 @@ Provider / OpenRouter 的安全策略只作为当前默认防线和补充防线�
 - 未调用 Provider：`GenerationJob.status = blocked`，`chargedCredits = 0`。
 - Provider 明确安全拒绝：`GenerationJob.status = blocked`，`chargedCredits = 0`。
 - 已预扣减积分时，积分服务按 `GenerationJob.jobId` 幂等返还。
-- `GenerationJob` 不记录审核状态机；审核详情进入 `ReviewRecord`。供应商原始响应不进入业务表。
+- `GenerationJob` 不记录审核状态机；投稿审核详情进入 `ImageSubmission.reviewFlow`。供应商原始响应不进入业务表。
 
-### 13.2 ReviewRecord 使用
+### 13.2 reviewFlow 使用
 
-`ReviewRecord` 记录自动和人工审核结果。MVP 阶段不是每个检查点都必须写完整记录；当检查结果影响任务状态、投稿状态、公开展示或人工处理时，应写入 `ReviewRecord`。
+`ImageSubmission.reviewFlow` 记录投稿自动和人工审核节点。MVP 阶段不是每个检查点都必须写完整节点；当检查结果影响投稿状态、公开展示或人工处理时，应追加节点。
 
-适用对象：
-
-- `prompt`
-- `reference_image`
-- `generated_image`
-- `submission`
-
-`targetType` 示例：
-
-- `prompt`
-- `reference_image`
-- `generated_image`
-- `submission`
-
-`reviewType` 示例：
+`action` 示例：
 
 - `safety_auto`
 - `safety_manual`
@@ -1832,7 +1510,7 @@ Provider / OpenRouter 的安全策略只作为当前默认防线和补充防线�
 ### 15.4 第四阶段：交互增强
 
 - Like / Save。
-- Variation / Edit，作为 `GenerationJob.generationType` 的扩展能力实现。
+- AI 图片编辑和变体后续重新设计，不复用当前 `GenerationJob` 表结构。
 - Theme stats 异步更新。
 - 管理审核接口。
 - 队列化生成任务。

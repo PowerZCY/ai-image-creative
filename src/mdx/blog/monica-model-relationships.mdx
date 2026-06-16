@@ -39,13 +39,12 @@ date: 2026-06-11
 
 | 表名 / Model | 中文业务名称 | 当前职责 |
 | --- | --- | --- |
-| `ThemeSubmission` | 主题提交 | 用户或管理员提交每日主题想法，进入审核和候选池 |
-| `Theme` | 正式主题 | 已采纳、排期或发布的每日主题 |
-| `ReferenceImage` | 参考图 | 用户上传的本地参考图片，作为生成输入素材 |
-| `GenerationJob` | 生成任务 | 图片生成、变体、编辑的异步任务记录 |
+| `ThemeSubmission` | 主题提交 | 用户提交每日主题想法，保存原始文本、当前审核状态和 reviewFlow 审批流节点 |
+| `Theme` | 正式主题 | 管理员创建或采纳后的每日主题，保存展示内容、SEO、生成器灵感、发布日期和精选图片 |
+| `ReferenceImage` | 参考图 | 用户本地上传后的参考图片 R2 定位信息，作为生成输入素材 |
+| `GenerationJob` | 生成任务 | 图片生成的异步任务记录 |
 | `GeneratedImage` | 生成图片 | AI 生成出的用户私有图片资产 |
-| `ImageSubmission` | 作品投稿 | 用户将生成图片提交到主题的审核记录 |
-| `ReviewRecord` | 审核记录 | 自动审核和人工审核历史 |
+| `ImageSubmission` | 作品投稿 | 用户将生成图片提交到主题的候选作品，保存当前审核状态和 reviewFlow 审批流节点 |
 | `PublicImage` | 公开图片 | 审核通过后进入 Explore / Theme Gallery 的公开展示记录 |
 | `ImageLike` | 图片点赞 | 用户对公开图片的点赞关系 |
 | `ImageSave` | 图片收藏 | 用户对公开图片的收藏关系 |
@@ -53,6 +52,8 @@ date: 2026-06-11
 </CheetTable>
 
 ## 3. 总体数据流向图
+
+本节箭头表示业务数据流向和查询归因，不等价于 Prisma relation。Monica AI 业务表之间不声明 Prisma relation，只保存 scalar id 和索引；列表页需要扩展展示信息时，由 repository/service 按 id 集合显式查询并组装。来源追溯字段只作为标量查询条件使用。
 
 <Mermaid
   title="3. 总体数据流向图"
@@ -70,7 +71,6 @@ flowchart TD
   GenerationJob[GenerationJob-生成任务]
   GeneratedImage[GeneratedImage-生成图片]
   ImageSubmission[ImageSubmission-作品投稿]
-  ReviewRecord[ReviewRecord-审核记录]
   PublicImage[PublicImage-公开图片]
   ImageLike[ImageLike-图片点赞]
   ImageSave[ImageSave-图片收藏]
@@ -95,12 +95,10 @@ flowchart TD
 
   GenerationJob --> GeneratedImage
   User --> GeneratedImage
-  Theme --> GeneratedImage
 
   GeneratedImage --> ImageSubmission
   User --> ImageSubmission
   Theme --> ImageSubmission
-  ImageSubmission --> ReviewRecord
 
   ImageSubmission --> PublicImage
   GeneratedImage --> PublicImage
@@ -131,9 +129,10 @@ flowchart LR
 
 说明：
 
-- 普通用户和管理员都通过 `ThemeSubmission-主题提交` 进入主题生产流程。
-- 管理员提交时也是一条链路，只是审核路径更快。
-- `Theme-正式主题` 只表示已采纳、排期或发布的主题。
+- 普通用户通过 `ThemeSubmission-主题提交` 提交主题文本想法。
+- 管理员接受用户提交后创建 `Theme-正式主题`，也可以直接创建 `Theme-正式主题`。
+- `ThemeSubmission` 不保存正式主题字段；`Theme.sourceSubmissionId` 指向来源提交的数字 `id`，Theme 字段可从提交内容初始化但后续独立维护。
+- `Theme-正式主题` 表示管理员可管理、可排期、可用于前台展示和投稿目标的主题。
 - 用户提交主题获得奖励时，不新建奖励表，写入 `CreditAuditLog-积分流水`。
 
 ### 4.2 图片生成链路
@@ -154,9 +153,9 @@ flowchart LR
 说明：
 
 - Assistant 中间过程不持久化；最终用于生成的 prompt 记录在 `GenerationJob-生成任务`。
-- `ReferenceImage-参考图` 是用户上传的输入素材，不是作品。
+- `ReferenceImage-参考图` 是输入素材，不是作品；表内只保存 `cdnImagePrefix`、`storageKey` 等 R2 定位信息，最终展示 URL 由业务代码拼接。
 - `GenerationJob-生成任务` 是调用 AI、记录供应商状态和预计/实际积分消耗的任务表。
-- `GeneratedImage-生成图片` 是 Studio 中展示的用户私有图片资产。
+- `GeneratedImage-生成图片` 是 Studio 中展示的用户私有图片资产；图片 URL 解析规则为 `sourceImageUrl` 优先，否则按 CDN base、`cdnImagePrefix`、`storageKey` 拼接。
 - 生成任务创建时预扣减积分；失败、拦截或取消时由积分服务按 `GenerationJob.jobId` 返还。扣费和返还通过 `CreditAuditLog-积分流水` 追溯，余额仍由 `Credit-积分余额` 管理。
 
 ### 4.3 投稿与公开展示链路
@@ -168,7 +167,6 @@ flowchart LR
   User[User-用户] --> GeneratedImage[GeneratedImage-生成图片]
   GeneratedImage --> ImageSubmission[ImageSubmission-作品投稿]
   Theme[Theme-正式主题] --> ImageSubmission
-  ImageSubmission --> ReviewRecord[ReviewRecord-审核记录]
   ImageSubmission --> PublicImage[PublicImage-公开图片]
   GeneratedImage --> PublicImage
   PublicImage --> ImageLike[ImageLike-图片点赞]
@@ -180,8 +178,8 @@ flowchart LR
 
 - 生成图片不会自动公开。
 - 用户主动提交后创建 `ImageSubmission-作品投稿`。
-- 投稿审核过程写入 `ReviewRecord-审核记录`。
-- 通过审核后创建 `PublicImage-公开图片`。
+- 投稿审核过程写入 `ImageSubmission.reviewFlow`。
+- 通过审核后创建 `PublicImage-公开图片`，并由 `PublicImage.sourceSubmissionId` 记录来源投稿；`ImageSubmission` 不反向关联公开图片。
 - `PublicImage-公开图片` 不重复存图片文件，它引用 `GeneratedImage-生成图片`，只承载公开展示、排序、点赞、收藏相关数据。
 
 ### 4.4 支付与积分链路
@@ -205,11 +203,13 @@ flowchart LR
 - 用户当前余额继续使用 `Credit-积分余额`。
 - 所有积分变动继续使用 `CreditAuditLog-积分流水`。
 - 图片生成预扣减、最终消耗或失败返还时，`CreditAuditLog.operationReferId` 可记录 `GenerationJob.jobId`。
-- 主题提交奖励积分时，`CreditAuditLog.operationReferId` 可记录 `ThemeSubmission.themeSubmissionId`。
+- 主题提交奖励积分时，`CreditAuditLog.operationReferId` 可记录 `ThemeSubmission.id`。
 
 ## 5. 核心关系清单
 
 ### 5.1 用户关系
+
+下表描述业务归属关系，不表示 Prisma 必须在 `User` Model 上声明反向 relation。Monica AI 业务表通过 `userId` 标量字段做权限校验和索引查询；需要用户展示信息时由 service 显式查询 `User`。
 
 <CheetTable title="用户关系">
 
@@ -235,9 +235,8 @@ flowchart LR
 
 | 来源 | 关系 | 目标 | 说明 |
 | --- | --- | --- | --- |
-| `ThemeSubmission-主题提交` | N:1 | `Theme-正式主题` | 多个提交可能被编辑、合并或采纳为正式主题 |
+| `ThemeSubmission-主题提交` | N:1 | `Theme-正式主题` | 用户提交被接受后关联正式主题；正式主题字段独立维护 |
 | `Theme-正式主题` | 1:N | `GenerationJob-生成任务` | 围绕主题生成的任务记录主题 |
-| `Theme-正式主题` | 1:N | `GeneratedImage-生成图片` | 生成图可带主题上下文 |
 | `Theme-正式主题` | 1:N | `ImageSubmission-作品投稿` | 用户把作品提交到某个主题 |
 | `Theme-正式主题` | 1:N | `PublicImage-公开图片` | 主题 Gallery 展示公开图片 |
 
@@ -251,7 +250,6 @@ flowchart LR
 | --- | --- | --- | --- |
 | `ReferenceImage-参考图` | 1:N | `GenerationJob-生成任务` | 一个参考图可被多个生成任务使用 |
 | `GenerationJob-生成任务` | 1:N | `GeneratedImage-生成图片` | 一个任务可生成 1/2/4 张图片 |
-| `GeneratedImage-生成图片` | 1:N | `GenerationJob-生成任务` | 一张图可作为变体/编辑的来源图 |
 
 </CheetTable>
 
@@ -262,8 +260,7 @@ flowchart LR
 | 来源 | 关系 | 目标 | 说明 |
 | --- | --- | --- | --- |
 | `GeneratedImage-生成图片` | 1:N | `ImageSubmission-作品投稿` | 一张图理论上可提交到不同主题，业务上可限制重复提交 |
-| `ImageSubmission-作品投稿` | 1:N | `ReviewRecord-审核记录` | 一次投稿可能有自动审核和人工审核记录 |
-| `ImageSubmission-作品投稿` | 1:1 | `PublicImage-公开图片` | 投稿审核通过后创建公开展示记录 |
+| `ImageSubmission-作品投稿` | 来源追溯 | `PublicImage-公开图片` | 投稿审核通过后创建公开展示记录，公开记录用 `sourceSubmissionId` 追溯来源，不声明反向 relation |
 | `GeneratedImage-生成图片` | 1:1 | `PublicImage-公开图片` | 公开图片引用原始生成图 |
 | `PublicImage-公开图片` | 1:N | `ImageLike-图片点赞` | 公开图片可被多个用户点赞 |
 | `PublicImage-公开图片` | 1:N | `ImageSave-图片收藏` | 公开图片可被多个用户收藏 |
@@ -287,7 +284,6 @@ flowchart LR
 | `GenerationJob-生成任务` | 本人 | 本人创建，系统更新 | 用户私有异步任务 |
 | `GeneratedImage-生成图片` | 本人 | 系统 | 用户私有图片资产 |
 | `ImageSubmission-作品投稿` | 本人 / 管理员 | 本人提交，管理员审核 | 投稿审核对象 |
-| `ReviewRecord-审核记录` | 管理员 / 系统 | 系统 / 管理员 | 审核审计 |
 | `PublicImage-公开图片` | 公开 | 系统 / 管理员 | 公开展示记录 |
 | `ImageLike-图片点赞` | 本人状态 / 公开计数 | 本人 | 用户互动 |
 | `ImageSave-图片收藏` | 本人状态 | 本人 | 用户收藏 |
@@ -296,9 +292,9 @@ flowchart LR
 
 ## 7. 关键设计结论
 
-- `User-用户` 是所有业务数据归属的根。
+- `User-用户` 是所有业务数据归属的根，但 Monica AI 业务表不在 `User` Model 上维护反向 relation。
 - `Credit-积分余额`、`CreditAuditLog-积分流水`、`Transaction-订单交易`、`Subscription-订阅` 已经完备，不需要为 Monica AI 新建积分或订单表。
-- `ThemeSubmission-主题提交` 是主题来源，普通用户和管理员走同一条主题生产链路。
+- `ThemeSubmission-主题提交` 是用户主题想法来源，正式运营字段不存放在提交表。
 - `Theme-正式主题` 是创作上下文和投稿目标。
 - `GenerationJob-生成任务` 是 AI 供应商调用、异步状态、预计消耗和实际消耗记录的核心任务表。
 - `GeneratedImage-生成图片` 是 My Studio 的核心资产。

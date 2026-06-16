@@ -13,7 +13,7 @@ date: 2026-06-13
 - 除真实 AI Provider / OpenRouter 接入、统一手动联调后的小修外，MVP 前端主功能已经基本落地。
 - 已完成：首页创作主流程、首页主题区、`/theme` 主题详情页、`/explore` Themes / Images 交互、`/studio` 图片管理和投稿弹窗、Monica 业务文案 i18n 拆分。
 - 当前前端已经覆盖生成、轮询、参考图上传、结果展示、Studio 列表、状态筛选、查看 prompt、投稿、Explore 搜索/筛选/排序、图片详情、like/save 等主链路。
-- 尚未产品化完成：真实 OpenRouter Provider、动态主题 slug/id 和主题 API、Explore 主题数据从 DB/API 读取、Edit / Variations / Download 实际能力、移动端和真实账号/积分/QStash/R2 的统一联调 polish。
+- 尚未产品化完成：真实 OpenRouter Provider、动态主题 slug/id 和主题 API、Explore 主题数据从 DB/API 读取、Download 实际能力、移动端和真实账号/积分/QStash/R2 的统一联调 polish。
 - 因此当前状态应理解为“MVP 前端主链路完成，等待联调和真实 AI Provider 接入”，而不是最终产品功能全量完成。
 
 核心策略：
@@ -22,7 +22,9 @@ date: 2026-06-13
 - 异步任务从第一版开始使用真实 Upstash QStash 链路，不做 mock queue。
 - Mock 只放在 AI Provider 层，用于模拟 OpenRouter 图片生成结果。
 - `GenerationJob` 只表达任务状态和预计/实际积分消耗，不承载积分状态机和审核状态机。
+- Monica 业务表之间不声明 Prisma relation，只保留 scalar id 和索引；列表页由 repository/service 按 id 集合显式查询并组装展示数据。
 - 内容安全保留 `SafetyService` 扩展入口，MVP 使用轻量策略，后续可替换为自研或第三方 NSFW 审查。
+- 投稿、撤销和发布审核过程写入 `ImageSubmission.reviewFlow`；`GeneratedImage.status + isLocked` 决定用户是否还能删除、投稿或申请撤销。
 
 ## 2. 总体分段
 
@@ -64,7 +66,6 @@ date: 2026-06-13
 - `GenerationJob`
 - `GeneratedImage`
 - `ImageSubmission`
-- `ReviewRecord`
 - `PublicImage`
 - `ImageLike`
 - `ImageSave`
@@ -75,6 +76,7 @@ date: 2026-06-13
 - Type check 通过。
 - 基础 service 能创建和查询 `GenerationJob`。
 - 不新增 `CreditLedger`，积分流水继续使用 `CreditAuditLog`。
+- Monica 业务表之间没有 Prisma relation，查询扩展数据必须通过显式批量查询。
 
 ## 4. 阶段 2：真实 QStash 生成任务闭环
 
@@ -203,23 +205,34 @@ Worker 流程：
   - 状态筛选。
   - 查看 prompt。
   - 下载。
-  - Variations / Edit 入口先占位或创建后续任务。
+  - 根据 `GeneratedImage.status` 和 `isLocked` 控制 Submit、删除、申请撤销等操作。
 - 投稿：
   - `POST /api/monica/submissions`。
   - 创建 `ImageSubmission`。
-  - 写入 `ReviewRecord`。
+  - 追加 `ImageSubmission.reviewFlow` 审核节点。
+  - 提交后更新 `GeneratedImage(status=submitted, isLocked=true)`。
   - MVP 可先使用轻量自动审核或人工审核。
+  - 审核通过时创建 `PublicImage(deleted=0)`，更新 `GeneratedImage(status=approved, isLocked=true)`。
+  - 审核拒绝时更新 `GeneratedImage(status=rejected, isLocked=false)`。
+  - 已公开作品不允许用户直接删除底层图片；用户只能申请撤销公开，后续由管理员审核后设置 `PublicImage.deleted=1` 并更新 `GeneratedImage(status=withdrawn, isLocked=true)`。
 - Explore / Theme Gallery：
   - 只展示 `PublicImage`。
   - 实现 like/save。
+  - 实现 view 和 unique view 聚合计数。
+  - like/save/view 计数先由 Redis 实时维护，异步批量落库到 `PublicImage` 聚合字段。
   - 支持 newest、most liked、featured 排序。
+  - 列表页按 `imageId`、`themeId`、`userId` 集合显式批量查询展示所需基础数据。
 
 验收标准：
 
 - 私有 `GeneratedImage` 不会直接公开。
 - 只有投稿审核通过后才创建 `PublicImage`。
+- `PublicImage` 不使用 status，公开可见条件为 `deleted=0`。
+- `GeneratedImage.isLocked` 与状态一致：`generated/rejected=false`，其他状态为 `true`。
 - 点赞和收藏幂等。
+- Redis 计数异步落库后，`PublicImage.likeCount/saveCount/viewCount/uniqueViewCount` 可用于排序和兜底展示。
 - 投稿状态能在 Studio 中查看。
+- 撤销公开申请能进入审核流，用户不能绕过审核直接删除已公开图片。
 
 ## 8. 阶段 6：OpenRouter 真实 Provider
 
@@ -270,6 +283,12 @@ Worker 流程：
   - 用户只能查询自己的任务和私有图片。
   - PublicImage 才能匿名公开访问。
   - 内部 Worker API 只接受 QStash 签名请求。
+- 查询：
+  - 不使用 Prisma relation include 串联 Monica 业务表。
+  - 列表页按 id 集合批量查询并在 service 层组装。
+- 审核：
+  - `ImageSubmission.reviewFlow` 覆盖提交、自动审核、人工审核、发布、撤销申请和撤销审核节点。
+  - `GeneratedImage.isLocked` 防止锁定状态下的删除、重复投稿和绕过撤销审核。
 - 前端：
   - 移动端布局检查。
   - 长 prompt 和长错误信息不撑破 UI。

@@ -11,31 +11,21 @@ datasource db {
 
 // === backend-core models ===
 model User {
-  id                       BigInt            @id @default(autoincrement())
-  userId                   String            @unique @default(dbgenerated("gen_random_uuid()")) @map("user_id") @db.Uuid
-  status                   String            @default("anonymous") @db.VarChar(50)
-  fingerprintId            String?           @map("fingerprint_id") @db.VarChar(255)
-  clerkUserId              String?           @unique @map("clerk_user_id") @db.VarChar(255)
-  stripeCusId              String?           @unique @map("stripe_cus_id") @db.VarChar(255)
-  email                    String?           @db.VarChar(255)
-  userName                 String?           @map("user_name") @db.VarChar(255)
-  createdAt                DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                DateTime?         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  sourceRef                Json?             @map("source_ref")
-  creditAuditLogs          CreditAuditLog[]
-  credit                   Credit?
-  subscription             Subscription?
-  transactions             Transaction[]
-  themeSubmissions         ThemeSubmission[] @relation("ThemeSubmissionUser")
-  reviewedThemeSubmissions ThemeSubmission[] @relation("ThemeSubmissionReviewer")
-  referenceImages          ReferenceImage[]
-  generationJobs           GenerationJob[]
-  generatedImages          GeneratedImage[]
-  imageSubmissions         ImageSubmission[]
-  reviewRecords            ReviewRecord[]    @relation("ReviewRecordReviewer")
-  publicImages             PublicImage[]
-  imageLikes               ImageLike[]
-  imageSaves               ImageSave[]
+  id              BigInt           @id @default(autoincrement())
+  userId          String           @unique @default(dbgenerated("gen_random_uuid()")) @map("user_id") @db.Uuid
+  status          String           @default("anonymous") @db.VarChar(50)
+  fingerprintId   String?          @map("fingerprint_id") @db.VarChar(255)
+  clerkUserId     String?          @unique @map("clerk_user_id") @db.VarChar(255)
+  stripeCusId     String?          @unique @map("stripe_cus_id") @db.VarChar(255)
+  email           String?          @db.VarChar(255)
+  userName        String?          @map("user_name") @db.VarChar(255)
+  createdAt       DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime?        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sourceRef       Json?            @map("source_ref")
+  creditAuditLogs CreditAuditLog[]
+  credit          Credit?
+  subscription    Subscription?
+  transactions    Transaction[]
 
   @@index([fingerprintId], map: "idx_users_fingerprint_id")
   @@map("users")
@@ -193,85 +183,66 @@ model Apilog {
 }
 
 model ThemeSubmission {
-  id                BigInt    @id @default(autoincrement())
-  themeSubmissionId String    @unique @default(dbgenerated("gen_random_uuid()")) @map("theme_submission_id") @db.Uuid
-  userId            String    @map("user_id") @db.Uuid
-  status            String    @default("draft") @db.VarChar(50)
-  rawTitle          String    @map("raw_title") @db.VarChar(255)
-  rawDescription    String?   @map("raw_description") @db.Text
-  triggerType       String?   @map("trigger_type") @db.VarChar(100)
-  editedTitle       String?   @map("edited_title") @db.VarChar(255)
-  editedBrief       String?   @map("edited_brief") @db.Text
-  editedDescription String?   @map("edited_description") @db.Text
-  acceptedThemeId   String?   @map("accepted_theme_id") @db.Uuid
-  reviewedByUserId  String?   @map("reviewed_by_user_id") @db.Uuid
-  reviewReason      String?   @map("review_reason") @db.Text
-  sourceType        String    @default("user") @map("source_type") @db.VarChar(50)
-  submittedAt       DateTime? @map("submitted_at") @db.Timestamptz(6)
-  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz(6)
-  selectedAt        DateTime? @map("selected_at") @db.Timestamptz(6)
-  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted           Int       @default(0)
-
-  user          User   @relation("ThemeSubmissionUser", fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  reviewedBy    User?  @relation("ThemeSubmissionReviewer", fields: [reviewedByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  acceptedTheme Theme? @relation("AcceptedThemeSubmission", fields: [acceptedThemeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
+  id           BigInt    @id @default(autoincrement())
+  userId       String    @map("user_id") @db.Uuid
+  status       String    @default("under_review") @db.VarChar(50)
+  title        String    @db.VarChar(255)
+  details      String    @db.Text
+  submitReason String?   @map("submit_reason") @db.Text
+  reviewFlow   Json?     @map("review_flow")
+  submittedAt  DateTime? @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted      Int       @default(0)
 
   @@index([userId, submittedAt], map: "idx_theme_submissions_user_submitted_at")
   @@index([status, submittedAt], map: "idx_theme_submissions_status_submitted_at")
-  @@index([acceptedThemeId], map: "idx_theme_submissions_accepted_theme_id")
   @@map("theme_submissions")
   @@schema("monica_ai")
 }
 
 model Theme {
-  id            BigInt    @id @default(autoincrement())
-  themeId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("theme_id") @db.Uuid
-  title         String    @db.VarChar(255)
-  brief         String?   @db.Text
-  description   String?   @db.Text
-  status        String    @default("draft") @db.VarChar(50)
-  publishDate   DateTime? @map("publish_date") @db.Date
-  coverImageUrl String?   @map("cover_image_url") @db.Text
-  promptTexts   String[]  @default([]) @map("prompt_texts")
-  tags          Json?
-  stats         Json?
-  sourceType    String?   @map("source_type") @db.VarChar(50)
-  sortOrder     Int       @default(0) @map("sort_order")
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted       Int       @default(0)
+  id                 BigInt    @id @default(autoincrement())
+  title              String    @db.VarChar(255)
+  brief              String?   @db.Text
+  themeNote          String?   @map("theme_note") @db.Text
+  publishDate        DateTime? @map("publish_date") @db.Date
+  coverImageUrl      String?   @map("cover_image_url") @db.Text
+  featuredImageIds   BigInt[]  @default([]) @map("featured_image_ids")
+  generatorIdeas     String[]  @default([]) @map("generator_ideas")
+  avoidCliches       String[]  @default([]) @map("avoid_cliches")
+  tags               Json?
+  seoTitle           String?   @map("seo_title") @db.VarChar(255)
+  seoMetaDescription String?   @map("seo_meta_description") @db.Text
+  seoKeywords        String[]  @default([]) @map("seo_keywords")
+  imageSeoNotes      Json?     @map("image_seo_notes")
+  stats              Json?
+  sourceType         String?   @map("source_type") @db.VarChar(50)
+  sourceSubmissionId BigInt?   @map("source_submission_id")
+  createdAt          DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted            Int       @default(0)
 
-  generationJobs      GenerationJob[]
-  generatedImages     GeneratedImage[]
-  submissions         ImageSubmission[]
-  publicImages        PublicImage[]
-  acceptedSubmissions ThemeSubmission[] @relation("AcceptedThemeSubmission")
-
-  @@index([status, publishDate], map: "idx_themes_status_publish_date")
   @@index([publishDate], map: "idx_themes_publish_date")
+  @@index([sourceSubmissionId], map: "idx_themes_source_submission_id")
   @@map("themes")
   @@schema("monica_ai")
 }
 
 model ReferenceImage {
-  id           BigInt    @id @default(autoincrement())
-  referenceId  String    @unique @default(dbgenerated("gen_random_uuid()")) @map("reference_id") @db.Uuid
-  userId       String?   @map("user_id") @db.Uuid
-  storageKey   String    @map("storage_key") @db.Text
-  url          String?   @db.Text
-  mimeType     String?   @map("mime_type") @db.VarChar(100)
-  width        Int?
-  height       Int?
-  status       String    @default("uploaded") @db.VarChar(50)
-  safetyStatus String    @default("pending") @map("safety_status") @db.VarChar(50)
-  safetyResult Json?     @map("safety_result")
-  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  deleted      Int       @default(0)
-
-  user           User?            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  generationJobs GenerationJob[]
+  id             BigInt    @id @default(autoincrement())
+  referenceId    String    @unique @default(dbgenerated("gen_random_uuid()")) @map("reference_id") @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  cdnImagePrefix String?   @map("cdn_image_prefix") @db.Text
+  storageKey     String    @map("storage_key") @db.Text
+  mimeType       String?   @map("mime_type") @db.VarChar(100)
+  width          Int?
+  height         Int?
+  status         String    @default("uploaded") @db.VarChar(50)
+  safetyStatus   String    @default("pending") @map("safety_status") @db.VarChar(50)
+  safetyResult   Json?     @map("safety_result")
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  deleted        Int       @default(0)
 
   @@index([userId, createdAt], map: "idx_reference_images_user_created_at")
   @@map("reference_images")
@@ -282,46 +253,29 @@ model GenerationJob {
   id               BigInt    @id @default(autoincrement())
   jobId            String    @unique @default(dbgenerated("gen_random_uuid()")) @map("job_id") @db.Uuid
   userId           String    @map("user_id") @db.Uuid
-  themeId          String?   @map("theme_id") @db.Uuid
+  themeId          BigInt?   @map("theme_id")
   referenceId      String?   @map("reference_id") @db.Uuid
-  sourceImageId    String?   @map("source_image_id") @db.Uuid
   status           String    @default("pending") @db.VarChar(50)
-  sourcePage       String?   @map("source_page") @db.VarChar(50)
   generationType   String    @default("text_to_image") @map("generation_type") @db.VarChar(50)
   prompt           String    @db.Text
   negativePrompt   String?   @map("negative_prompt") @db.Text
-  editInstruction  String?   @map("edit_instruction") @db.Text
   model            String    @db.VarChar(100)
   style            String?   @db.VarChar(100)
   ratio            String?   @db.VarChar(50)
   imageCount       Int       @default(1) @map("image_count")
   estimatedCredits Int       @default(0) @map("estimated_credits")
   chargedCredits   Int       @default(0) @map("charged_credits")
-  provider         String?   @db.VarChar(100)
-  providerJobId    String?   @map("provider_job_id") @db.VarChar(255)
   failureCode      String?   @map("failure_code") @db.VarChar(100)
   failureMessage   String?   @map("failure_message") @db.Text
-  qstashMessageId  String?   @map("qstash_message_id") @db.VarChar(255)
-  retryCount       Int       @default(0) @map("retry_count")
-  lockedAt         DateTime? @map("locked_at") @db.Timestamptz(6)
-  lockedBy         String?   @map("locked_by") @db.VarChar(255)
   startedAt        DateTime? @map("started_at") @db.Timestamptz(6)
   completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
   createdAt        DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deleted          Int       @default(0)
 
-  user           User             @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  theme          Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  referenceImage ReferenceImage?  @relation(fields: [referenceId], references: [referenceId], onDelete: NoAction, onUpdate: NoAction)
-  sourceImage    GeneratedImage?  @relation("GenerationSourceImage", fields: [sourceImageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
-  images         GeneratedImage[] @relation("GenerationJobImages")
-
   @@index([userId, createdAt], map: "idx_generation_jobs_user_created_at")
   @@index([status, createdAt], map: "idx_generation_jobs_status_created_at")
   @@index([themeId], map: "idx_generation_jobs_theme_id")
-  @@index([sourceImageId], map: "idx_generation_jobs_source_image_id")
-  @@index([providerJobId], map: "idx_generation_jobs_provider_job_id")
   @@map("generation_jobs")
   @@schema("monica_ai")
 }
@@ -332,17 +286,14 @@ model GeneratedImage {
   jobId              String?   @map("job_id") @db.Uuid
   providerImageIndex Int?      @map("provider_image_index")
   userId             String    @map("user_id") @db.Uuid
-  themeId            String?   @map("theme_id") @db.Uuid
+  imageType          String    @default("ai_generated") @map("image_type") @db.VarChar(50)
   status             String    @default("generated") @db.VarChar(50)
-  storageKey         String    @map("storage_key") @db.Text
-  imageUrl           String?   @map("image_url") @db.Text
-  thumbnailUrl       String?   @map("thumbnail_url") @db.Text
+  isLocked           Boolean   @default(false) @map("is_locked")
+  sourceImageUrl     String?   @map("source_image_url") @db.Text
+  cdnImagePrefix     String?   @map("cdn_image_prefix") @db.Text
+  storageKey         String?   @map("storage_key") @db.Text
   width              Int?
   height             Int?
-  promptUsed         String?   @map("prompt_used") @db.Text
-  model              String?   @db.VarChar(100)
-  style              String?   @db.VarChar(100)
-  ratio              String?   @db.VarChar(50)
   safetyStatus       String    @default("pending") @map("safety_status") @db.VarChar(50)
   safetyResult       Json?     @map("safety_result")
   metadata           Json?
@@ -350,45 +301,27 @@ model GeneratedImage {
   updatedAt          DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deleted            Int       @default(0)
 
-  job              GenerationJob?    @relation("GenerationJobImages", fields: [jobId], references: [jobId], onDelete: NoAction, onUpdate: NoAction)
-  user             User              @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  theme            Theme?            @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  usedAsSourceJobs GenerationJob[]   @relation("GenerationSourceImage")
-  submissions      ImageSubmission[]
-  publicImage      PublicImage?
-
   @@unique([jobId, providerImageIndex], map: "generated_images_job_provider_index_key")
   @@index([userId, createdAt], map: "idx_generated_images_user_created_at")
-  @@index([themeId], map: "idx_generated_images_theme_id")
   @@index([status, createdAt], map: "idx_generated_images_status_created_at")
   @@map("generated_images")
   @@schema("monica_ai")
 }
 
 model ImageSubmission {
-  id              BigInt    @id @default(autoincrement())
-  submissionId    String    @unique @default(dbgenerated("gen_random_uuid()")) @map("submission_id") @db.Uuid
-  userId          String    @map("user_id") @db.Uuid
-  imageId         String    @map("image_id") @db.Uuid
-  themeId         String    @map("theme_id") @db.Uuid
-  status          String    @default("under_review") @db.VarChar(50)
-  promptSnapshot  String?   @map("prompt_snapshot") @db.Text
-  creatorNote     String?   @map("creator_note") @db.Text
-  safetyStatus    String    @default("pending") @map("safety_status") @db.VarChar(50)
-  relevanceStatus String    @default("pending") @map("relevance_status") @db.VarChar(50)
-  reviewSummary   String?   @map("review_summary") @db.Text
-  submittedAt     DateTime? @default(now()) @map("submitted_at") @db.Timestamptz(6)
-  reviewedAt      DateTime? @map("reviewed_at") @db.Timestamptz(6)
-  publishedAt     DateTime? @map("published_at") @db.Timestamptz(6)
-  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted         Int       @default(0)
-
-  user        User           @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  image       GeneratedImage @relation(fields: [imageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
-  theme       Theme          @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  reviews     ReviewRecord[]
-  publicImage PublicImage?
+  id             BigInt    @id @default(autoincrement())
+  userId         String    @map("user_id") @db.Uuid
+  imageId        String    @map("image_id") @db.Uuid
+  themeId        BigInt    @map("theme_id")
+  status         String    @default("submitted") @db.VarChar(50)
+  title          String    @db.VarChar(255)
+  promptSnapshot String?   @map("prompt_snapshot") @db.Text
+  creationNote   String?   @map("creation_note") @db.Text
+  reviewFlow     Json?     @map("review_flow")
+  submittedAt    DateTime? @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted        Int       @default(0)
 
   @@index([userId, submittedAt], map: "idx_image_submissions_user_submitted_at")
   @@index([themeId, status], map: "idx_image_submissions_theme_status")
@@ -397,57 +330,29 @@ model ImageSubmission {
   @@schema("monica_ai")
 }
 
-model ReviewRecord {
-  id             BigInt    @id @default(autoincrement())
-  reviewId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("review_id") @db.Uuid
-  submissionId   String?   @map("submission_id") @db.Uuid
-  targetType     String    @map("target_type") @db.VarChar(50)
-  targetId       String    @map("target_id") @db.Uuid
-  reviewerUserId String?   @map("reviewer_user_id") @db.Uuid
-  reviewType     String    @map("review_type") @db.VarChar(50)
-  result         String    @db.VarChar(50)
-  reason         String?   @db.Text
-  detail         Json?
-  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  deleted        Int       @default(0)
-
-  submission ImageSubmission? @relation(fields: [submissionId], references: [submissionId], onDelete: NoAction, onUpdate: NoAction)
-  reviewer   User?            @relation("ReviewRecordReviewer", fields: [reviewerUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-
-  @@index([targetType, targetId], map: "idx_review_records_target")
-  @@index([submissionId], map: "idx_review_records_submission_id")
-  @@map("review_records")
-  @@schema("monica_ai")
-}
-
 model PublicImage {
-  id            BigInt    @id @default(autoincrement())
-  publicImageId String    @unique @default(dbgenerated("gen_random_uuid()")) @map("public_image_id") @db.Uuid
-  imageId       String    @unique @map("image_id") @db.Uuid
-  submissionId  String?   @unique @map("submission_id") @db.Uuid
-  userId        String    @map("user_id") @db.Uuid
-  themeId       String?   @map("theme_id") @db.Uuid
-  status        String    @default("published") @db.VarChar(50)
-  title         String?   @db.VarChar(255)
-  promptPublic  Boolean   @default(true) @map("prompt_public")
-  tags          Json?
-  likeCount     Int       @default(0) @map("like_count")
-  saveCount     Int       @default(0) @map("save_count")
-  viewCount     Int       @default(0) @map("view_count")
-  featuredScore Int       @default(0) @map("featured_score")
-  publishedAt   DateTime? @default(now()) @map("published_at") @db.Timestamptz(6)
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted       Int       @default(0)
+  id                 BigInt    @id @default(autoincrement())
+  publicImageId      String    @unique @default(dbgenerated("gen_random_uuid()")) @map("public_image_id") @db.Uuid
+  imageId            String    @unique @map("image_id") @db.Uuid
+  sourceSubmissionId BigInt?   @unique @map("source_submission_id")
+  userId             String    @map("user_id") @db.Uuid
+  themeId            BigInt?   @map("theme_id")
+  title              String    @db.VarChar(255)
+  altText            String?   @map("alt_text") @db.Text
+  creationNote       String?   @map("creation_note") @db.Text
+  promptPublic       Boolean   @default(true) @map("prompt_public")
+  tags               Json?
+  likeCount          Int       @default(0) @map("like_count")
+  saveCount          Int       @default(0) @map("save_count")
+  viewCount          Int       @default(0) @map("view_count")
+  uniqueViewCount    Int       @default(0) @map("unique_view_count")
+  featuredScore      Int       @default(0) @map("featured_score")
+  publishedAt        DateTime? @default(now()) @map("published_at") @db.Timestamptz(6)
+  createdAt          DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted            Int       @default(0)
 
-  image      GeneratedImage   @relation(fields: [imageId], references: [imageId], onDelete: NoAction, onUpdate: NoAction)
-  submission ImageSubmission? @relation(fields: [submissionId], references: [submissionId], onDelete: NoAction, onUpdate: NoAction)
-  user       User             @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-  theme      Theme?           @relation(fields: [themeId], references: [themeId], onDelete: NoAction, onUpdate: NoAction)
-  likes      ImageLike[]
-  saves      ImageSave[]
-
-  @@index([status, publishedAt], map: "idx_public_images_status_published_at")
+  @@index([publishedAt], map: "idx_public_images_published_at")
   @@index([themeId, featuredScore], map: "idx_public_images_theme_featured_score")
   @@index([likeCount], map: "idx_public_images_like_count")
   @@map("public_images")
@@ -461,9 +366,6 @@ model ImageLike {
   createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   deleted       Int       @default(0)
 
-  publicImage PublicImage @relation(fields: [publicImageId], references: [publicImageId], onDelete: NoAction, onUpdate: NoAction)
-  user        User        @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-
   @@unique([publicImageId, userId], map: "image_likes_public_image_user_key")
   @@index([userId, createdAt], map: "idx_image_likes_user_created_at")
   @@map("image_likes")
@@ -476,9 +378,6 @@ model ImageSave {
   userId        String    @map("user_id") @db.Uuid
   createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   deleted       Int       @default(0)
-
-  publicImage PublicImage @relation(fields: [publicImageId], references: [publicImageId], onDelete: NoAction, onUpdate: NoAction)
-  user        User        @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([publicImageId, userId], map: "image_saves_public_image_user_key")
   @@index([userId, createdAt], map: "idx_image_saves_user_created_at")

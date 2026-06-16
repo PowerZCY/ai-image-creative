@@ -32,15 +32,14 @@ date: 2026-06-11
 | 预扣减 | AI 调用前先扣减或占用积分 |
 | 返还 | AI 失败后由积分服务按 `operationReferId` 幂等返还预扣减积分 |
 
-## 3. 场景 A：用户创建并提交主题提案
+## 3. 场景 A：用户提交主题想法
 
-用户在站内创建每日主题提案。提交前是草稿，可以编辑；提交后进入审核，普通用户不能再修改。该流程不调用 AI 时可以完全同步；如果启用自动质量/安全审核，则审核部分可异步。
+用户在 `Submit a theme` 页面提交每日主题想法。该流程只提交文本，不上传说明图片，也不填写 SEO、tags 或生成器灵感。提交后进入审核，普通用户不能修改，只能查看状态和 Notes。
 
 涉及数据表：
 
 - `User-用户`
 - `ThemeSubmission-主题提交`
-- `ReviewRecord-审核记录`
 - `Credit-积分余额`
 - `CreditAuditLog-积分流水`
 
@@ -52,55 +51,41 @@ sequenceDiagram
   participant FE as 前端
   participant API as ThemeSubmission API
   participant DB as 数据库
-  participant Review as 审核服务/异步任务
   participant Credit as 积分服务
 
-  FE->>API: 创建主题提案草稿(title/description/triggerType)
-  API->>DB: 同步创建 ThemeSubmission-主题提交(status=draft)
-  API-->>FE: 返回 themeSubmissionId 和 draft 状态
+  FE->>API: 提交主题想法(title/details/submitReason?)
+  API->>DB: 同步创建 ThemeSubmission(status=under_review)
 
-  FE->>API: 提交前编辑草稿
-  API->>DB: 同步校验 ThemeSubmission 归属和 status=draft
-  API->>DB: 同步更新 ThemeSubmission 草稿字段
-  API-->>FE: 返回更新后的草稿
-
-  FE->>API: 提交主题提案
-  API->>DB: 同步校验 ThemeSubmission 归属和 status=draft
-  API->>DB: 同步更新 ThemeSubmission(status=under_review, submittedAt)
-  API-->>FE: 返回提交成功和审核中状态
-
-  API->>Review: 异步触发自动审核
-  Review->>DB: 异步写入 ReviewRecord-审核记录
-  Review->>DB: 异步更新 ThemeSubmission-主题提交(status=accepted_to_pool/rejected/duplicate)
-
-  alt 有效提交并需要奖励积分
-    Review->>Credit: 同步增加 Credit-积分余额
-    Review->>DB: 同步写入 CreditAuditLog-积分流水(operationReferId=themeSubmissionId)
+  alt 用户首次提交主题想法
+    API->>Credit: 同步增加 +20 credits
+    API->>DB: 同步写入 CreditAuditLog(operationReferId=ThemeSubmission.id)
+    API->>DB: 追加 ThemeSubmission.reviewFlow 奖励节点
   end
+  API-->>FE: 返回提交成功、Under review 和 Notes
 `}
 />
 
 关键状态变化：
 
-- `ThemeSubmission.status`: `draft -> under_review -> accepted_to_pool / rejected / duplicate`
-- `CreditAuditLog.operationReferId`: `ThemeSubmission.themeSubmissionId`
+- `ThemeSubmission.status`: `under_review -> accepted / not_selected`
+- `CreditAuditLog.operationReferId`: `ThemeSubmission.id`
 
 关键约束：
 
-- 普通用户只能编辑自己的 `draft`。
-- `under_review` 及之后状态，普通用户不可修改。
-- 从 Studio 图片创建主题提案时，只写入粗粒度 `triggerType`，不创建 `ImageSubmission`，也不创建正式 `Theme`。
+- 主题提交只接收 `title`、`details`、`submitReason?`。
+- `ThemeSubmission` 不保存正式主题字段，也不上传说明图。
+- 提交后普通用户不可修改。
+- 用户侧只展示 `Under review`、`Accepted`、`Not selected`。
 
 ## 4. 场景 B：管理员采纳主题并发布每日主题
 
-管理员从候选主题中选中一个主题，编辑后采纳为正式主题。管理员自己创建主题也走同一条 `ThemeSubmission-主题提交` 链路，只是后端写入 `sourceType = admin`，审核路径更快。正式 `Theme-正式主题` 只能由该采纳动作产生。
+管理员可以接受用户提交并创建正式主题，也可以在后台直接创建正式主题。`ThemeSubmission` 保存用户原始提交，`Theme` 保存正式主题的全部可运营字段，两者不共享字段状态。
 
 涉及数据表：
 
 - `User-用户`
 - `ThemeSubmission-主题提交`
 - `Theme-正式主题`
-- `ReviewRecord-审核记录`
 - `Credit-积分余额`
 - `CreditAuditLog-积分流水`
 
@@ -114,34 +99,33 @@ sequenceDiagram
   participant DB as 数据库
   participant Credit as 积分服务
 
-  Admin->>API: 采纳主题提交并设置排期/发布信息和快捷提示词
+  Admin->>API: Accept as theme / Edit and accept
   API->>DB: 同步读取 ThemeSubmission-主题提交
-  API->>DB: 同步校验 status=accepted_to_pool/under_review 且未被采纳
-  API->>DB: 同步保存管理员编辑后的标题/简介/说明
-  API->>DB: 同步创建 Theme-正式主题(status=scheduled/published, promptTexts)
-  API->>DB: 同步更新 ThemeSubmission(status=selected/published, acceptedThemeId=themeId)
-  API->>DB: 同步写入 ReviewRecord-审核记录(reviewType=theme_select)
+  API->>DB: 同步校验 status=under_review 且未被采纳
+  API->>DB: 同步创建 Theme(sourceSubmissionId=ThemeSubmission.id)
+  API->>DB: 同步更新 ThemeSubmission(status=accepted)
+  API->>DB: 追加 ThemeSubmission.reviewFlow 审核/奖励/主题关联节点
 
   alt 主题被采纳需要奖励积分
-    API->>Credit: 同步增加 Credit-积分余额
-    API->>DB: 同步写入 CreditAuditLog-积分流水(operationReferId=themeSubmissionId)
+    API->>Credit: 同步增加 +300 credits
+    API->>DB: 同步写入 CreditAuditLog(operationReferId=ThemeSubmission.id)
   end
 
-  API-->>Admin: 返回正式 Theme-正式主题
+  API-->>Admin: 返回正式 Theme，进入 Manage themes
 `}
 />
 
 关键状态变化：
 
-- `ThemeSubmission.status`: `accepted_to_pool -> selected / published`
-- `Theme.status`: `scheduled / published`
-- `ThemeSubmission.acceptedThemeId`: 关联 `Theme.themeId`
+- `ThemeSubmission.status`: `under_review -> accepted`
+- `Theme.sourceSubmissionId`: 关联 `ThemeSubmission.id`
+- `Theme.publishDate`: 为空表示未排期，有日期表示可按日期展示。
 
 关键约束：
 
 - 普通用户不能直接创建 `Theme-正式主题`。
 - 图片投稿不会创建 `Theme-正式主题`。
-- 管理员可以审核和采纳自己提交的 `ThemeSubmission-主题提交`。
+- 管理员直接创建主题时写入 `Theme`，不需要 `ThemeSubmission`。
 
 ## 5. 场景 C：用户在首页自由生成图片
 
@@ -154,7 +138,6 @@ sequenceDiagram
 - `CreditAuditLog-积分流水`
 - `GenerationJob-生成任务`
 - `GeneratedImage-生成图片`
-- `ReviewRecord-审核记录`
 
 <Mermaid
   title="5. 场景 C：用户在首页自由生成图片"
@@ -273,7 +256,7 @@ sequenceDiagram
   participant AI as AI Provider
 
   FE->>AssistantAPI: 点击 Get ideas(themeId)
-  AssistantAPI->>DB: 读取 Theme(title/description/promptTexts)
+  AssistantAPI->>DB: 读取 Theme(title/brief/themeNote/generatorIdeas/avoidCliches)
   AssistantAPI->>AI: 调用 AI 生成 ideas
   AI-->>AssistantAPI: 返回 ideas
   AssistantAPI-->>FE: 返回 ideas
@@ -294,7 +277,7 @@ sequenceDiagram
 
 - `GenerationJob.themeId`: 当前主题
 - `GenerationJob.prompt`: 用户最终确认后的 prompt
-- `GeneratedImage.themeId`: 当前主题上下文
+- `GeneratedImage` 不保存主题字段；主题上下文保留在 `GenerationJob.themeId`，投稿时写入 `ImageSubmission.themeId`。
 
 ## 7. 场景 E：用户 Improve Prompt 后生成图片
 
@@ -354,7 +337,6 @@ sequenceDiagram
 - `ReferenceImage-参考图`
 - `GenerationJob-生成任务`
 - `GeneratedImage-生成图片`
-- `ReviewRecord-审核记录`
 - `Credit-积分余额`
 - `CreditAuditLog-积分流水`
 
@@ -377,13 +359,12 @@ sequenceDiagram
 
   FE->>UploadAPI: 上传参考图
   UploadAPI->>R2: 上传原始参考图
-  R2-->>UploadAPI: 返回 storageKey 和展示 URL
-  UploadAPI->>DB: 同步创建 ReferenceImage(status=uploaded, safetyStatus=pending, storageKey)
-  UploadAPI-->>FE: 返回 referenceId 和预览 URL
+  R2-->>UploadAPI: 返回 cdnImagePrefix 和 storageKey
+  UploadAPI->>DB: 同步创建 ReferenceImage(cdnImagePrefix, storageKey, safetyStatus=pending)
+  UploadAPI-->>FE: 返回 referenceId 和按业务规则拼接的预览 URL
 
   UploadAPI->>Safety: checkReferenceImages(reference image)
   Safety-->>UploadAPI: passed/skipped/blocked
-  UploadAPI->>DB: 可选写入 ReviewRecord(reference image safety)
   UploadAPI->>DB: 更新 ReferenceImage.safetyStatus=passed/skipped/failed
 
   FE->>GenAPI: 点击 Generate(prompt, referenceId)
@@ -404,10 +385,10 @@ sequenceDiagram
   AI-->>Worker: 返回 message.images[]，可能是 base64 data URL
   loop 每张生成图
     Worker->>R2: 将生成图片二进制上传到 R2
-    R2-->>Worker: 返回 storageKey 和 imageUrl
-    Worker->>Safety: checkProviderResult(imageUrl/provider response)
+    R2-->>Worker: 返回 cdnImagePrefix 和 storageKey
+    Worker->>Safety: checkProviderResult(图片 URL/provider response)
     Safety-->>Worker: passed/skipped/blocked
-    Worker->>DB: 创建可交付 GeneratedImage(providerImageIndex, storageKey, imageUrl)
+    Worker->>DB: 创建可交付 GeneratedImage(providerImageIndex, sourceImageUrl?, cdnImagePrefix?, storageKey?)
   end
   Worker->>DB: 更新 GenerationJob(status=succeeded, chargedCredits=estimatedCredits)
 `}
@@ -419,59 +400,10 @@ sequenceDiagram
 - `GenerationJob.referenceId`: 关联参考图
 - `GeneratedImage` 是结果作品，`ReferenceImage` 仍只是输入素材
 - QStash 任务消息只传 `jobId`，不传 reference image URL 或 base64 图片
-- OpenRouter 输出如果是 base64 data URL，必须先落 R2，再保存 `GeneratedImage`
+- OpenRouter 输出如果是公网 URL，先保存到 `GeneratedImage.sourceImageUrl`；如果是 base64 data URL 或已完成迁移，则保存 `cdnImagePrefix` 和 `storageKey`
+- 图片展示规则统一为：`sourceImageUrl` 不为空则直接使用；为空则按 CDN base、`cdnImagePrefix` 和 `storageKey` 拼接
 - MVP 阶段 `SafetyService` 可以只做文件基础校验并返回 `skipped`；后续接入图片 NSFW 审查时不需要改变上传和生成主流程
 - `SafetyService.status = skipped` 不阻断流程；`blocked` 会让生成任务进入 `blocked` 并触发积分返还
-
-## 9. 场景 G：用户基于已有图片生成变体或编辑图
-
-用户在生成结果卡片或 Studio 中点击 `Variations` 或 `Edit`。不单独建立 `ImageEdit` 表，而是创建新的 `GenerationJob-生成任务`。
-
-涉及数据表：
-
-- `User-用户`
-- `GeneratedImage-生成图片`
-- `GenerationJob-生成任务`
-- `Credit-积分余额`
-- `CreditAuditLog-积分流水`
-
-<Mermaid
-  title="9. 场景 G：用户基于已有图片生成变体或编辑图"
-  chart={`
-sequenceDiagram
-  autonumber
-  participant FE as 前端
-  participant API as Image Variation/Edit API
-  participant Redis as Redis分布式锁
-  participant Credit as 积分服务
-  participant DB as 数据库
-  participant Queue as 任务队列
-  participant Worker as AI Worker
-  participant AI as AI Provider
-
-  FE->>API: 点击 Variations/Edit(sourceImageId, instruction?)
-  API->>Redis: 锁 userId + image_derivative + sourceImageId
-  API->>DB: 同步校验 GeneratedImage 归属
-  API->>DB: 同步创建 GenerationJob(generationType=image_variation/image_edit, sourceImageId, editInstruction)
-  API->>Credit: 同步预扣减 Credit-积分余额
-  Credit->>DB: 同步写入 CreditAuditLog(operationReferId=jobId)
-  API->>Queue: 异步投递 jobId
-  API->>Redis: 释放锁
-  API-->>FE: 返回 jobId，前端轮询任务状态
-
-  Worker->>AI: 异步调用 AI，携带 source image 和 instruction
-  AI-->>Worker: 返回新图片
-  Worker->>DB: 异步创建 GeneratedImage(jobId=新任务)
-  Worker->>DB: 异步更新 GenerationJob(status=succeeded, chargedCredits=estimatedCredits)
-`}
-/>
-
-关键状态变化：
-
-- `GenerationJob.generationType`: `image_variation / image_edit`
-- `GenerationJob.sourceImageId`: 原始图片
-- 新结果仍进入 `GeneratedImage-生成图片`
-- Studio 继续只查询 `GeneratedImage-生成图片`
 
 ## 10. 场景 H：用户提交作品到主题
 
@@ -483,7 +415,6 @@ sequenceDiagram
 - `GeneratedImage-生成图片`
 - `Theme-正式主题`
 - `ImageSubmission-作品投稿`
-- `ReviewRecord-审核记录`
 - `PublicImage-公开图片`
 
 <Mermaid
@@ -498,46 +429,49 @@ sequenceDiagram
   participant Redis as Redis分布式锁
   participant AI as AI Provider
 
-  FE->>API: 提交作品(imageId, themeId, creatorNote)
+  FE->>API: 提交作品(imageId, themeId, title, creationNote?)
   API->>DB: 同步校验 GeneratedImage 归属
   API->>DB: 同步校验 Theme 为正式主题且可投稿
-  API->>DB: 同步创建 ImageSubmission(status=under_review)
-  API->>DB: 同步更新 GeneratedImage(status=under_review)
-  API-->>FE: 返回 under_review
+  API->>DB: 同步创建 ImageSubmission(status=submitted, promptSnapshot=metadata)
+  API->>DB: 同步更新 GeneratedImage(status=submitted, isLocked=true)
+  API-->>FE: 返回 Submitted
 
   API->>Review: 异步触发审核
-  Review->>DB: 异步写入 ReviewRecord(safety)
+  Review->>DB: 追加 ImageSubmission.reviewFlow(safety)
 
   opt 使用 AI 做主题相关性审核
-    Review->>Redis: 锁 submissionId + relevance_check
+    Review->>Redis: 锁 ImageSubmission.id + relevance_check
     Review->>AI: 调用 AI 判断主题相关性
     AI-->>Review: 返回 relevance result
     Review->>Redis: 释放锁
   end
 
-  Review->>DB: 异步写入 ReviewRecord(theme_relevance)
-  Review->>DB: 异步更新 ImageSubmission(status=needs_review/published/rejected)
+  Review->>DB: 追加 ImageSubmission.reviewFlow(theme_relevance)
+  Review->>DB: 异步更新 ImageSubmission(status=needs_review/approved/rejected)
 
   alt 审核通过
-    Review->>DB: 创建 PublicImage-公开图片
-    Review->>DB: 更新 GeneratedImage(status=published)
+    Review->>DB: 创建 PublicImage(sourceSubmissionId=ImageSubmission.id)
+    Review->>DB: 追加 ImageSubmission.reviewFlow(publish)
+    Review->>DB: 更新 GeneratedImage(status=approved, isLocked=true)
   else 审核拒绝
-    Review->>DB: 更新 GeneratedImage(status=rejected)
+    Review->>DB: 追加 ImageSubmission.reviewFlow(reject note)
+    Review->>DB: 更新 GeneratedImage(status=rejected, isLocked=false)
   end
 `}
 />
 
 关键状态变化：
 
-- `ImageSubmission.status`: `under_review -> needs_review / published / rejected`
-- `GeneratedImage.status`: `generated -> under_review -> published / rejected`
+- `ImageSubmission.status`: `submitted -> needs_review / approved / rejected`
+- `GeneratedImage.status`: `generated -> submitted -> approved / rejected`
+- `GeneratedImage.isLocked`: `submitted`、`approved` 为 `true`，`rejected` 为 `false`
 - `PublicImage` 只在审核通过后创建
 
 关键约束：
 
 - 投稿目标是 `Theme-正式主题`，不能是 `ThemeSubmission-主题提交`。
 - `ImageSubmission-作品投稿` 不改变 `ThemeSubmission-主题提交` 状态。
-- 如果用户想基于某张图片提出新主题，应走场景 J 中的“从图片创建主题提案”入口。
+- 图片投稿只提交到正式 `Theme`，不会创建或修改主题提交。
 
 ## 11. 场景 I：用户浏览公开图片并点赞/收藏
 
@@ -560,19 +494,25 @@ sequenceDiagram
   participant DB as 数据库
 
   FE->>API: 获取公开图片列表
-  API->>DB: 查询 PublicImage(status=published)
+  API->>DB: 查询 PublicImage(deleted=0)
   API->>DB: 如果已登录，查询 ImageLike/ImageSave 当前用户状态
   API-->>FE: 返回图片列表和 liked/saved 状态
 
+  FE->>API: 打开图片详情或图片曝光
+  API->>Redis: 增加 view 计数，并按 userId/visitorId 去重增加 unique view 计数
+  API-->>FE: 返回图片详情
+
   FE->>API: 点击 Like
   API->>DB: 同步 upsert/soft-delete ImageLike
-  API->>DB: 同步更新 PublicImage.likeCount
+  API->>Redis: 实时更新 like 计数
   API-->>FE: 返回 liked 状态和 likeCount
 
   FE->>API: 点击 Save
   API->>DB: 同步 upsert/soft-delete ImageSave
-  API->>DB: 同步更新 PublicImage.saveCount
+  API->>Redis: 实时更新 save 计数
   API-->>FE: 返回 saved 状态和 saveCount
+
+  API->>DB: 异步任务批量落库 PublicImage 聚合计数
 `}
 />
 
@@ -580,18 +520,18 @@ sequenceDiagram
 
 - `ImageLike.deleted`: `0 / 1`
 - `ImageSave.deleted`: `0 / 1`
-- `PublicImage.likeCount` / `PublicImage.saveCount` 同步维护
+- `PublicImage.likeCount` / `saveCount` / `viewCount` / `uniqueViewCount` 是聚合计数，由 Redis 实时维护并异步落库
+- `ImageLike` 和 `ImageSave` 服务于用户自己的 liked/saved 状态、去重和个人历史列表，不承担全量计数实时写入
 
 ## 12. 场景 J：用户在 My Studio 查看创作资产
 
-用户进入 My Studio，查看自己的生成图、投稿状态、主题提案，并按状态筛选。Studio 的图片操作可以提交作品到已有正式主题，也可以基于图片创建主题提案；这两个入口写入不同表。
+用户进入 My Studio，查看自己的生成图、投稿状态，并按状态筛选。主题想法提交由独立的 `Submit a theme` 页面负责。
 
 涉及数据表：
 
 - `User-用户`
 - `GeneratedImage-生成图片`
 - `GenerationJob-生成任务`
-- `ThemeSubmission-主题提交`
 - `ImageSubmission-作品投稿`
 - `PublicImage-公开图片`
 
@@ -606,21 +546,15 @@ sequenceDiagram
 
   FE->>API: 打开 My Studio(status filter)
   API->>DB: 查询 GeneratedImage(userId=currentUser)
-  API->>DB: include GenerationJob 摘要
-  API->>DB: include ImageSubmission 最新状态
-  API->>DB: include PublicImage 如果已发布
-  API->>DB: 查询 ThemeSubmission(userId=currentUser)
+  API->>DB: 按 jobId 批量查询 GenerationJob 摘要
+  API->>DB: 按 imageId 批量查询 ImageSubmission 最新状态
+  API->>DB: 按 imageId 批量查询 PublicImage(deleted=0)
   API-->>FE: 返回图片列表
 
   FE->>API: 点击 View prompt
   API->>DB: 校验 GeneratedImage.userId
-  API->>DB: 返回 GeneratedImage.promptUsed 或 GenerationJob.prompt
+  API->>DB: 返回 GenerationJob.prompt
   API-->>FE: 返回 prompt
-
-  FE->>API: 点击 Create theme idea from image
-  API->>DB: 校验 GeneratedImage.userId
-  API->>DB: 创建 ThemeSubmission(status=draft, triggerType=from_image)
-  API-->>FE: 返回主题提案草稿
 `}
 />
 
@@ -629,8 +563,7 @@ sequenceDiagram
 - Studio 不查询 `ReferenceImage` 作为作品。
 - Studio 的主资产是 `GeneratedImage-生成图片`。
 - 投稿状态来自 `ImageSubmission-作品投稿` 和 `GeneratedImage.status`。
-- 主题提案状态来自 `ThemeSubmission-主题提交`。
-- 从图片创建主题提案不会创建 `ImageSubmission-作品投稿`，也不会创建 `Theme-正式主题`。
+- Studio 顶层状态只需要 `All` 和 `Submitted`；Submitted 下展示 `Pending review`、`Approved`、`Rejected`。
 
 ## 13. AI 场景通用事务原则
 
