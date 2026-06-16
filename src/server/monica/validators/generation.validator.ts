@@ -16,15 +16,20 @@ function readOptionalString(value: unknown): string | undefined {
 }
 
 function readGenerationType(value: unknown): GenerationType {
-  if (
-    value === GENERATION_TYPE.TEXT_TO_IMAGE ||
-    value === GENERATION_TYPE.IMAGE_VARIATION ||
-    value === GENERATION_TYPE.IMAGE_EDIT
-  ) {
+  if (value === GENERATION_TYPE.TEXT_TO_IMAGE) {
     return value;
   }
 
   return GENERATION_TYPE.TEXT_TO_IMAGE;
+}
+
+function readOptionalBigInt(value: unknown): bigint | undefined {
+  const text = readOptionalString(value);
+  if (!text || !/^\d+$/.test(text)) {
+    return undefined;
+  }
+
+  return BigInt(text);
 }
 
 export function parseCreateGenerationJobInput(payload: unknown): CreateGenerationJobInput {
@@ -52,10 +57,7 @@ export function parseCreateGenerationJobInput(payload: unknown): CreateGeneratio
     ratio: readOptionalString(body.ratio),
     imageCount,
     generationType: readGenerationType(body.generationType),
-    sourcePage: readOptionalString(body.sourcePage),
-    themeId: readOptionalString(body.themeId),
+    themeId: readOptionalBigInt(body.themeId),
     referenceId: readOptionalString(body.referenceId),
-    sourceImageId: readOptionalString(body.sourceImageId),
-    editInstruction: readOptionalString(body.editInstruction),
   };
 }

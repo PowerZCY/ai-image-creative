@@ -12,14 +12,10 @@ export const GENERATION_STATUS = {
 
 export const GENERATION_TYPE = {
   TEXT_TO_IMAGE: 'text_to_image',
-  IMAGE_VARIATION: 'image_variation',
-  IMAGE_EDIT: 'image_edit',
 } as const;
 
 export const GENERATION_FEATURE = {
   IMAGE_GENERATION: 'ai_image_generation',
-  IMAGE_VARIATION: 'ai_image_variation',
-  IMAGE_EDIT: 'ai_image_edit',
 } as const;
 
 export const TERMINAL_GENERATION_STATUSES = new Set<string>([

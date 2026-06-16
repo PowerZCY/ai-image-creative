@@ -6,12 +6,28 @@ export class ThemeService {
     return themeRepository.listPublicThemes();
   }
 
+  searchPublicThemes(input: Parameters<typeof themeRepository.searchPublicThemes>[0]) {
+    return themeRepository.searchPublicThemes(input);
+  }
+
+  searchAdminThemes(input: Parameters<typeof themeRepository.searchAdminThemes>[0]) {
+    return themeRepository.searchAdminThemes(input);
+  }
+
   findPublicThemeBySlug(slug: string) {
     return themeRepository.findPublicThemeBySlug(slug);
   }
 
+  updateAdminTheme(themeId: string, input: Parameters<typeof themeRepository.updateAdminTheme>[1]) {
+    return themeRepository.updateAdminTheme(themeId, input);
+  }
+
   listSubmissions(input: Parameters<typeof themeRepository.listSubmissions>[0]) {
     return themeRepository.listSubmissions(input);
+  }
+
+  searchSubmissions(input: Parameters<typeof themeRepository.searchSubmissions>[0]) {
+    return themeRepository.searchSubmissions(input);
   }
 
   listMySubmissions(userId: string) {

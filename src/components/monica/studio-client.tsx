@@ -1,394 +1,292 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
-import { Eye, ImagePlus, Loader2, Send, X } from 'lucide-react';
+import { Eye, ImagePlus, Send, X } from 'lucide-react';
+import { cn } from '@windrun-huaiin/lib/utils';
 import {
   themeButtonGradientClass,
   themeButtonGradientHoverClass,
   themeHeroEyesOnClass,
-  themeIconColor,
 } from '@windrun-huaiin/base-ui/lib';
-import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaStudioCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
+import {
+  FilterPills,
+  ListShell,
+  ReviewFlowInline,
+  SearchInput,
+  SpinnerLabel,
+  StatusBadge,
+  getStatusTone,
+  useMonicaPagedList,
+} from './list-components';
 
 type StudioImage = {
   imageId: string;
   imageUrl?: string | null;
-  thumbnailUrl?: string | null;
   width?: number | null;
   height?: number | null;
   status: string;
+  isLocked?: boolean;
   themeId?: string | null;
   promptUsed?: string | null;
   model?: string | null;
   style?: string | null;
   ratio?: string | null;
   createdAt?: string | null;
-  submissions?: Array<{ status: string; submissionId: string }>;
-  publicImage?: { publicImageId: string; status: string } | null;
+  submissions?: Array<{ id?: string; status: string; reviewFlow?: unknown } | undefined>;
+  publicImage?: { publicImageId: string; title?: string | null } | null;
 };
 
-type StudioTab = 'all' | 'generated' | 'submitted' | 'under_review' | 'published' | 'rejected';
+type StudioFilters = {
+  keyword: string;
+  status: string;
+  locked: string;
+};
 
 async function readError(response: Response) {
   try {
-    const data = await response.json();
+    const data = await response.json() as { error?: unknown };
     return typeof data.error === 'string' ? data.error : response.statusText;
   } catch {
     return response.statusText;
   }
 }
 
-function formatStatus(status: string | undefined | null, labels: Record<string, string>, fallback: string) {
-  if (!status) return fallback;
-  return labels[status] ?? status;
-}
-
-function getImageDimensions(image: StudioImage) {
-  if (image.width && image.height && image.width > 0 && image.height > 0) {
-    return { width: image.width, height: image.height };
-  }
-
-  const [ratioWidth, ratioHeight] = image.ratio?.split(':').map((value) => Number(value)) ?? [];
-  if (ratioWidth && ratioHeight && ratioWidth > 0 && ratioHeight > 0) {
-    return { width: ratioWidth * 256, height: ratioHeight * 256 };
-  }
-
+function imageDimensions(image: StudioImage) {
+  if (image.width && image.height) return { width: image.width, height: image.height };
   return { width: 1024, height: 1024 };
 }
 
-function truncatePrompt(prompt: string | null | undefined, maxLength = 150) {
-  const normalized = prompt?.trim();
-  if (!normalized) {
-    return '';
-  }
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength).trimEnd()}...` : normalized;
+function truncate(value?: string | null, max = 220) {
+  const text = value?.trim() ?? '';
+  return text.length > max ? `${text.slice(0, max).trimEnd()}...` : text;
 }
 
 export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
-  const [images, setImages] = useState<StudioImage[]>([]);
-  const [tab, setTab] = useState<StudioTab>('all');
-  const [loading, setLoading] = useState(true);
-  const [submittingImageId, setSubmittingImageId] = useState<string | null>(null);
-  const [submitTarget, setSubmitTarget] = useState<StudioImage | null>(null);
+  const list = useMonicaPagedList<StudioFilters, StudioImage>({
+    endpoint: '/api/monica/studio/images/search',
+    initialFilters: { keyword: '', status: 'all', locked: 'all' },
+    pageSize: 12,
+  });
   const [promptTarget, setPromptTarget] = useState<StudioImage | null>(null);
-  const [creatorNote, setCreatorNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [submitTarget, setSubmitTarget] = useState<StudioImage | null>(null);
+  const [title, setTitle] = useState('');
+  const [creationNote, setCreationNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const tabOptions: Array<{ value: StudioTab; label: string }> = [
+  const statusOptions = [
     { value: 'all', label: copy.tabs.all },
     { value: 'generated', label: copy.tabs.generated },
     { value: 'submitted', label: copy.tabs.submitted },
-    { value: 'under_review', label: copy.tabs.underReview },
-    { value: 'published', label: copy.tabs.published },
+    { value: 'approved', label: copy.statusLabels.approved ?? 'Approved' },
     { value: 'rejected', label: copy.tabs.rejected },
   ];
+  const lockOptions = [
+    { value: 'all', label: 'All lock states' },
+    { value: 'unlocked', label: 'Editable' },
+    { value: 'locked', label: 'Locked' },
+  ];
 
-  const visibleImages = images.filter((image) => {
-    if (tab === 'all') return true;
-    const submissionStatus = image.publicImage?.status ?? image.submissions?.[0]?.status;
-    if (tab === 'submitted') return Boolean(submissionStatus);
-    if (tab === 'generated') return image.status === 'generated' && !submissionStatus;
-    if (tab === 'published') return image.status === 'published' || submissionStatus === 'published';
-    return submissionStatus === tab || image.status === tab;
-  });
-
-  async function fetchImages() {
-    const response = await fetch('/api/monica/studio/images', {
-      headers: { accept: 'application/json' },
-    });
-    if (!response.ok) {
-      throw new Error(await readError(response));
-    }
-    const data = await response.json() as { images: StudioImage[] };
-    return data.images;
-  }
-
-  async function loadImages() {
-    setLoading(true);
-    setError(null);
-    try {
-      setImages(await fetchImages());
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadInitialImages() {
-      try {
-        const nextImages = await fetchImages();
-        if (active) {
-          setImages(nextImages);
-        }
-      } catch (loadError) {
-        if (active) {
-          setError(loadError instanceof Error ? loadError.message : String(loadError));
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadInitialImages();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  async function submitImage(imageId: string, note?: string) {
-    setSubmittingImageId(imageId);
-    setError(null);
+  async function submitImage() {
+    if (!submitTarget) return;
+    setSubmitting(true);
+    setActionError(null);
     try {
       const response = await fetch('/api/monica/submissions', {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json',
-        },
-        body: JSON.stringify({ imageId, creatorNote: note }),
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+          imageId: submitTarget.imageId,
+          title,
+          creatorNote: creationNote,
+        }),
       });
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
+      if (!response.ok) throw new Error(await readError(response));
       setSubmitTarget(null);
-      setCreatorNote('');
-      await loadImages();
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : String(submitError));
+      setTitle('');
+      setCreationNote('');
+      list.reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
     } finally {
-      setSubmittingImageId(null);
+      setSubmitting(false);
     }
   }
 
   return (
     <section className="min-h-screen px-4 py-20 md:px-8 md:py-24">
       <div className={monicaContentWidthClass}>
-        <div className="mb-6 flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <h1 className={cn('bg-clip-text text-3xl font-semibold text-transparent md:text-5xl', themeHeroEyesOnClass)}>{copy.title}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {copy.description}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadImages()}
-            className="h-10 rounded-md border border-border px-4 text-sm text-foreground hover:bg-muted"
-          >
-            {copy.refresh}
-          </button>
+        <div className="mb-8">
+          <h1 className={cn('bg-clip-text text-3xl font-semibold text-transparent md:text-5xl', themeHeroEyesOnClass)}>
+            {copy.title}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.description}</p>
         </div>
 
-        <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-border bg-card/70 p-2">
-          {tabOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setTab(option.value)}
-              className={cn(
-                'h-9 rounded-md px-3 text-sm transition',
-                tab === option.value
-                  ? cn('text-white', themeButtonGradientClass)
-                  : 'text-muted-foreground hover:bg-background hover:text-foreground',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        {error && (
-          <div className="mb-4 rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
-            {error}
+        {actionError ? (
+          <div className="mb-4 rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-100">
+            {actionError}
           </div>
-        )}
+        ) : null}
 
-        {loading ? (
-          <div className="flex h-40 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground">
-            <Loader2 className="mr-2 size-4 animate-spin" />
-            {copy.loading}
-          </div>
-        ) : visibleImages.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card/60 p-6 text-sm text-muted-foreground">
-            {copy.empty}
-          </div>
-        ) : (
-          <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
-            {visibleImages.map((image) => {
-              const dimensions = getImageDimensions(image);
-              const promptPreview = truncatePrompt(image.promptUsed);
-
-              return (
-                <article key={image.imageId} className="mb-4 break-inside-avoid overflow-hidden rounded-lg border border-border bg-card">
-                {image.imageUrl ? (
-                  <Image
-                    src={image.imageUrl}
-                    alt=""
-                    width={dimensions.width}
-                    height={dimensions.height}
-                    unoptimized
-                    sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                    className="h-auto w-full object-contain"
-                  />
-                ) : (
-                  <div className="grid aspect-square place-items-center text-muted-foreground">
-                    <ImagePlus className="size-8" />
-                  </div>
-                )}
-                <div className="space-y-3 p-3">
-                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>{formatStatus(image.status, copy.statusLabels, copy.generated)}</span>
-                    <span>
-                      {formatStatus(
-                        image.publicImage?.status ?? image.submissions?.[0]?.status,
-                        copy.statusLabels,
-                        copy.privateStatus,
-                      )}
-                    </span>
-                  </div>
-                  <div
-                    className="line-clamp-3 min-h-10 text-xs leading-5 text-muted-foreground"
-                    title={image.promptUsed ?? undefined}
-                  >
-                    {promptPreview || copy.empty}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPromptTarget(image)}
-                      className="flex h-10 items-center justify-center gap-2 rounded-md border border-border text-sm text-foreground hover:bg-muted"
-                    >
-                      <Eye className="size-4" />
-                      <span className="min-w-0 truncate">{copy.viewPrompt}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSubmitTarget(image);
-                        setCreatorNote('');
-                      }}
-                      disabled={!image.themeId || Boolean(image.publicImage) || submittingImageId === image.imageId}
-                      className={cn(
-                        'flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50',
-                        themeButtonGradientClass,
-                        themeButtonGradientHoverClass,
-                      )}
-                    >
-                      {submittingImageId === image.imageId ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                      <span className="min-w-0 truncate">{image.themeId ? copy.submit : copy.noTheme}</span>
-                    </button>
-                  </div>
+        <ListShell
+          title={copy.myImages}
+          description="Generated images, submission state, and public publishing controls."
+          items={list.items}
+          loading={list.loading}
+          error={list.error}
+          empty={copy.empty}
+          pagination={list.pagination}
+          onPageChange={list.setPage}
+          filters={(
+            <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto] lg:items-end">
+              <SearchInput
+                value={list.filters.keyword}
+                placeholder="Search prompt or metadata"
+                onChange={(keyword) => list.updateFilters({ keyword })}
+              />
+              <FilterPills
+                value={list.filters.status}
+                options={statusOptions}
+                onChange={(status) => list.updateFilters({ status })}
+              />
+              <FilterPills
+                value={list.filters.locked}
+                options={lockOptions}
+                onChange={(locked) => list.updateFilters({ locked })}
+              />
+            </div>
+          )}
+          renderItem={(image) => {
+            const latestSubmission = image.submissions?.[0];
+            const canSubmit = !image.isLocked && (image.status === 'generated' || image.status === 'rejected') && Boolean(image.themeId);
+            return (
+              <article key={image.imageId} className="grid gap-4 rounded-lg border border-border bg-card p-3 md:grid-cols-[160px_minmax(0,1fr)_auto]">
+                <div className="overflow-hidden rounded-md bg-muted">
+                  {image.imageUrl ? (
+                    <Image
+                      src={image.imageUrl}
+                      alt=""
+                      width={imageDimensions(image).width}
+                      height={imageDimensions(image).height}
+                      unoptimized
+                      className="aspect-square w-full object-cover"
+                    />
+                  ) : (
+                    <div className="grid aspect-square place-items-center text-muted-foreground">
+                      <ImagePlus className="size-8" />
+                    </div>
+                  )}
                 </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+                <div className="min-w-0 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge tone={getStatusTone(image.status)}>{copy.statusLabels[image.status] ?? image.status}</StatusBadge>
+                    <StatusBadge tone={image.isLocked ? 'warn' : 'good'}>{image.isLocked ? 'Locked' : 'Editable'}</StatusBadge>
+                    {image.themeId ? <span className="text-xs text-muted-foreground">Theme #{image.themeId}</span> : null}
+                  </div>
+                  <p className="line-clamp-3 text-sm leading-6 text-foreground">{truncate(image.promptUsed) || copy.empty}</p>
+                  {latestSubmission ? <ReviewFlowInline flow={latestSubmission.reviewFlow} /> : null}
+                </div>
+                <div className="flex gap-2 md:w-36 md:flex-col">
+                  <button
+                    type="button"
+                    onClick={() => setPromptTarget(image)}
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted md:flex-none"
+                  >
+                    <Eye className="size-4" />
+                    {copy.viewPrompt}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSubmit}
+                    onClick={() => {
+                      setSubmitTarget(image);
+                      setTitle('');
+                      setCreationNote('');
+                    }}
+                    className={cn(
+                      'inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-45 md:flex-none',
+                      themeButtonGradientClass,
+                      themeButtonGradientHoverClass,
+                    )}
+                  >
+                    <Send className="size-4" />
+                    {image.themeId ? copy.submitImage : copy.noTheme}
+                  </button>
+                </div>
+              </article>
+            );
+          }}
+        />
       </div>
 
-      {promptTarget && (
-        <Modal title={copy.viewPrompt} closeLabel={copy.close} onClose={() => setPromptTarget(null)}>
-          <div className="space-y-4">
-            <div>
-              <div className="text-xs uppercase text-muted-foreground">{copy.prompt}</div>
-              <p className="mt-2 max-h-[48vh] overflow-auto rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm leading-6 text-zinc-950 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 whitespace-pre-wrap break-words">
-                {promptTarget.promptUsed || copy.empty}
-              </p>
-            </div>
-            <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-              <div>
-                <div className="text-xs uppercase text-muted-foreground">{copy.theme}</div>
-                <div className="mt-1">{promptTarget.themeId || copy.noTheme}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase text-muted-foreground">{copy.model}</div>
-                <div className="mt-1">{promptTarget.model || promptTarget.status}</div>
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {promptTarget ? (
+        <StudioModal title={copy.viewPrompt} closeLabel={copy.close} onClose={() => setPromptTarget(null)}>
+          <p className="whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-4 text-sm leading-6">
+            {promptTarget.promptUsed || copy.empty}
+          </p>
+        </StudioModal>
+      ) : null}
 
-      {submitTarget && (
-        <Modal title={copy.submitImage} closeLabel={copy.close} onClose={() => setSubmitTarget(null)}>
+      {submitTarget ? (
+        <StudioModal title={copy.submitImage} closeLabel={copy.close} onClose={() => setSubmitTarget(null)}>
           <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
             {submitTarget.imageUrl ? (
               <Image
                 src={submitTarget.imageUrl}
                 alt=""
-                width={getImageDimensions(submitTarget).width}
-                height={getImageDimensions(submitTarget).height}
+                width={imageDimensions(submitTarget).width}
+                height={imageDimensions(submitTarget).height}
                 unoptimized
-                className="h-auto w-full rounded-md object-contain"
+                className="aspect-square w-full rounded-md object-cover"
               />
-            ) : (
-              <div className="grid aspect-square place-items-center rounded-md bg-muted text-muted-foreground">
-                <ImagePlus className="size-8" />
-              </div>
-            )}
+            ) : null}
             <div className="space-y-4">
-              <div>
-                <div className="text-xs uppercase text-muted-foreground">{copy.prompt}</div>
-                <p className="mt-2 line-clamp-4 text-sm leading-6 text-foreground" title={submitTarget.promptUsed ?? undefined}>
-                  {truncatePrompt(submitTarget.promptUsed, 260) || copy.empty}
-                </p>
-              </div>
               <label className="block">
-                <span className="text-sm font-medium text-foreground">{copy.creatorNote}</span>
+                <span className="text-sm font-medium">Image title</span>
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none"
+                  placeholder="A lonely figure under a red sun"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium">{copy.creatorNote}</span>
                 <textarea
-                  value={creatorNote}
-                  onChange={(event) => setCreatorNote(event.target.value)}
+                  value={creationNote}
+                  onChange={(event) => setCreationNote(event.target.value)}
+                  className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
                   placeholder={copy.creatorNotePlaceholder}
                   rows={4}
-                  className={cn(
-                    'mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-current',
-                    themeIconColor,
-                  )}
                 />
               </label>
               <p className="text-xs leading-5 text-muted-foreground">{copy.submitHint}</p>
               <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSubmitTarget(null)}
-                  className="h-10 rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted"
-                >
+                <button type="button" onClick={() => setSubmitTarget(null)} className="h-10 rounded-md border border-border px-3 text-sm hover:bg-muted">
                   {copy.cancel}
                 </button>
                 <button
                   type="button"
-                  onClick={() => void submitImage(submitTarget.imageId, creatorNote)}
-                  disabled={submittingImageId === submitTarget.imageId}
-                  className={cn(
-                    'flex h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50',
-                    themeButtonGradientClass,
-                    themeButtonGradientHoverClass,
-                  )}
+                  onClick={() => void submitImage()}
+                  disabled={submitting}
+                  className={cn('h-10 rounded-md px-3 text-sm font-medium text-white disabled:opacity-50', themeButtonGradientClass)}
                 >
-                  {submittingImageId === submitTarget.imageId ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  <span className="min-w-0 truncate">{copy.submitImage}</span>
+                  {submitting ? <SpinnerLabel>{copy.submitImage}</SpinnerLabel> : copy.submitImage}
                 </button>
               </div>
             </div>
           </div>
-        </Modal>
-      )}
+        </StudioModal>
+      ) : null}
     </section>
   );
 }
 
-function Modal({
+function StudioModal({
   title,
   closeLabel,
   children,
@@ -396,20 +294,15 @@ function Modal({
 }: {
   title: string;
   closeLabel: string;
-  children: ReactNode;
+  children: React.ReactNode;
   onClose: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-zinc-200 bg-white text-zinc-950 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 [&_.text-foreground]:text-zinc-950 dark:[&_.text-foreground]:text-zinc-50 [&_.text-muted-foreground]:text-zinc-600 dark:[&_.text-muted-foreground]:text-zinc-400">
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid size-9 place-items-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
-            aria-label={closeLabel}
-          >
+          <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-md border border-border hover:bg-muted" aria-label={closeLabel}>
             <X className="size-4" />
           </button>
         </div>

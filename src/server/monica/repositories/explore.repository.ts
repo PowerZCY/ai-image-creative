@@ -1,9 +1,16 @@
 import { prisma } from '@/server/prisma';
+import { Prisma } from '@app-prisma';
+import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
+import { buildStoredImageUrl } from '../utils/image-url';
 
 export type ExploreSort = 'newest' | 'most_liked' | 'featured';
+type PublicImageFilters = {
+  keyword?: string;
+  themeId?: string;
+};
 
 export class ExploreRepository {
-  listPublicImages(sort: ExploreSort = 'newest') {
+  async listPublicImages(sort: ExploreSort = 'newest') {
     const orderBy =
       sort === 'most_liked'
         ? [{ likeCount: 'desc' as const }, { publishedAt: 'desc' as const }]
@@ -11,21 +18,111 @@ export class ExploreRepository {
           ? [{ featuredScore: 'desc' as const }, { publishedAt: 'desc' as const }]
           : [{ publishedAt: 'desc' as const }];
 
-    return prisma.publicImage.findMany({
+    const publicImages = await prisma.publicImage.findMany({
       where: {
-        status: 'published',
         deleted: 0,
-      },
-      include: {
-        image: true,
       },
       orderBy,
       take: 80,
     });
+
+    const imageIds = publicImages.map((publicImage) => publicImage.imageId);
+    const images = imageIds.length
+      ? await prisma.generatedImage.findMany({
+          where: {
+            imageId: { in: imageIds },
+            deleted: 0,
+          },
+        })
+      : [];
+    const imageById = new Map(images.map((image) => [image.imageId, image]));
+
+    return publicImages.map((publicImage) => {
+      const image = imageById.get(publicImage.imageId);
+      const imageUrl = image ? buildStoredImageUrl(image) : null;
+      return {
+        ...publicImage,
+        image: image
+          ? {
+              ...image,
+              imageUrl,
+              thumbnailUrl: imageUrl,
+            }
+          : null,
+      };
+    });
+  }
+
+  async searchPublicImages(input: MonicaPagedRequest<PublicImageFilters>) {
+    const sort = input.sortBy === 'most_liked' || input.sortBy === 'featured' ? input.sortBy : 'newest';
+    const orderBy =
+      sort === 'most_liked'
+        ? [{ likeCount: 'desc' as const }, { publishedAt: 'desc' as const }]
+        : sort === 'featured'
+          ? [{ featuredScore: 'desc' as const }, { publishedAt: 'desc' as const }]
+          : [{ publishedAt: 'desc' as const }];
+    const { page, pageSize, skip } = normalizePagination(input);
+    const keyword = readStringFilter(input.filters?.keyword);
+    const themeIdText = readStringFilter(input.filters?.themeId);
+    const themeId = /^\d+$/.test(themeIdText) ? BigInt(themeIdText) : undefined;
+    const where: Prisma.PublicImageWhereInput = {
+      deleted: 0,
+      ...(themeId ? { themeId } : {}),
+      ...(keyword
+        ? {
+            OR: [
+              { title: { contains: keyword, mode: 'insensitive' } },
+              { altText: { contains: keyword, mode: 'insensitive' } },
+              { creationNote: { contains: keyword, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [publicImages, total] = await prisma.$transaction([
+      prisma.publicImage.findMany({
+        where,
+        orderBy,
+        skip,
+        take: pageSize,
+      }),
+      prisma.publicImage.count({ where }),
+    ]);
+
+    const imageIds = publicImages.map((publicImage) => publicImage.imageId);
+    const images = imageIds.length
+      ? await prisma.generatedImage.findMany({
+          where: { imageId: { in: imageIds }, deleted: 0 },
+        })
+      : [];
+    const imageById = new Map(images.map((image) => [image.imageId, image]));
+
+    return {
+      items: publicImages.map((publicImage) => {
+        const image = imageById.get(publicImage.imageId);
+        const imageUrl = image ? buildStoredImageUrl(image) : null;
+        return {
+          ...publicImage,
+          image: image ? { ...image, imageUrl, thumbnailUrl: imageUrl } : null,
+        };
+      }),
+      pagination: buildPagination({ page, pageSize, total }),
+    };
   }
 
   async toggleLike(userId: string, publicImageId: string) {
     return prisma.$transaction(async (tx) => {
+      const publicImage = await tx.publicImage.findFirst({
+        where: {
+          publicImageId,
+          deleted: 0,
+        },
+        select: { id: true },
+      });
+      if (!publicImage) {
+        throw new Error('Public image not found');
+      }
+
       const existing = await tx.imageLike.findUnique({
         where: {
           publicImageId_userId: {
@@ -68,6 +165,17 @@ export class ExploreRepository {
 
   async toggleSave(userId: string, publicImageId: string) {
     return prisma.$transaction(async (tx) => {
+      const publicImage = await tx.publicImage.findFirst({
+        where: {
+          publicImageId,
+          deleted: 0,
+        },
+        select: { id: true },
+      });
+      if (!publicImage) {
+        throw new Error('Public image not found');
+      }
+
       const existing = await tx.imageSave.findUnique({
         where: {
           publicImageId_userId: {

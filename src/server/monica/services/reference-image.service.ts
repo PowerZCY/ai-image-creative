@@ -7,7 +7,7 @@ import { safetyService } from './safety.service';
 export class ReferenceImageService {
   async createReferenceImage(userId: string, input: {
     storageKey: string;
-    url?: string;
+    cdnImagePrefix?: string;
     mimeType?: string;
     width?: number;
     height?: number;
@@ -21,7 +21,7 @@ export class ReferenceImageService {
     return referenceImageRepository.create({
       userId,
       storageKey: input.storageKey,
-      url: input.url,
+      cdnImagePrefix: input.cdnImagePrefix,
       mimeType: input.mimeType,
       width: input.width,
       height: input.height,

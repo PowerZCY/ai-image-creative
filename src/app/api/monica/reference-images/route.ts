@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     const referenceImage = await referenceImageService.createReferenceImage(user.userId, {
       storageKey,
-      url: readOptionalJsonString(body.url),
+      cdnImagePrefix: readOptionalJsonString(body.cdnImagePrefix),
       mimeType: readOptionalJsonString(body.mimeType),
       width: readOptionalJsonNumber(body.width),
       height: readOptionalJsonNumber(body.height),

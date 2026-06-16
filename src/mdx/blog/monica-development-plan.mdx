@@ -16,6 +16,15 @@ date: 2026-06-13
 - 尚未产品化完成：真实 OpenRouter Provider、动态主题 slug/id 和主题 API、Explore 主题数据从 DB/API 读取、Download 实际能力、移动端和真实账号/积分/QStash/R2 的统一联调 polish。
 - 因此当前状态应理解为“MVP 前端主链路完成，等待联调和真实 AI Provider 接入”，而不是最终产品功能全量完成。
 
+详细 TODO:
+  - OpenRouter 真实 AI Provider 还没接入，现在仍是 mock provider 链路
+  - 管理端权限目前只是登录鉴权，是否真正 admin 权限需要接项目权限体系
+  - like/save/view 的 Redis 实时计数 + 异步落库还没做，只是保留了字段和基础接口
+  - Download 实际能力还没补
+  - 撤销公开/下架申请审核流还没做
+  - 真实 R2/QStash/账号/积分的端到端联调还没跑
+  - 部分 Monica 新页面文案还是硬编码英文，后续要进 i18n
+
 核心策略：
 
 - 先打通“生成任务闭环”，再补 Studio、投稿、Explore 和真实 AI Provider。
@@ -328,5 +337,12 @@ Worker 流程：
 | 2026-06-13 | 阶段 4 | 首页第一屏接入 Monica Creator，支持 prompt、参考图上传、创建任务、轮询状态和结果展示 | build:prod 通过 |
 | 2026-06-13 | 阶段 5 | 实现 Studio 图片列表、投稿发布、Explore 列表、like/save API，并新增 `/studio` 和 `/explore` 页面 | build:prod 通过 |
 | 2026-06-13 | 阶段 4/5 | 按项目 i18n 规范拆分 `messages/biz` 文案文件，新增 copy builder，补齐首页主题区、`/theme` 页面、Explore tabs/search/filter/detail、Studio tabs/prompt/submit modal | build:prod 通过 |
+| 2026-06-16 | 阶段 5 | 新增 POST body 分页查询接口，覆盖公开主题、公开图片、Studio 图片、我的主题提交、管理员主题提交、管理员主题和管理员图片提交列表 | build:prod 通过，lint 通过 |
+| 2026-06-16 | 阶段 5 | 新增 Monica 通用列表组件，统一分页、搜索、筛选、加载骨架、状态标签和审核流摘要展示 | build:prod 通过，lint 通过 |
+| 2026-06-16 | 阶段 5 | 重写 Explore 和 Studio 页面列表读取逻辑，改为 POST body 分页查询，并按 `GeneratedImage.status/isLocked` 控制图片投稿操作 | build:prod 通过，lint 通过 |
+| 2026-06-16 | 阶段 5 | 新增独立主题提交页 `/submit-theme`，并新增管理员审核页 `/admin/monica`，覆盖主题提交、正式主题、图片提交三个分页列表 | build:prod 通过，lint 通过 |
+| 2026-06-16 | 阶段 5 | 导航改为独立主题提交入口，并增加管理员 Monica 审核入口 | build:prod 通过，lint 通过 |
+| 2026-06-16 | 阶段 5 | 图片投稿改为进入审核流，管理员图片审核通过后创建或恢复 `PublicImage`，拒绝后解锁 `GeneratedImage`；独立主题提交页直接创建 `under_review` 记录；主题详情支持按 id 查询 | build:prod 通过，lint 通过 |
+| 2026-06-16 | 阶段 5 | 新增管理员正式 Theme 更新接口，并在 `/admin/monica` 正式主题列表中接入基础字段和 featured image id 行内编辑 | build:prod 通过，lint 通过 |
 
 </CheetTable>

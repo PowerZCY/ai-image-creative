@@ -62,8 +62,8 @@ export async function primaryNavLinks(locale: string): Promise<SiteNavItemConfig
     ),
     createLocalizedNavLink(
       {
-        text: 'Themes',
-        path: '/themes',
+        text: 'Submit a theme',
+        path: '/submit-theme',
         prefetch: false,
         icon: <BrainCircuitIcon />,
       },
@@ -75,6 +75,15 @@ export async function primaryNavLinks(locale: string): Promise<SiteNavItemConfig
         path: '/studio',
         prefetch: false,
         icon: <SparklesIcon />,
+      },
+      context,
+    ),
+    createLocalizedNavLink(
+      {
+        text: 'Admin',
+        path: '/admin/monica',
+        prefetch: false,
+        icon: <SettingsIcon />,
       },
       context,
     ),

@@ -1,8 +1,9 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
-import { submissionService } from '@/server/monica/services/submission.service';
+import { themeService } from '@/server/monica/services/theme.service';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
+import type { MonicaPagedRequest } from '@/server/monica/types/pagination';
 
 installBigIntJsonSerialization();
 
@@ -10,18 +11,13 @@ export async function POST(request: NextRequest) {
   try {
     const authUtils = new ApiAuthUtils(request);
     const { user } = await authUtils.requireAuthWithUser();
-    const body = await request.json() as { imageId?: string; title?: string; creatorNote?: string };
-    if (!body.imageId) {
-      return NextResponse.json({ error: 'imageId is required' }, { status: 400 });
-    }
-
-    const submission = await submissionService.submitImage(user.userId, {
-      imageId: body.imageId,
-      title: typeof body.title === 'string' ? body.title : undefined,
-      creatorNote: typeof body.creatorNote === 'string' ? body.creatorNote : undefined,
+    const body = await request.json() as MonicaPagedRequest;
+    const result = await themeService.searchSubmissions({
+      ...body,
+      currentUserId: user.userId,
+      includeAll: false,
     });
-
-    return NextResponse.json({ submission });
+    return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 400 });

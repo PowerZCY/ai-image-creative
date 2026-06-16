@@ -1,89 +1,153 @@
 import { prisma } from '@/server/prisma';
+import { Prisma } from '@app-prisma';
 
 export type CreateSubmissionInput = {
   userId: string;
   imageId: string;
-  themeId: string;
+  themeId: bigint;
+  title: string;
   promptSnapshot?: string | null;
-  creatorNote?: string;
+  creationNote?: string;
 };
 
+function appendReviewFlow(flow: Prisma.JsonValue | null | undefined, event: {
+  actorUserId: string;
+  actorType: string;
+  status: string;
+  note?: string;
+}) {
+  const currentFlow = Array.isArray(flow) ? flow : [];
+  return [
+    ...currentFlow,
+    {
+      status: event.status,
+      actorUserId: event.actorUserId,
+      actorType: event.actorType,
+      note: event.note,
+      createdAt: new Date().toISOString(),
+    },
+  ] satisfies Prisma.InputJsonValue;
+}
+
 export class SubmissionRepository {
-  findExistingSubmission(userId: string, imageId: string) {
-    return prisma.imageSubmission.findFirst({
+  async findExistingSubmission(userId: string, imageId: string) {
+    const submission = await prisma.imageSubmission.findFirst({
       where: {
         userId,
         imageId,
         deleted: 0,
         status: { not: 'withdrawn' },
       },
-      include: {
-        publicImage: true,
-        reviews: {
-          where: { deleted: 0 },
-          orderBy: { createdAt: 'desc' },
-        },
+      orderBy: { submittedAt: 'desc' },
+    });
+    if (!submission) return null;
+
+    const publicImage = await prisma.publicImage.findFirst({
+      where: {
+        imageId,
+        deleted: 0,
       },
     });
+
+    return {
+      ...submission,
+      publicImage,
+    };
   }
 
-  createAndPublish(input: CreateSubmissionInput) {
+  createForReview(input: CreateSubmissionInput) {
     return prisma.$transaction(async (tx) => {
       const submission = await tx.imageSubmission.create({
         data: {
           userId: input.userId,
           imageId: input.imageId,
           themeId: input.themeId,
-          status: 'published',
+          status: 'under_review',
+          title: input.title,
           promptSnapshot: input.promptSnapshot,
-          creatorNote: input.creatorNote,
-          safetyStatus: 'skipped',
-          relevanceStatus: 'skipped',
-          reviewSummary: 'MVP lightweight review passed',
-          reviewedAt: new Date(),
-          publishedAt: new Date(),
-        },
-      });
-
-      await tx.reviewRecord.create({
-        data: {
-          submissionId: submission.submissionId,
-          targetType: 'submission',
-          targetId: submission.submissionId,
-          reviewType: 'safety_auto',
-          result: 'skipped',
-          reason: 'MVP lightweight review',
-          detail: {
-            mode: 'mvp_lightweight_review',
-          },
-        },
-      });
-
-      const publicImage = await tx.publicImage.upsert({
-        where: {
-          imageId: input.imageId,
-        },
-        update: {
-          submissionId: submission.submissionId,
-          status: 'published',
-          title: input.creatorNote?.slice(0, 255),
-          publishedAt: new Date(),
-          deleted: 0,
-        },
-        create: {
-          imageId: input.imageId,
-          submissionId: submission.submissionId,
-          userId: input.userId,
-          themeId: input.themeId,
-          status: 'published',
-          title: input.creatorNote?.slice(0, 255),
-          promptPublic: true,
+          creationNote: input.creationNote,
+          reviewFlow: appendReviewFlow(null, {
+            actorUserId: input.userId,
+            actorType: 'user',
+            status: 'under_review',
+            note: input.creationNote || 'Submitted for review',
+          }),
         },
       });
 
       await tx.generatedImage.update({
         where: { imageId: input.imageId },
-        data: { status: 'published' },
+        data: {
+          status: 'under_review',
+          isLocked: true,
+        },
+      });
+
+      return submission;
+    });
+  }
+
+  reviewImageSubmission(reviewerUserId: string, submissionId: string, action: 'approved' | 'rejected', note?: string) {
+    if (!/^\d+$/.test(submissionId)) return null;
+
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.imageSubmission.findFirst({
+        where: {
+          id: BigInt(submissionId),
+          deleted: 0,
+        },
+      });
+      if (!existing) return null;
+      if (!['submitted', 'under_review', 'needs_review'].includes(existing.status)) {
+        throw new Error('Image submission cannot be reviewed in its current status');
+      }
+
+      const submission = await tx.imageSubmission.update({
+        where: { id: existing.id },
+        data: {
+          status: action,
+          reviewFlow: appendReviewFlow(existing.reviewFlow, {
+            actorUserId: reviewerUserId,
+            actorType: 'reviewer',
+            status: action,
+            note,
+          }),
+        },
+      });
+
+      let publicImage = null;
+      if (action === 'approved') {
+        publicImage = await tx.publicImage.upsert({
+          where: {
+            imageId: existing.imageId,
+          },
+          update: {
+            sourceSubmissionId: existing.id,
+            userId: existing.userId,
+            themeId: existing.themeId,
+            title: existing.title,
+            creationNote: existing.creationNote,
+            publishedAt: new Date(),
+            deleted: 0,
+          },
+          create: {
+            imageId: existing.imageId,
+            sourceSubmissionId: existing.id,
+            userId: existing.userId,
+            themeId: existing.themeId,
+            title: existing.title,
+            creationNote: existing.creationNote,
+            promptPublic: true,
+          },
+        });
+      }
+
+      await tx.generatedImage.update({
+        where: { imageId: existing.imageId },
+        data: {
+          status: action,
+          isLocked: action === 'approved',
+        },
       });
 
       return {

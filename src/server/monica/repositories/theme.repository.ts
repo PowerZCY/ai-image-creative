@@ -1,18 +1,19 @@
 import { prisma } from '@/server/prisma';
+import { Prisma } from '@app-prisma';
 import { THEME_STATUS, THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
+import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
 import { slugifyThemeTitle } from '../utils/theme-slug';
 
+type ThemeRecord = NonNullable<Awaited<ReturnType<typeof prisma.theme.findFirst>>>;
+
 type ThemeSubmissionDraftInput = {
-  rawTitle: string;
-  rawDescription?: string;
-  triggerType?: string;
-  editedTitle?: string;
-  editedBrief?: string;
-  editedDescription?: string;
-  sourceType?: string;
+  title: string;
+  details: string;
+  submitReason?: string;
+  submitNow?: boolean;
 };
 
-type ThemeSubmissionUpdateInput = Partial<Omit<ThemeSubmissionDraftInput, 'sourceType'>>;
+type ThemeSubmissionUpdateInput = Partial<ThemeSubmissionDraftInput>;
 
 type PublishThemeInput = {
   title: string;
@@ -25,6 +26,17 @@ type PublishThemeInput = {
   status: string;
 };
 
+type AdminThemeUpdateInput = {
+  title?: string;
+  brief?: string | null;
+  description?: string | null;
+  coverImageUrl?: string | null;
+  promptTexts?: string[];
+  tags?: string[];
+  publishDate?: string | null;
+  featuredImageIds?: bigint[];
+};
+
 type ListThemeSubmissionsInput = {
   userId?: string;
   includeAll?: boolean;
@@ -33,13 +45,71 @@ type ListThemeSubmissionsInput = {
   pageSize?: number;
 };
 
-function normalizeTheme(theme: Awaited<ReturnType<typeof prisma.theme.findFirst>>) {
-  if (!theme) return null;
+type ThemeSearchFilters = {
+  keyword?: string;
+  visibility?: string;
+  sourceType?: string;
+};
+
+type ThemeSubmissionSearchFilters = {
+  keyword?: string;
+  status?: string;
+  userId?: string;
+};
+
+function normalizeTheme(theme: ThemeRecord) {
   return {
     ...theme,
     slug: slugifyThemeTitle(theme.title),
+    description: theme.themeNote,
+    promptTexts: theme.generatorIdeas,
     tags: Array.isArray(theme.tags) ? theme.tags : [],
     stats: theme.stats && typeof theme.stats === 'object' ? theme.stats : {},
+  };
+}
+
+function toSubmissionId(value: string) {
+  if (!/^\d+$/.test(value)) {
+    throw new Error('themeSubmissionId must be a numeric id');
+  }
+
+  return BigInt(value);
+}
+
+function appendReviewFlow(
+  current: Prisma.JsonValue | null | undefined,
+  node: {
+    status: string;
+    actorUserId: string;
+    actorType: string;
+    note?: string;
+  },
+) {
+  const items = Array.isArray(current) ? current : [];
+  return [
+    ...items,
+    {
+      ...node,
+      createdAt: new Date().toISOString(),
+    },
+  ] as Prisma.InputJsonValue;
+}
+
+function mapSubmissionForApi<T extends { id: bigint; title: string; details: string; submitReason?: string | null }>(
+  submission: T,
+  acceptedTheme?: unknown,
+  user?: unknown,
+) {
+  return {
+    ...submission,
+    themeSubmissionId: submission.id.toString(),
+    rawTitle: submission.title,
+    rawDescription: submission.details,
+    editedTitle: submission.title,
+    editedBrief: submission.details,
+    editedDescription: submission.details,
+    acceptedTheme: acceptedTheme ?? null,
+    user: user ?? null,
   };
 }
 
@@ -47,24 +117,133 @@ export class ThemeRepository {
   async listPublicThemes() {
     const themes = await prisma.theme.findMany({
       where: {
-        status: THEME_STATUS.PUBLISHED,
         deleted: 0,
+        OR: [
+          { publishDate: null },
+          { publishDate: { lte: new Date() } },
+        ],
       },
-      orderBy: [{ sortOrder: 'desc' }, { publishDate: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ publishDate: 'desc' }, { createdAt: 'desc' }],
       take: 80,
     });
 
-    return themes.map((theme) => ({
-      ...theme,
-      slug: slugifyThemeTitle(theme.title),
-      tags: Array.isArray(theme.tags) ? theme.tags : [],
-      stats: theme.stats && typeof theme.stats === 'object' ? theme.stats : {},
-    }));
+    return themes.map((theme) => normalizeTheme(theme));
+  }
+
+  async searchPublicThemes(input: MonicaPagedRequest<ThemeSearchFilters>) {
+    const { page, pageSize, skip } = normalizePagination(input);
+    const keyword = readStringFilter(input.filters?.keyword);
+    const where: Prisma.ThemeWhereInput = {
+      deleted: 0,
+      OR: [
+        { publishDate: null },
+        { publishDate: { lte: new Date() } },
+      ],
+      ...(keyword
+        ? {
+            AND: [
+              {
+                OR: [
+                  { title: { contains: keyword, mode: 'insensitive' } },
+                  { brief: { contains: keyword, mode: 'insensitive' } },
+                  { themeNote: { contains: keyword, mode: 'insensitive' } },
+                ],
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await prisma.$transaction([
+      prisma.theme.findMany({
+        where,
+        orderBy: [{ publishDate: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: pageSize,
+      }),
+      prisma.theme.count({ where }),
+    ]);
+
+    return {
+      items: items.map((theme) => normalizeTheme(theme)),
+      pagination: buildPagination({ page, pageSize, total }),
+    };
+  }
+
+  async searchAdminThemes(input: MonicaPagedRequest<ThemeSearchFilters>) {
+    const { page, pageSize, skip } = normalizePagination(input);
+    const keyword = readStringFilter(input.filters?.keyword);
+    const sourceType = readStringFilter(input.filters?.sourceType);
+    const visibility = readStringFilter(input.filters?.visibility);
+    const where: Prisma.ThemeWhereInput = {
+      ...(visibility === 'deleted' ? { deleted: 1 } : { deleted: 0 }),
+      ...(sourceType ? { sourceType } : {}),
+      ...(keyword
+        ? {
+            OR: [
+              { title: { contains: keyword, mode: 'insensitive' } },
+              { brief: { contains: keyword, mode: 'insensitive' } },
+              { themeNote: { contains: keyword, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await prisma.$transaction([
+      prisma.theme.findMany({
+        where,
+        orderBy: [{ publishDate: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: pageSize,
+      }),
+      prisma.theme.count({ where }),
+    ]);
+
+    return {
+      items: items.map((theme) => normalizeTheme(theme)),
+      pagination: buildPagination({ page, pageSize, total }),
+    };
   }
 
   async findPublicThemeBySlug(slug: string) {
+    if (/^\d+$/.test(slug)) {
+      const theme = await prisma.theme.findFirst({
+        where: {
+          id: BigInt(slug),
+          deleted: 0,
+          OR: [
+            { publishDate: null },
+            { publishDate: { lte: new Date() } },
+          ],
+        },
+      });
+
+      return theme ? normalizeTheme(theme) : null;
+    }
+
     const themes = await this.listPublicThemes();
-    return themes.find((theme) => theme.slug === slug) ?? null;
+    return themes.find((theme) => theme?.slug === slug) ?? null;
+  }
+
+  async updateAdminTheme(themeId: string, input: AdminThemeUpdateInput) {
+    if (!/^\d+$/.test(themeId)) return null;
+
+    const data: Prisma.ThemeUpdateInput = {};
+    if (input.title !== undefined) data.title = input.title;
+    if (input.brief !== undefined) data.brief = input.brief;
+    if (input.description !== undefined) data.themeNote = input.description;
+    if (input.coverImageUrl !== undefined) data.coverImageUrl = input.coverImageUrl;
+    if (input.promptTexts !== undefined) data.generatorIdeas = input.promptTexts;
+    if (input.tags !== undefined) data.tags = input.tags;
+    if (input.publishDate !== undefined) data.publishDate = input.publishDate ? new Date(input.publishDate) : null;
+    if (input.featuredImageIds !== undefined) data.featuredImageIds = input.featuredImageIds;
+
+    const theme = await prisma.theme.update({
+      where: { id: BigInt(themeId) },
+      data,
+    });
+
+    return normalizeTheme(theme);
   }
 
   async listSubmissions(input: ListThemeSubmissionsInput) {
@@ -79,16 +258,6 @@ export class ThemeRepository {
     const [items, total] = await prisma.$transaction([
       prisma.themeSubmission.findMany({
         where,
-        include: {
-          user: {
-            select: {
-              userId: true,
-              email: true,
-              userName: true,
-            },
-          },
-          acceptedTheme: true,
-        },
         orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -96,8 +265,38 @@ export class ThemeRepository {
       prisma.themeSubmission.count({ where }),
     ]);
 
+    const submissionIds = items.map((item) => item.id);
+    const userIds = [...new Set(items.map((item) => item.userId))];
+    const [themes, users] = await Promise.all([
+      submissionIds.length
+        ? prisma.theme.findMany({
+            where: {
+              sourceSubmissionId: { in: submissionIds },
+              deleted: 0,
+            },
+          })
+        : [],
+      userIds.length
+        ? prisma.user.findMany({
+            where: { userId: { in: userIds } },
+            select: {
+              userId: true,
+              email: true,
+              userName: true,
+            },
+          })
+        : [],
+    ]);
+
+    const themeBySubmissionId = new Map(themes.map((theme) => [theme.sourceSubmissionId?.toString(), normalizeTheme(theme)]));
+    const userById = new Map(users.map((user) => [user.userId, user]));
+
     return {
-      items,
+      items: items.map((item) => mapSubmissionForApi(
+        item,
+        themeBySubmissionId.get(item.id.toString()),
+        userById.get(item.userId),
+      )),
       pagination: {
         page,
         pageSize,
@@ -105,6 +304,68 @@ export class ThemeRepository {
         totalPages: Math.max(1, Math.ceil(total / pageSize)),
       },
       canReview: true,
+    };
+  }
+
+  async searchSubmissions(input: MonicaPagedRequest<ThemeSubmissionSearchFilters> & { currentUserId?: string; includeAll?: boolean }) {
+    const { page, pageSize, skip } = normalizePagination(input);
+    const keyword = readStringFilter(input.filters?.keyword);
+    const status = readStringFilter(input.filters?.status);
+    const userId = input.includeAll ? readStringFilter(input.filters?.userId) : input.currentUserId;
+    const where: Prisma.ThemeSubmissionWhereInput = {
+      deleted: 0,
+      ...(userId ? { userId } : {}),
+      ...(status && status !== 'all' ? { status } : {}),
+      ...(keyword
+        ? {
+            OR: [
+              { title: { contains: keyword, mode: 'insensitive' } },
+              { details: { contains: keyword, mode: 'insensitive' } },
+              { submitReason: { contains: keyword, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await prisma.$transaction([
+      prisma.themeSubmission.findMany({
+        where,
+        orderBy: [{ submittedAt: 'desc' }, { updatedAt: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: pageSize,
+      }),
+      prisma.themeSubmission.count({ where }),
+    ]);
+
+    const submissionIds = items.map((item) => item.id);
+    const userIds = [...new Set(items.map((item) => item.userId))];
+    const [themes, users] = await Promise.all([
+      submissionIds.length
+        ? prisma.theme.findMany({
+            where: {
+              sourceSubmissionId: { in: submissionIds },
+              deleted: 0,
+            },
+          })
+        : [],
+      userIds.length
+        ? prisma.user.findMany({
+            where: { userId: { in: userIds } },
+            select: { userId: true, email: true, userName: true },
+          })
+        : [],
+    ]);
+
+    const themeBySubmissionId = new Map(themes.map((theme) => [theme.sourceSubmissionId?.toString(), normalizeTheme(theme)]));
+    const userById = new Map(users.map((user) => [user.userId, user]));
+
+    return {
+      items: items.map((item) => mapSubmissionForApi(
+        item,
+        themeBySubmissionId.get(item.id.toString()),
+        userById.get(item.userId),
+      )),
+      pagination: buildPagination({ page, pageSize, total }),
     };
   }
 
@@ -118,25 +379,30 @@ export class ThemeRepository {
   }
 
   createSubmission(userId: string, input: ThemeSubmissionDraftInput) {
+    const status = input.submitNow ? THEME_SUBMISSION_STATUS.UNDER_REVIEW : THEME_SUBMISSION_STATUS.DRAFT;
     return prisma.themeSubmission.create({
       data: {
         userId,
-        status: THEME_SUBMISSION_STATUS.DRAFT,
-        rawTitle: input.rawTitle,
-        rawDescription: input.rawDescription,
-        triggerType: input.triggerType,
-        editedTitle: input.editedTitle,
-        editedBrief: input.editedBrief,
-        editedDescription: input.editedDescription,
-        sourceType: input.sourceType ?? 'user',
+        status,
+        title: input.title,
+        details: input.details,
+        submitReason: input.submitReason,
+        submittedAt: input.submitNow ? new Date() : undefined,
+        reviewFlow: appendReviewFlow(null, {
+          status,
+          actorUserId: userId,
+          actorType: 'user',
+          note: input.submitReason,
+        }),
       },
-    });
+    }).then((submission) => mapSubmissionForApi(submission));
   }
 
   async updateOwnedDraft(userId: string, themeSubmissionId: string, input: ThemeSubmissionUpdateInput) {
+    const id = toSubmissionId(themeSubmissionId);
     const existing = await prisma.themeSubmission.findFirst({
       where: {
-        themeSubmissionId,
+        id,
         userId,
         deleted: 0,
       },
@@ -146,16 +412,19 @@ export class ThemeRepository {
       throw new Error('Only draft theme submissions can be edited');
     }
 
-    return prisma.themeSubmission.update({
+    const submission = await prisma.themeSubmission.update({
       where: { id: existing.id },
       data: input,
     });
+
+    return mapSubmissionForApi(submission);
   }
 
   async submitOwnedDraft(userId: string, themeSubmissionId: string) {
+    const id = toSubmissionId(themeSubmissionId);
     const existing = await prisma.themeSubmission.findFirst({
       where: {
-        themeSubmissionId,
+        id,
         userId,
         deleted: 0,
       },
@@ -165,19 +434,27 @@ export class ThemeRepository {
       throw new Error('Only draft theme submissions can be submitted');
     }
 
-    return prisma.themeSubmission.update({
+    const submission = await prisma.themeSubmission.update({
       where: { id: existing.id },
       data: {
         status: THEME_SUBMISSION_STATUS.UNDER_REVIEW,
         submittedAt: new Date(),
+        reviewFlow: appendReviewFlow(existing.reviewFlow, {
+          status: THEME_SUBMISSION_STATUS.UNDER_REVIEW,
+          actorUserId: userId,
+          actorType: 'user',
+        }),
       },
     });
+
+    return mapSubmissionForApi(submission);
   }
 
   async reviewSubmission(reviewerUserId: string, themeSubmissionId: string, status: ThemeSubmissionStatus, reason?: string) {
+    const id = toSubmissionId(themeSubmissionId);
     const existing = await prisma.themeSubmission.findFirst({
       where: {
-        themeSubmissionId,
+        id,
         deleted: 0,
       },
     });
@@ -189,21 +466,27 @@ export class ThemeRepository {
       throw new Error('Only under-review or accepted theme submissions can be reviewed');
     }
 
-    return prisma.themeSubmission.update({
+    const submission = await prisma.themeSubmission.update({
       where: { id: existing.id },
       data: {
         status,
-        reviewedByUserId: reviewerUserId,
-        reviewReason: reason,
-        reviewedAt: new Date(),
+        reviewFlow: appendReviewFlow(existing.reviewFlow, {
+          status,
+          actorUserId: reviewerUserId,
+          actorType: 'reviewer',
+          note: reason,
+        }),
       },
     });
+
+    return mapSubmissionForApi(submission);
   }
 
   async publishFromSubmission(reviewerUserId: string, themeSubmissionId: string, input: PublishThemeInput) {
+    const id = toSubmissionId(themeSubmissionId);
     const existing = await prisma.themeSubmission.findFirst({
       where: {
-        themeSubmissionId,
+        id,
         deleted: 0,
       },
     });
@@ -221,12 +504,12 @@ export class ThemeRepository {
         data: {
           title: input.title,
           brief: input.brief,
-          description: input.description,
+          themeNote: input.description,
           coverImageUrl: input.coverImageUrl,
-          promptTexts: input.promptTexts,
+          generatorIdeas: input.promptTexts,
           tags: input.tags,
-          sourceType: existing.sourceType,
-          status: input.status,
+          sourceType: 'theme_submission',
+          sourceSubmissionId: existing.id,
           publishDate: input.publishDate ? new Date(input.publishDate) : new Date(),
         },
       });
@@ -239,18 +522,17 @@ export class ThemeRepository {
         where: { id: existing.id },
         data: {
           status: submissionStatus,
-          acceptedThemeId: theme.themeId,
-          reviewedByUserId: reviewerUserId,
-          reviewedAt: existing.reviewedAt ?? new Date(),
-          selectedAt: new Date(),
-        },
-        include: {
-          acceptedTheme: true,
+          reviewFlow: appendReviewFlow(existing.reviewFlow, {
+            status: submissionStatus,
+            actorUserId: reviewerUserId,
+            actorType: 'reviewer',
+            note: `Theme ${input.status}`,
+          }),
         },
       });
 
       return {
-        submission,
+        submission: mapSubmissionForApi(submission, normalizeTheme(theme)),
         theme: normalizeTheme(theme),
       };
     });

@@ -6,6 +6,10 @@ export class ExploreService {
     return exploreRepository.listPublicImages(sort as ExploreSort);
   }
 
+  searchPublicImages(input: Parameters<typeof exploreRepository.searchPublicImages>[0]) {
+    return exploreRepository.searchPublicImages(input);
+  }
+
   toggleLike(userId: string, publicImageId: string) {
     return exploreRepository.toggleLike(userId, publicImageId);
   }

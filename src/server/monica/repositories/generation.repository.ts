@@ -2,9 +2,19 @@ import { prisma } from '@/server/prisma';
 import { Prisma } from '@app-prisma';
 import { GENERATION_STATUS, TERMINAL_GENERATION_STATUSES } from '../constants/generation';
 import type { CreateGenerationJobInput, ImageGenerationProviderResult } from '../types/generation';
+import { buildStoredImageUrl } from '../utils/image-url';
 
 type Tx = Prisma.TransactionClient;
 type Client = typeof prisma | Tx;
+
+function mapGeneratedImageForApi<T extends { sourceImageUrl?: string | null; cdnImagePrefix?: string | null; storageKey?: string | null }>(image: T) {
+  const imageUrl = buildStoredImageUrl(image);
+  return {
+    ...image,
+    imageUrl,
+    thumbnailUrl: imageUrl,
+  };
+}
 
 export class GenerationRepository {
   createJob(client: Client, userId: string, input: CreateGenerationJobInput, estimatedCredits: number) {
@@ -13,13 +23,10 @@ export class GenerationRepository {
         userId,
         themeId: input.themeId,
         referenceId: input.referenceId,
-        sourceImageId: input.sourceImageId,
-        sourcePage: input.sourcePage,
         status: GENERATION_STATUS.QUEUED,
         generationType: input.generationType,
         prompt: input.prompt,
         negativePrompt: input.negativePrompt,
-        editInstruction: input.editInstruction,
         model: input.model,
         style: input.style,
         ratio: input.ratio,
@@ -30,35 +37,45 @@ export class GenerationRepository {
     });
   }
 
-  getJobForOwner(userId: string, jobId: string) {
-    return prisma.generationJob.findFirst({
+  async getJobForOwner(userId: string, jobId: string) {
+    const job = await prisma.generationJob.findFirst({
       where: {
         jobId,
         userId,
         deleted: 0,
       },
-      include: {
-        images: {
-          where: { deleted: 0 },
-          orderBy: [{ providerImageIndex: 'asc' }, { createdAt: 'asc' }],
-        },
-      },
     });
+    if (!job) return null;
+
+    const images = await prisma.generatedImage.findMany({
+      where: { jobId, deleted: 0 },
+      orderBy: [{ providerImageIndex: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return {
+      ...job,
+      images: images.map(mapGeneratedImageForApi),
+    };
   }
 
-  getJobForWorker(jobId: string) {
-    return prisma.generationJob.findFirst({
+  async getJobForWorker(jobId: string) {
+    const job = await prisma.generationJob.findFirst({
       where: {
         jobId,
         deleted: 0,
       },
-      include: {
-        images: {
-          where: { deleted: 0 },
-          orderBy: [{ providerImageIndex: 'asc' }, { createdAt: 'asc' }],
-        },
-      },
     });
+    if (!job) return null;
+
+    const images = await prisma.generatedImage.findMany({
+      where: { jobId, deleted: 0 },
+      orderBy: [{ providerImageIndex: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return {
+      ...job,
+      images,
+    };
   }
 
   markQueuePublishFailed(jobId: string, failureMessage: string) {
@@ -74,16 +91,11 @@ export class GenerationRepository {
     });
   }
 
-  setQstashMessageId(jobId: string, qstashMessageId: string | null) {
-    return prisma.generationJob.update({
-      where: { jobId },
-      data: {
-        qstashMessageId,
-      },
-    });
+  setQstashMessageId(_jobId: string, _qstashMessageId: string | null) {
+    return Promise.resolve();
   }
 
-  async claimQueuedJob(jobId: string, lockedBy: string) {
+  async claimQueuedJob(jobId: string, _lockedBy: string) {
     const result = await prisma.generationJob.updateMany({
       where: {
         jobId,
@@ -92,8 +104,6 @@ export class GenerationRepository {
       },
       data: {
         status: GENERATION_STATUS.RUNNING,
-        lockedAt: new Date(),
-        lockedBy,
         startedAt: new Date(),
       },
     });
@@ -115,33 +125,26 @@ export class GenerationRepository {
           },
           update: {
             storageKey: image.storageKey,
-            imageUrl: image.imageUrl,
-            thumbnailUrl: image.thumbnailUrl ?? image.imageUrl,
+            cdnImagePrefix: image.cdnImagePrefix,
+            sourceImageUrl: image.imageUrl,
             width: image.width,
             height: image.height,
-            promptUsed: job.prompt,
-            model: job.model,
-            style: job.style,
-            ratio: job.ratio,
             metadata: (image.metadata ?? Prisma.JsonNull) as Prisma.InputJsonValue,
             status: 'generated',
+            isLocked: false,
             safetyStatus: 'skipped',
           },
           create: {
             jobId,
             providerImageIndex: image.index,
             userId: job.userId,
-            themeId: job.themeId,
             status: 'generated',
+            isLocked: false,
             storageKey: image.storageKey,
-            imageUrl: image.imageUrl,
-            thumbnailUrl: image.thumbnailUrl ?? image.imageUrl,
+            cdnImagePrefix: image.cdnImagePrefix,
+            sourceImageUrl: image.imageUrl,
             width: image.width,
             height: image.height,
-            promptUsed: job.prompt,
-            model: job.model,
-            style: job.style,
-            ratio: job.ratio,
             safetyStatus: 'skipped',
             metadata: (image.metadata ?? Prisma.JsonNull) as Prisma.InputJsonValue,
           },
@@ -153,8 +156,6 @@ export class GenerationRepository {
         data: {
           status: GENERATION_STATUS.SUCCEEDED,
           chargedCredits: estimatedCredits,
-          provider: result.provider,
-          providerJobId: result.providerJobId,
           completedAt: new Date(),
           failureCode: null,
           failureMessage: null,

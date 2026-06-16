@@ -8,11 +8,8 @@ export type CreateGenerationJobInput = {
   ratio?: string;
   imageCount: number;
   generationType?: GenerationType;
-  sourcePage?: string;
-  themeId?: string;
+  themeId?: bigint;
   referenceId?: string;
-  sourceImageId?: string;
-  editInstruction?: string;
 };
 
 export type ImageGenerationProviderInput = {
@@ -28,9 +25,9 @@ export type ImageGenerationProviderInput = {
 
 export type ImageGenerationProviderImage = {
   index: number;
-  storageKey: string;
-  imageUrl: string;
-  thumbnailUrl?: string;
+  storageKey?: string;
+  cdnImagePrefix?: string;
+  imageUrl?: string;
   width?: number;
   height?: number;
   metadata?: Record<string, unknown>;
