@@ -18,6 +18,10 @@ export class ThemeService {
     return themeRepository.findPublicThemeBySlug(slug);
   }
 
+  findPublicThemeById(themeId: bigint) {
+    return themeRepository.findPublicThemeById(themeId);
+  }
+
   updateAdminTheme(themeId: string, input: Parameters<typeof themeRepository.updateAdminTheme>[1]) {
     return themeRepository.updateAdminTheme(themeId, input);
   }

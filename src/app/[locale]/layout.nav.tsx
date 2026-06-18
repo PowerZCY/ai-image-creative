@@ -62,7 +62,7 @@ export async function primaryNavLinks(locale: string): Promise<SiteNavItemConfig
     ),
     createLocalizedNavLink(
       {
-        text: 'Submit a theme',
+        text: 'Submit Theme',
         path: '/submit-theme',
         prefetch: false,
         icon: <BrainCircuitIcon />,

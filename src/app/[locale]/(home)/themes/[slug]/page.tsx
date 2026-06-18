@@ -2,9 +2,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MonicaCreator } from '@/components/monica/creator-client';
-import { getMonicaCreatorCopy, getMonicaExploreCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
+import { getMonicaCreatorCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
 import { monicaContentWidthClass } from '@/components/monica/layout';
-import { getTodayThemeSlug, slugifyThemeTitle } from '@/components/monica/theme-routes';
 import { themeService } from '@/server/monica/services/theme.service';
 import {
   themeBgColor,
@@ -23,33 +22,28 @@ export default async function ThemeDetailPage({
   params: Promise<{ locale: string; slug: string }>;
 }) {
   const { locale, slug } = await params;
-  const [creatorCopy, themeCopy, exploreCopy] = await Promise.all([
+  const [creatorCopy, themeCopy] = await Promise.all([
     getMonicaCreatorCopy(locale),
     getMonicaThemeCopy(locale),
-    getMonicaExploreCopy(locale),
   ]);
   const dbTheme = await themeService.findPublicThemeBySlug(slug);
-  const todaySlug = getTodayThemeSlug(themeCopy);
-  const summary = exploreCopy.themes.find((theme) => slugifyThemeTitle(theme.title) === slug);
 
-  if (!dbTheme && !summary && slug !== todaySlug) {
+  if (!dbTheme) {
     notFound();
   }
 
-  const isToday = !dbTheme && slug === todaySlug;
-  const title = dbTheme?.title ?? (isToday ? themeCopy.title : summary?.title ?? themeCopy.title);
-  const description = dbTheme?.description ?? dbTheme?.brief ?? (isToday ? themeCopy.homeDescription : summary?.brief ?? themeCopy.homeDescription);
-  const coverImage = isToday ? themeCopy.gallery[0] : undefined;
-  const coverImageUrl = dbTheme?.coverImageUrl ?? coverImage?.imageUrl;
-  const tags = dbTheme ? dbTheme.tags as string[] : isToday ? themeCopy.tags : summary?.tags ?? [];
-  const promptTexts = dbTheme?.promptTexts ?? [];
+  const title = dbTheme.title;
+  const description = dbTheme.description ?? dbTheme.brief ?? themeCopy.homeDescription;
+  const coverImageUrl = dbTheme.coverImageUrl;
+  const tags = dbTheme.tags as string[];
+  const promptTexts = dbTheme.promptTexts ?? [];
 
   return (
     <>
       <section className="px-4 pb-10 pt-20 md:px-8 md:pt-24">
         <div className="mx-auto max-w-5xl text-center">
           <div className={cn('mx-auto inline-flex rounded-full border px-3 py-1 text-sm', themeBgColor, themeBorderColor, themeIconColor)}>
-            {isToday ? themeCopy.date : summary?.date}
+            {dbTheme.publishDate ? new Date(dbTheme.publishDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Published theme'}
           </div>
           <h1 className={cn('mt-5 bg-clip-text text-4xl font-semibold leading-tight text-transparent md:text-6xl', themeHeroEyesOnClass)}>
             {title}
@@ -75,7 +69,7 @@ export default async function ThemeDetailPage({
           <div className={cn(monicaContentWidthClass, 'overflow-hidden rounded-lg border border-border bg-card')}>
             <Image
               src={coverImageUrl}
-              alt={coverImage?.alt ?? title}
+              alt={title}
               width={1200}
               height={720}
               className="max-h-[520px] w-full object-cover"
@@ -97,19 +91,7 @@ export default async function ThemeDetailPage({
         </section>
       ) : null}
 
-      {isToday ? (
-        <section className="px-4 pb-8 md:px-8">
-          <div className={cn(monicaContentWidthClass, 'grid gap-3 md:grid-cols-2')}>
-            {themeCopy.notes.map((note) => (
-              <p key={note} className="rounded-lg border border-border bg-card/60 p-4 text-sm leading-6 text-muted-foreground">
-                {note}
-              </p>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <MonicaCreator copy={creatorCopy} />
+      <MonicaCreator copy={creatorCopy} themeId={dbTheme.id} />
 
       <section className="px-4 pb-24 md:px-8">
         <div className={monicaContentWidthClass}>
@@ -130,19 +112,8 @@ export default async function ThemeDetailPage({
               ))}
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {(isToday ? themeCopy.gallery : []).map((image) => (
-              <article key={image.title} className="overflow-hidden rounded-lg border border-border bg-card">
-                <Image src={image.imageUrl} alt={image.alt} width={720} height={720} className="aspect-square w-full object-cover" />
-                <div className="space-y-3 p-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">{image.title}</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">{image.author}</p>
-                  </div>
-                  <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{image.prompt}</p>
-                </div>
-              </article>
-            ))}
+          <div className="rounded-lg border border-border bg-card/60 p-6 text-sm text-muted-foreground">
+            Public gallery images will appear here after submissions are approved for this theme.
           </div>
         </div>
       </section>

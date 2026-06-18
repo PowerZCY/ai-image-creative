@@ -44,7 +44,6 @@ type Pagination = {
 type ThemeSubmissionResponse = {
   items: ThemeSubmission[];
   pagination: Pagination;
-  canReview: boolean;
 };
 
 const statusFilters = [
@@ -88,13 +87,9 @@ export function MyThemeSubmissionsClient() {
   const [status, setStatus] = useState('all');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [activePublishId, setActivePublishId] = useState<string | null>(null);
-  const [publishDate, setPublishDate] = useState('');
-  const [promptTexts, setPromptTexts] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [canReview, setCanReview] = useState(true);
 
   const page = pagination.page;
   const canGoPrev = page > 1;
@@ -127,7 +122,6 @@ export function MyThemeSubmissionsClient() {
       const data = await fetchSubmissions(nextStatus, nextPage);
       setItems(data.items);
       setPagination(data.pagination);
-      setCanReview(data.canReview);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
     } finally {
@@ -153,7 +147,6 @@ export function MyThemeSubmissionsClient() {
         if (active) {
           setItems(data.items);
           setPagination(data.pagination);
-          setCanReview(data.canReview);
         }
       } catch (loadError) {
         if (active) {
@@ -205,24 +198,6 @@ export function MyThemeSubmissionsClient() {
     await mutateSubmission(`/api/monica/themes/my/${themeSubmissionId}/submit`, {});
   }
 
-  async function reviewSubmission(themeSubmissionId: string, action: 'accepted_to_pool' | 'rejected' | 'duplicate') {
-    await mutateSubmission(`/api/monica/themes/my/${themeSubmissionId}/review`, { action });
-  }
-
-  async function publishSubmission(submission: ThemeSubmission, nextStatus: 'scheduled' | 'published') {
-    await mutateSubmission(`/api/monica/themes/my/${submission.themeSubmissionId}/publish`, {
-      title: submission.editedTitle || submission.rawTitle,
-      brief: submission.editedBrief || submission.rawDescription,
-      description: submission.rawDescription,
-      promptTexts: promptTexts.split('\n').map((item) => item.trim()).filter(Boolean),
-      publishDate,
-      status: nextStatus,
-    });
-    setActivePublishId(null);
-    setPromptTexts('');
-    setPublishDate('');
-  }
-
   async function mutateSubmission(url: string, body: Record<string, unknown>) {
     setSaving(true);
     setError(null);
@@ -262,7 +237,7 @@ export function MyThemeSubmissionsClient() {
               Theme workspace
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Create theme drafts, submit ideas, review submissions, and schedule official themes from one list.
+              Create theme drafts, submit ideas, and track how your theme submissions move through review.
             </p>
           </div>
           <div className="text-sm text-muted-foreground">
@@ -375,79 +350,8 @@ export function MyThemeSubmissionsClient() {
                           Submit
                         </button>
                       ) : null}
-                      {canReview && (submission.status === 'under_review' || submission.status === 'accepted_to_pool') ? (
-                        <>
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={() => void reviewSubmission(submission.themeSubmissionId, 'accepted_to_pool')}
-                            className="h-9 rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted disabled:opacity-60"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={() => void reviewSubmission(submission.themeSubmissionId, 'rejected')}
-                            className="h-9 rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted disabled:opacity-60"
-                          >
-                            Reject
-                          </button>
-                        </>
-                      ) : null}
-                      {canReview && (
-                        submission.status === 'under_review'
-                        || submission.status === 'accepted_to_pool'
-                        || submission.status === 'selected'
-                      ) ? (
-                        <button
-                          type="button"
-                          onClick={() => setActivePublishId(activePublishId === submission.themeSubmissionId ? null : submission.themeSubmissionId)}
-                          className={cn('h-9 rounded-md px-3 text-sm font-medium text-white', themeButtonGradientClass)}
-                        >
-                          Schedule
-                        </button>
-                      ) : null}
                     </div>
                   </div>
-
-                  {activePublishId === submission.themeSubmissionId ? (
-                    <div className="mt-4 grid gap-3 rounded-md border border-border bg-background/50 p-3 md:grid-cols-[180px_minmax(0,1fr)_auto_auto] md:items-end">
-                      <label className="block">
-                        <span className="text-xs font-medium text-muted-foreground">Publish date</span>
-                        <input
-                          type="date"
-                          value={publishDate}
-                          onChange={(event) => setPublishDate(event.target.value)}
-                          className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs font-medium text-muted-foreground">Prompt texts, one per line</span>
-                        <textarea
-                          value={promptTexts}
-                          onChange={(event) => setPromptTexts(event.target.value)}
-                          className="mt-1 min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => void publishSubmission(submission, 'scheduled')}
-                        className="h-10 rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted disabled:opacity-60"
-                      >
-                        Save schedule
-                      </button>
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => void publishSubmission(submission, 'published')}
-                        className={cn('h-10 rounded-md px-3 text-sm font-medium text-white disabled:opacity-60', themeButtonGradientClass)}
-                      >
-                        Publish
-                      </button>
-                    </div>
-                  ) : null}
                 </article>
               ))}
             </div>

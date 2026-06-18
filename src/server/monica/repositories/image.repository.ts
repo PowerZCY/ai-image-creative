@@ -168,8 +168,16 @@ export class ImageRepository {
           })
         : [],
     ]);
+    const themeIds = [...new Set(jobs.map((job) => job.themeId).filter((themeId): themeId is bigint => Boolean(themeId)))];
+    const themes = themeIds.length
+      ? await prisma.theme.findMany({
+          where: { id: { in: themeIds }, deleted: 0 },
+          select: { id: true, title: true, brief: true },
+        })
+      : [];
 
     const jobById = new Map(jobs.map((job) => [job.jobId, job]));
+    const themeById = new Map(themes.map((theme) => [theme.id.toString(), theme]));
     const publicImageByImageId = new Map(publicImages.map((publicImage) => [publicImage.imageId, publicImage]));
     const latestSubmissionByImageId = new Map<string, (typeof submissions)[number]>();
     for (const submission of submissions) {
@@ -180,6 +188,7 @@ export class ImageRepository {
 
     return images.map((image) => {
       const job = image.jobId ? jobById.get(image.jobId) : null;
+      const theme = job?.themeId ? themeById.get(job.themeId.toString()) : null;
       const imageUrl = buildStoredImageUrl(image);
       return {
         ...image,
@@ -190,6 +199,7 @@ export class ImageRepository {
         style: job?.style ?? null,
         ratio: job?.ratio ?? null,
         themeId: job?.themeId?.toString() ?? null,
+        theme: theme ? { id: theme.id.toString(), title: theme.title, brief: theme.brief } : null,
         publicImage: publicImageByImageId.get(image.imageId) ?? null,
         submissions: latestSubmissionByImageId.has(image.imageId)
           ? [latestSubmissionByImageId.get(image.imageId)]

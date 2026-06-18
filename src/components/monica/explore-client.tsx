@@ -21,6 +21,7 @@ type ThemeItem = {
   brief?: string | null;
   description?: string | null;
   coverImageUrl?: string | null;
+  featuredImages?: Array<{ id: string; publicImageId?: string | null; title?: string | null; imageUrl?: string | null; thumbnailUrl?: string | null } | null>;
   slug?: string;
   tags?: string[];
   publishDate?: string | null;
@@ -85,16 +86,6 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
     { value: 'images', label: copy.tabs.images },
   ];
 
-  const fallbackThemes = themes.items.length === 0 && !themes.loading && !themes.error && !themes.filters.keyword
-    ? copy.themes.map((theme) => ({
-        title: theme.title,
-        brief: theme.brief,
-        coverImageUrl: theme.coverImageUrl,
-        tags: theme.tags,
-      }))
-    : [];
-  const themeItems = fallbackThemes.length ? fallbackThemes : themes.items;
-
   async function toggleAction(publicImageId: string, action: 'like' | 'save') {
     setActionError(null);
     try {
@@ -138,11 +129,11 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
 
         {tab === 'themes' ? (
           <ListShell
-            items={themeItems}
-            loading={themes.loading && fallbackThemes.length === 0}
+            items={themes.items}
+            loading={themes.loading}
             error={themes.error}
             empty={copy.emptyThemes}
-            pagination={fallbackThemes.length ? { page: 1, pageSize: fallbackThemes.length, total: fallbackThemes.length, totalPages: 1 } : themes.pagination}
+            pagination={themes.pagination}
             onPageChange={themes.setPage}
             filters={(
               <SearchInput
@@ -221,12 +212,15 @@ function ThemeListItem({ theme, copy }: { theme: ThemeItem; copy: MonicaExploreC
   const href = `/themes/${theme.id ?? theme.slug ?? slugifyThemeTitle(theme.title)}`;
   return (
     <article className="grid gap-4 rounded-lg border border-border bg-card p-3 md:grid-cols-[180px_minmax(0,1fr)_auto]">
-      <div className="overflow-hidden rounded-md bg-muted">
-        {theme.coverImageUrl ? (
-          <Image src={theme.coverImageUrl} alt="" width={720} height={480} className="aspect-16/10 w-full object-cover" />
-        ) : (
-          <div className="grid aspect-16/10 place-items-center text-muted-foreground"><ImagePlus className="size-8" /></div>
-        )}
+      <div className="grid gap-2">
+        <div className="h-[102px] overflow-hidden rounded-md bg-muted">
+          {theme.coverImageUrl ? (
+            <Image src={theme.coverImageUrl} alt="" width={720} height={408} unoptimized className="size-full object-cover" />
+          ) : (
+            <div className="grid size-full place-items-center text-muted-foreground"><ImagePlus className="size-8" /></div>
+          )}
+        </div>
+        <ThemeFeaturedStrip images={theme.featuredImages} />
       </div>
       <div className="min-w-0">
         <h2 className="text-lg font-semibold">{theme.title}</h2>
@@ -246,6 +240,28 @@ function ThemeListItem({ theme, copy }: { theme: ThemeItem; copy: MonicaExploreC
         </Link>
       </div>
     </article>
+  );
+}
+
+function ThemeFeaturedStrip({ images }: { images?: Array<{ imageUrl?: string | null; thumbnailUrl?: string | null; title?: string | null } | null> }) {
+  const slots = Array.from({ length: 3 }, (_, index) => images?.[index] ?? null);
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      {slots.map((image, index) => {
+        const imageUrl = image?.thumbnailUrl || image?.imageUrl;
+        return (
+          <div key={`${imageUrl ?? 'empty'}-${index}`} className="h-11 overflow-hidden rounded bg-muted">
+            {imageUrl ? (
+              <Image src={imageUrl} alt={image?.title ?? ''} width={96} height={96} unoptimized className="size-full object-cover" />
+            ) : (
+              <div className="grid size-full place-items-center text-muted-foreground/60">
+                <ImagePlus className="size-4" />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

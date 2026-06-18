@@ -29,6 +29,7 @@ type ThemeItem = {
   publishDate?: string | null;
   coverImageUrl?: string | null;
   featuredImageIds?: string[];
+  featuredImages?: Array<{ id: string; publicImageId?: string | null; title?: string | null; imageUrl?: string | null; thumbnailUrl?: string | null } | null>;
   promptTexts?: string[];
   tags?: string[];
 };
@@ -63,6 +64,9 @@ export function AdminReviewClient() {
   const [tab, setTab] = useState<AdminTab>('theme_submissions');
   const [actionError, setActionError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [activePublishId, setActivePublishId] = useState<string | null>(null);
+  const [publishDate, setPublishDate] = useState('');
+  const [promptTexts, setPromptTexts] = useState('');
   const themeSubmissions = useMonicaPagedList<Filters, ThemeSubmission>({
     endpoint: '/api/monica/admin/theme-submissions/search',
     initialFilters: { keyword: '', status: 'all' },
@@ -103,6 +107,35 @@ export function AdminReviewClient() {
       });
       if (!response.ok) throw new Error(await readError(response));
       themeSubmissions.reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setActingId(null);
+    }
+  }
+
+  async function publishThemeSubmission(item: ThemeSubmission, status: 'scheduled' | 'published') {
+    setActingId(`${item.themeSubmissionId}:${status}`);
+    setActionError(null);
+    try {
+      const response = await fetch(`/api/monica/admin/theme-submissions/${item.themeSubmissionId}/publish`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+          title: item.title,
+          brief: item.details,
+          description: item.details,
+          promptTexts: splitLines(promptTexts),
+          publishDate,
+          status,
+        }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setActivePublishId(null);
+      setPublishDate('');
+      setPromptTexts('');
+      themeSubmissions.reload();
+      themes.reload();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -169,26 +202,78 @@ export function AdminReviewClient() {
                     <p className="mt-1 text-xs text-muted-foreground">{item.user?.email || item.user?.userName || 'Unknown user'}</p>
                     <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">{item.details}</p>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void reviewThemeSubmission(item.themeSubmissionId, 'accepted_to_pool')}
-                      disabled={Boolean(actingId)}
-                      className={cn('inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-white disabled:opacity-50', themeButtonGradientClass)}
-                    >
-                      {actingId === `${item.themeSubmissionId}:accepted_to_pool` ? <SpinnerLabel>Accept</SpinnerLabel> : <><Check className="size-4" />Accept</>}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void reviewThemeSubmission(item.themeSubmissionId, 'rejected')}
-                      disabled={Boolean(actingId)}
-                      className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
-                    >
-                      <X className="size-4" />Reject
-                    </button>
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    {item.status === 'under_review' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void reviewThemeSubmission(item.themeSubmissionId, 'accepted_to_pool')}
+                          disabled={Boolean(actingId)}
+                          className={cn('inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-white disabled:opacity-50', themeButtonGradientClass)}
+                        >
+                          {actingId === `${item.themeSubmissionId}:accepted_to_pool` ? <SpinnerLabel>Accept</SpinnerLabel> : <><Check className="size-4" />Accept</>}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void reviewThemeSubmission(item.themeSubmissionId, 'rejected')}
+                          disabled={Boolean(actingId)}
+                          className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
+                        >
+                          <X className="size-4" />Reject
+                        </button>
+                      </>
+                    ) : null}
+                    {item.status === 'accepted_to_pool' || item.status === 'selected' ? (
+                      <button
+                        type="button"
+                        onClick={() => setActivePublishId(activePublishId === item.themeSubmissionId ? null : item.themeSubmissionId)}
+                        disabled={Boolean(actingId)}
+                        className={cn('inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-white disabled:opacity-50', themeButtonGradientClass)}
+                      >
+                        <Pencil className="size-4" />Schedule theme
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-3"><ReviewFlowInline flow={item.reviewFlow} /></div>
+                {activePublishId === item.themeSubmissionId ? (
+                  <div className="mt-4 grid gap-3 rounded-md border border-border bg-background/50 p-3 md:grid-cols-[180px_minmax(0,1fr)_auto_auto] md:items-end">
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">Publish date</span>
+                      <input
+                        type="date"
+                        value={publishDate}
+                        onChange={(event) => setPublishDate(event.target.value)}
+                        className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">Generator ideas, one per line</span>
+                      <textarea
+                        value={promptTexts}
+                        onChange={(event) => setPromptTexts(event.target.value)}
+                        rows={3}
+                        className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={Boolean(actingId)}
+                      onClick={() => void publishThemeSubmission(item, 'scheduled')}
+                      className="h-10 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
+                    >
+                      {actingId === `${item.themeSubmissionId}:scheduled` ? <SpinnerLabel>Schedule</SpinnerLabel> : 'Save schedule'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(actingId)}
+                      onClick={() => void publishThemeSubmission(item, 'published')}
+                      className={cn('h-10 rounded-md px-3 text-sm font-medium text-white disabled:opacity-50', themeButtonGradientClass)}
+                    >
+                      {actingId === `${item.themeSubmissionId}:published` ? <SpinnerLabel>Publish</SpinnerLabel> : 'Publish'}
+                    </button>
+                  </div>
+                ) : null}
               </article>
             )}
           />
@@ -315,7 +400,11 @@ function ThemeEditor({ theme, onSaved }: { theme: ThemeItem; onSaved: () => void
 
   return (
     <article className="rounded-lg border border-border bg-card p-4">
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid gap-4 md:grid-cols-[156px_minmax(0,1fr)_auto]">
+        <div className="grid gap-2">
+          <ThemeCoverPreview imageUrl={theme.coverImageUrl} />
+          <FeaturedImageStrip images={theme.featuredImages} />
+        </div>
         <div className="min-w-0">
           <h3 className="text-base font-semibold">{theme.title}</h3>
           <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{theme.brief || 'No brief yet.'}</p>
@@ -421,5 +510,41 @@ function ThemeEditor({ theme, onSaved }: { theme: ThemeItem; onSaved: () => void
         </div>
       ) : null}
     </article>
+  );
+}
+
+function ThemeCoverPreview({ imageUrl }: { imageUrl?: string | null }) {
+  return (
+    <div className="h-[88px] overflow-hidden rounded-md bg-muted">
+      {imageUrl ? (
+        <Image src={imageUrl} alt="" width={312} height={176} unoptimized className="size-full object-cover" />
+      ) : (
+        <div className="grid size-full place-items-center text-muted-foreground">
+          <ImagePlus className="size-5" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeaturedImageStrip({ images }: { images?: Array<{ imageUrl?: string | null; thumbnailUrl?: string | null; title?: string | null } | null> }) {
+  const slots = Array.from({ length: 3 }, (_, index) => images?.[index] ?? null);
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      {slots.map((image, index) => {
+        const imageUrl = image?.thumbnailUrl || image?.imageUrl;
+        return (
+          <div key={`${imageUrl ?? 'empty'}-${index}`} className="h-10 overflow-hidden rounded bg-muted">
+            {imageUrl ? (
+              <Image src={imageUrl} alt={image?.title ?? ''} width={80} height={80} unoptimized className="size-full object-cover" />
+            ) : (
+              <div className="grid size-full place-items-center text-muted-foreground/60">
+                <ImagePlus className="size-3.5" />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

@@ -10,13 +10,17 @@ export async function POST(request: NextRequest) {
   try {
     const authUtils = new ApiAuthUtils(request);
     const { user } = await authUtils.requireAuthWithUser();
-    const body = await request.json() as { imageId?: string; title?: string; creatorNote?: string };
+    const body = await request.json() as { imageId?: string; themeId?: string; title?: string; creatorNote?: string };
     if (!body.imageId) {
       return NextResponse.json({ error: 'imageId is required' }, { status: 400 });
+    }
+    if (!body.themeId) {
+      return NextResponse.json({ error: 'themeId is required' }, { status: 400 });
     }
 
     const submission = await submissionService.submitImage(user.userId, {
       imageId: body.imageId,
+      themeId: body.themeId,
       title: typeof body.title === 'string' ? body.title : undefined,
       creatorNote: typeof body.creatorNote === 'string' ? body.creatorNote : undefined,
     });

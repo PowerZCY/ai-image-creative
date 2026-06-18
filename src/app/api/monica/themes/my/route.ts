@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const status = request.nextUrl.searchParams.get('status') ?? 'all';
     const result = await themeService.listSubmissions({
       userId: user.userId,
-      includeAll: true,
+      includeAll: false,
       status,
       page,
       pageSize,

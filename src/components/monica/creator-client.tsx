@@ -110,7 +110,7 @@ async function readError(response: Response) {
   }
 }
 
-export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
+export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; themeId?: string | number | bigint | null }) {
   const modelOptions = useMemo(() => [
     { value: 'mock-image-model', label: copy.modelOptions.mock },
     { value: 'openrouter-default', label: copy.modelOptions.openrouter },
@@ -287,6 +287,7 @@ export function MonicaCreator({ copy }: { copy: MonicaCreatorCopy }) {
           ratio,
           imageCount,
           referenceId: referenceImage?.referenceId,
+          themeId: themeId?.toString(),
           sourcePage: 'home',
         }),
       });

@@ -2,6 +2,7 @@ import { prisma } from '@/server/prisma';
 import { Prisma } from '@app-prisma';
 import { THEME_STATUS, THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
 import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
+import { buildStoredImageUrl } from '../utils/image-url';
 import { slugifyThemeTitle } from '../utils/theme-slug';
 
 type ThemeRecord = NonNullable<Awaited<ReturnType<typeof prisma.theme.findFirst>>>;
@@ -57,6 +58,43 @@ type ThemeSubmissionSearchFilters = {
   userId?: string;
 };
 
+const PUBLIC_THEME_TIME_ZONE = process.env.MONICA_PUBLICATION_TIME_ZONE || 'Asia/Shanghai';
+
+function getPublicThemeDateCutoff() {
+  const date = new Intl.DateTimeFormat('en-CA', {
+    timeZone: PUBLIC_THEME_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
+  return new Date(`${date}T00:00:00.000Z`);
+}
+
+function publicThemeWhere(keyword?: string): Prisma.ThemeWhereInput {
+  const publicDateCutoff = getPublicThemeDateCutoff();
+  return {
+    deleted: 0,
+    publishDate: {
+      not: null,
+      lte: publicDateCutoff,
+    },
+    ...(keyword
+      ? {
+          AND: [
+            {
+              OR: [
+                { title: { contains: keyword, mode: 'insensitive' } },
+                { brief: { contains: keyword, mode: 'insensitive' } },
+                { themeNote: { contains: keyword, mode: 'insensitive' } },
+              ],
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
 function normalizeTheme(theme: ThemeRecord) {
   return {
     ...theme,
@@ -66,6 +104,55 @@ function normalizeTheme(theme: ThemeRecord) {
     tags: Array.isArray(theme.tags) ? theme.tags : [],
     stats: theme.stats && typeof theme.stats === 'object' ? theme.stats : {},
   };
+}
+
+type NormalizedTheme = ReturnType<typeof normalizeTheme>;
+
+async function attachFeaturedImages(themes: NormalizedTheme[]) {
+  const featuredIds = [
+    ...new Set(themes.flatMap((theme) => (theme.featuredImageIds ?? []).slice(0, 3)).map((id) => id.toString())),
+  ].map((id) => BigInt(id));
+
+  if (featuredIds.length === 0) {
+    return themes.map((theme) => ({ ...theme, featuredImages: [] }));
+  }
+
+  const publicImages = await prisma.publicImage.findMany({
+    where: {
+      id: { in: featuredIds },
+      deleted: 0,
+    },
+  });
+  const generatedImages = publicImages.length
+    ? await prisma.generatedImage.findMany({
+        where: {
+          imageId: { in: publicImages.map((image) => image.imageId) },
+          deleted: 0,
+        },
+      })
+    : [];
+  const generatedByImageId = new Map(generatedImages.map((image) => [image.imageId, image]));
+  const publicImageById = new Map(publicImages.map((publicImage) => {
+    const image = generatedByImageId.get(publicImage.imageId);
+    const imageUrl = image ? buildStoredImageUrl(image) : null;
+    return [
+      publicImage.id.toString(),
+      {
+        id: publicImage.id.toString(),
+        publicImageId: publicImage.publicImageId,
+        title: publicImage.title,
+        imageUrl,
+        thumbnailUrl: imageUrl,
+      },
+    ];
+  }));
+
+  return themes.map((theme) => ({
+    ...theme,
+    featuredImages: (theme.featuredImageIds ?? [])
+      .slice(0, 3)
+      .map((id) => publicImageById.get(id.toString()) ?? null),
+  }));
 }
 
 function toSubmissionId(value: string) {
@@ -116,43 +203,18 @@ function mapSubmissionForApi<T extends { id: bigint; title: string; details: str
 export class ThemeRepository {
   async listPublicThemes() {
     const themes = await prisma.theme.findMany({
-      where: {
-        deleted: 0,
-        OR: [
-          { publishDate: null },
-          { publishDate: { lte: new Date() } },
-        ],
-      },
+      where: publicThemeWhere(),
       orderBy: [{ publishDate: 'desc' }, { createdAt: 'desc' }],
       take: 80,
     });
 
-    return themes.map((theme) => normalizeTheme(theme));
+    return attachFeaturedImages(themes.map((theme) => normalizeTheme(theme)));
   }
 
   async searchPublicThemes(input: MonicaPagedRequest<ThemeSearchFilters>) {
     const { page, pageSize, skip } = normalizePagination(input);
     const keyword = readStringFilter(input.filters?.keyword);
-    const where: Prisma.ThemeWhereInput = {
-      deleted: 0,
-      OR: [
-        { publishDate: null },
-        { publishDate: { lte: new Date() } },
-      ],
-      ...(keyword
-        ? {
-            AND: [
-              {
-                OR: [
-                  { title: { contains: keyword, mode: 'insensitive' } },
-                  { brief: { contains: keyword, mode: 'insensitive' } },
-                  { themeNote: { contains: keyword, mode: 'insensitive' } },
-                ],
-              },
-            ],
-          }
-        : {}),
-    };
+    const where = publicThemeWhere(keyword);
 
     const [items, total] = await prisma.$transaction([
       prisma.theme.findMany({
@@ -165,7 +227,7 @@ export class ThemeRepository {
     ]);
 
     return {
-      items: items.map((theme) => normalizeTheme(theme)),
+      items: await attachFeaturedImages(items.map((theme) => normalizeTheme(theme))),
       pagination: buildPagination({ page, pageSize, total }),
     };
   }
@@ -200,7 +262,7 @@ export class ThemeRepository {
     ]);
 
     return {
-      items: items.map((theme) => normalizeTheme(theme)),
+      items: await attachFeaturedImages(items.map((theme) => normalizeTheme(theme))),
       pagination: buildPagination({ page, pageSize, total }),
     };
   }
@@ -209,12 +271,8 @@ export class ThemeRepository {
     if (/^\d+$/.test(slug)) {
       const theme = await prisma.theme.findFirst({
         where: {
+          ...publicThemeWhere(),
           id: BigInt(slug),
-          deleted: 0,
-          OR: [
-            { publishDate: null },
-            { publishDate: { lte: new Date() } },
-          ],
         },
       });
 
@@ -223,6 +281,15 @@ export class ThemeRepository {
 
     const themes = await this.listPublicThemes();
     return themes.find((theme) => theme?.slug === slug) ?? null;
+  }
+
+  async findPublicThemeById(themeId: bigint) {
+    return prisma.theme.findFirst({
+      where: {
+        ...publicThemeWhere(),
+        id: themeId,
+      },
+    });
   }
 
   async updateAdminTheme(themeId: string, input: AdminThemeUpdateInput) {
@@ -303,7 +370,7 @@ export class ThemeRepository {
         total,
         totalPages: Math.max(1, Math.ceil(total / pageSize)),
       },
-      canReview: true,
+      canReview: Boolean(input.includeAll),
     };
   }
 
@@ -500,19 +567,31 @@ export class ThemeRepository {
     }
 
     return prisma.$transaction(async (tx) => {
-      const theme = await tx.theme.create({
-        data: {
-          title: input.title,
-          brief: input.brief,
-          themeNote: input.description,
-          coverImageUrl: input.coverImageUrl,
-          generatorIdeas: input.promptTexts,
-          tags: input.tags,
-          sourceType: 'theme_submission',
+      const themeData = {
+        title: input.title,
+        brief: input.brief,
+        themeNote: input.description,
+        coverImageUrl: input.coverImageUrl,
+        generatorIdeas: input.promptTexts,
+        tags: input.tags,
+        sourceType: 'theme_submission',
+        sourceSubmissionId: existing.id,
+        publishDate: input.publishDate ? new Date(input.publishDate) : new Date(),
+      };
+      const existingTheme = await tx.theme.findFirst({
+        where: {
           sourceSubmissionId: existing.id,
-          publishDate: input.publishDate ? new Date(input.publishDate) : new Date(),
+          deleted: 0,
         },
       });
+      const theme = existingTheme
+        ? await tx.theme.update({
+            where: { id: existingTheme.id },
+            data: themeData,
+          })
+        : await tx.theme.create({
+            data: themeData,
+          });
 
       const submissionStatus = input.status === THEME_STATUS.PUBLISHED
         ? THEME_SUBMISSION_STATUS.PUBLISHED

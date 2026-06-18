@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Eye, ImagePlus, Send, X } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
@@ -30,6 +30,7 @@ type StudioImage = {
   status: string;
   isLocked?: boolean;
   themeId?: string | null;
+  theme?: { id: string; title: string; brief?: string | null } | null;
   promptUsed?: string | null;
   model?: string | null;
   style?: string | null;
@@ -37,6 +38,12 @@ type StudioImage = {
   createdAt?: string | null;
   submissions?: Array<{ id?: string; status: string; reviewFlow?: unknown } | undefined>;
   publicImage?: { publicImageId: string; title?: string | null } | null;
+};
+
+type ThemeOption = {
+  id: string;
+  title: string;
+  brief?: string | null;
 };
 
 type StudioFilters = {
@@ -72,6 +79,9 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
   });
   const [promptTarget, setPromptTarget] = useState<StudioImage | null>(null);
   const [submitTarget, setSubmitTarget] = useState<StudioImage | null>(null);
+  const [themes, setThemes] = useState<ThemeOption[]>([]);
+  const [themesLoading, setThemesLoading] = useState(true);
+  const [selectedThemeId, setSelectedThemeId] = useState('');
   const [title, setTitle] = useState('');
   const [creationNote, setCreationNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -90,6 +100,43 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
     { value: 'locked', label: 'Locked' },
   ];
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadThemes() {
+      setThemesLoading(true);
+      try {
+        const response = await fetch('/api/monica/themes/search', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({
+            page: 1,
+            pageSize: 100,
+            filters: { keyword: '' },
+          }),
+        });
+        if (!response.ok) throw new Error(await readError(response));
+        const data = await response.json() as { items?: ThemeOption[] };
+        if (active) {
+          setThemes(data.items ?? []);
+        }
+      } catch (error) {
+        if (active) {
+          setActionError(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        if (active) {
+          setThemesLoading(false);
+        }
+      }
+    }
+
+    void loadThemes();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function submitImage() {
     if (!submitTarget) return;
     setSubmitting(true);
@@ -100,12 +147,14 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({
           imageId: submitTarget.imageId,
+          themeId: selectedThemeId,
           title,
           creatorNote: creationNote,
         }),
       });
       if (!response.ok) throw new Error(await readError(response));
       setSubmitTarget(null);
+      setSelectedThemeId('');
       setTitle('');
       setCreationNote('');
       list.reload();
@@ -162,7 +211,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
           )}
           renderItem={(image) => {
             const latestSubmission = image.submissions?.[0];
-            const canSubmit = !image.isLocked && (image.status === 'generated' || image.status === 'rejected') && Boolean(image.themeId);
+            const canSubmit = !image.isLocked && (image.status === 'generated' || image.status === 'rejected') && themes.length > 0;
             return (
               <article key={image.imageId} className="grid gap-4 rounded-lg border border-border bg-card p-3 md:grid-cols-[160px_minmax(0,1fr)_auto]">
                 <div className="overflow-hidden rounded-md bg-muted">
@@ -185,7 +234,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge tone={getStatusTone(image.status)}>{copy.statusLabels[image.status] ?? image.status}</StatusBadge>
                     <StatusBadge tone={image.isLocked ? 'warn' : 'good'}>{image.isLocked ? 'Locked' : 'Editable'}</StatusBadge>
-                    {image.themeId ? <span className="text-xs text-muted-foreground">Theme #{image.themeId}</span> : null}
+                    {image.theme ? <span className="text-xs text-muted-foreground">{image.theme.title}</span> : null}
                   </div>
                   <p className="line-clamp-3 text-sm leading-6 text-foreground">{truncate(image.promptUsed) || copy.empty}</p>
                   {latestSubmission ? <ReviewFlowInline flow={latestSubmission.reviewFlow} /> : null}
@@ -204,6 +253,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                     disabled={!canSubmit}
                     onClick={() => {
                       setSubmitTarget(image);
+                      setSelectedThemeId(image.themeId && themes.some((theme) => theme.id === image.themeId) ? image.themeId : themes[0]?.id ?? '');
                       setTitle('');
                       setCreationNote('');
                     }}
@@ -214,7 +264,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                     )}
                   >
                     <Send className="size-4" />
-                    {image.themeId ? copy.submitImage : copy.noTheme}
+                    {copy.submitImage}
                   </button>
                 </div>
               </article>
@@ -246,6 +296,21 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
             ) : null}
             <div className="space-y-4">
               <label className="block">
+                <span className="text-sm font-medium">{copy.theme}</span>
+                <select
+                  value={selectedThemeId}
+                  onChange={(event) => setSelectedThemeId(event.target.value)}
+                  disabled={themesLoading || themes.length === 0}
+                  className="mt-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none disabled:opacity-60"
+                >
+                  {themes.length === 0 ? (
+                    <option value="">{themesLoading ? 'Loading themes...' : 'No published themes'}</option>
+                  ) : themes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>{theme.title}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
                 <span className="text-sm font-medium">Image title</span>
                 <input
                   value={title}
@@ -272,7 +337,7 @@ export function StudioClient({ copy }: { copy: MonicaStudioCopy }) {
                 <button
                   type="button"
                   onClick={() => void submitImage()}
-                  disabled={submitting}
+                  disabled={submitting || !selectedThemeId}
                   className={cn('h-10 rounded-md px-3 text-sm font-medium text-white disabled:opacity-50', themeButtonGradientClass)}
                 >
                   {submitting ? <SpinnerLabel>{copy.submitImage}</SpinnerLabel> : copy.submitImage}
@@ -298,15 +363,15 @@ function StudioModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 px-4 py-6 backdrop-blur-md">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-border bg-background shadow-2xl ring-1 ring-foreground/10">
+        <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
           <h2 className="text-lg font-semibold">{title}</h2>
           <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-md border border-border hover:bg-muted" aria-label={closeLabel}>
             <X className="size-4" />
           </button>
         </div>
-        <div className="p-4">{children}</div>
+        <div className="bg-background p-4">{children}</div>
       </div>
     </div>
   );

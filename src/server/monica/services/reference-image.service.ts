@@ -1,7 +1,7 @@
 import { Prisma } from '@app-prisma';
 import { SAFETY_STATUS } from '../constants/safety';
 import { referenceImageRepository } from '../repositories/reference-image.repository';
-import { r2StorageService } from '../storage/r2-storage.service';
+import { buildProviderReferenceImageUrl } from '../utils/image-url';
 import { safetyService } from './safety.service';
 
 export class ReferenceImageService {
@@ -52,7 +52,7 @@ export class ReferenceImageService {
       throw new Error('Reference image not found');
     }
 
-    return r2StorageService.createProviderAccessibleImageUrl(referenceImage.storageKey);
+    return buildProviderReferenceImageUrl(referenceImage);
   }
 }
 
