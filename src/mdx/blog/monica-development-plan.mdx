@@ -11,9 +11,9 @@ date: 2026-06-13
 当前结论：
 
 - 除真实 AI Provider / OpenRouter 接入、统一手动联调后的小修外，MVP 前端主功能已经基本落地。
-- 已完成：首页创作主流程、首页主题区、`/theme` 主题详情页、`/explore` Themes / Images 交互、`/studio` 图片管理和投稿弹窗、Monica 业务文案 i18n 拆分。
-- 当前前端已经覆盖生成、轮询、参考图上传、结果展示、Studio 列表、状态筛选、查看 prompt、投稿、Explore 搜索/筛选/排序、图片详情、like/save 等主链路。
-- 尚未产品化完成：真实 OpenRouter Provider、动态主题 slug/id 和主题 API、Explore 主题数据从 DB/API 读取、Download 实际能力、移动端和真实账号/积分/QStash/R2 的统一联调 polish。
+- 已完成：首页创作主流程、首页真实主题区、`/themes/[id]` 主题详情页、`/explore` Themes / Images 交互、`/studio` 图片管理和投稿弹窗、Monica 业务文案 i18n 拆分。
+- 当前前端已经覆盖生成、轮询、参考图上传、结果展示、Studio 列表、状态筛选、查看 prompt、选择公开主题投稿、Explore 搜索/筛选/排序、图片详情、like/save 等主链路。
+- 尚未产品化完成：真实 OpenRouter Provider、Download 实际能力、移动端和真实账号/积分/QStash/R2 的统一联调 polish。
 - 因此当前状态应理解为“MVP 前端主链路完成，等待联调和真实 AI Provider 接入”，而不是最终产品功能全量完成。
 
 详细 TODO:
@@ -31,9 +31,11 @@ date: 2026-06-13
 - 异步任务从第一版开始使用真实 Upstash QStash 链路，不做 mock queue。
 - Mock 只放在 AI Provider 层，用于模拟 OpenRouter 图片生成结果。
 - `GenerationJob` 只表达任务状态和预计/实际积分消耗，不承载积分状态机和审核状态机。
+- `GenerationJob.themeId` 只表示生成时使用过的主题上下文，可作为图片辅助信息；图片投稿时由用户在 Studio 选择一个当前公开主题，不强制绑定生成主题。
 - Monica 业务表之间不声明 Prisma relation，只保留 scalar id 和索引；列表页由 repository/service 按 id 集合显式查询并组装展示数据。
 - 内容安全保留 `SafetyService` 扩展入口，MVP 使用轻量策略，后续可替换为自研或第三方 NSFW 审查。
 - 投稿、撤销和发布审核过程写入 `ImageSubmission.reviewFlow`；`GeneratedImage.status + isLocked` 决定用户是否还能删除、投稿或申请撤销。
+- 正式 `Theme` 不使用独立 status 字段；公开可见条件为 `deleted=0` 且 `publishDate` 非空并不晚于当前产品日期，`publishDate=null` 表示未发布，不在 Explore 和公开主题详情中展示。
 
 ## 2. 总体分段
 
@@ -43,7 +45,7 @@ date: 2026-06-13
 | --- | --- | --- | --- |
 | 1 | 数据模型和后端骨架 | Prisma models、server/monica 目录、基础 repository/service | 已完成 |
 | 2 | 真实 QStash 生成任务闭环 | 创建任务、投递队列、Worker webhook、mock AI、轮询查询 | 已完成 |
-| 3 | R2 图片上传和 Reference Image | 用户上传参考图、R2 存储、Provider 可访问 URL | 已完成，待联调 |
+| 3 | R2 图片上传和 Reference Image | 用户上传参考图、R2 存储、CDN URL 拼接和后续临时授权扩展点 | 已完成，待联调 |
 | 4 | 前端创作主流程 | 创作 UI、生成任务轮询、结果展示、失败/拦截状态 | 已完成，待联调 |
 | 5 | Studio / 投稿 / Explore | 私有图片库、投稿审核、公开图片、点赞收藏 | 进行中，待联调 |
 | 6 | OpenRouter 真实 Provider | 替换 mock AI、解析多图输出、Provider 错误归一化 | 待开始 |
@@ -147,17 +149,17 @@ Worker 流程：
 
 - 实现 `POST /api/monica/reference-images`。
 - 使用 `src/lib/r2-explorer-sdk.ts` 上传图片到 R2。
-- 保存 `ReferenceImage.storageKey`、mime type、width、height、展示 URL。
+- 保存 `ReferenceImage.cdnImagePrefix`、`storageKey`、mime type、width、height；不在 DB 固化最终展示 URL。
 - 返回 `referenceId` 和预览 URL。
-- 实现 `R2StorageService.createProviderAccessibleImageUrl(referenceId)`。
-- 生成任务支持 `referenceId`，Worker 调用 Provider 前临时生成 public/signed view URL。
+- 生成任务支持 `referenceId`；Worker 根据 `referenceId` 查库，用 `NEXT_PUBLIC_CDN_ACCESS_DOMAIN + cdnImagePrefix + storageKey` 拼接 Provider 可访问 URL。
+- 后续如 CDN 访问需要授权，再基于同一 `storageKey` 增加临时访问 URL 能力。
 - QStash body 仍然只传 `{ jobId }`。
 
 验收标准：
 
 - 上传图片后前端可以预览。
 - 生成任务只传 `referenceId`，不传图片 base64 或 signed URL。
-- Worker 能根据 `jobId` 查到 `ReferenceImage` 并生成 Provider 可访问 URL。
+- Worker 能根据 `jobId` 查到 `ReferenceImage` 并按 CDN 访问域名拼接 Provider 可访问 URL。
 - `SafetyService.checkReferenceImages` 调用点存在，MVP 可返回 `skipped`。
 
 ## 6. 阶段 4：前端创作主流程
@@ -201,7 +203,7 @@ Worker 流程：
 - 桌面和移动端创作流程可用。
 - 轮询在终态后停止。
 - `failed / blocked / cancelled` 不展示为成功结果。
-- 前端只展示后端保存后的 R2/站内图片 URL，不直接使用 Provider base64。
+- 前端展示后端返回的图片 URL；mock 或真实 provider 原始 URL 可先保存为 `sourceImageUrl`，真实 Provider 临时 URL 后续需要迁移到 R2 后保存 `cdnImagePrefix/storageKey`。
 
 ## 7. 阶段 5：Studio / 投稿 / Explore
 
@@ -215,16 +217,20 @@ Worker 流程：
   - 查看 prompt。
   - 下载。
   - 根据 `GeneratedImage.status` 和 `isLocked` 控制 Submit、删除、申请撤销等操作。
+  - Submit 弹窗允许用户选择一个当前公开主题；生成时的主题只作为默认选项或辅助信息，不是投稿前置条件。
 - 投稿：
   - `POST /api/monica/submissions`。
+  - 请求包含 `imageId`、用户选择的 `themeId`、公开标题和创作说明。
   - 创建 `ImageSubmission`。
   - 追加 `ImageSubmission.reviewFlow` 审核节点。
-  - 提交后更新 `GeneratedImage(status=submitted, isLocked=true)`。
+  - 提交后更新 `GeneratedImage(status=under_review, isLocked=true)`。
   - MVP 可先使用轻量自动审核或人工审核。
   - 审核通过时创建 `PublicImage(deleted=0)`，更新 `GeneratedImage(status=approved, isLocked=true)`。
   - 审核拒绝时更新 `GeneratedImage(status=rejected, isLocked=false)`。
   - 已公开作品不允许用户直接删除底层图片；用户只能申请撤销公开，后续由管理员审核后设置 `PublicImage.deleted=1` 并更新 `GeneratedImage(status=withdrawn, isLocked=true)`。
 - Explore / Theme Gallery：
+  - Themes 只展示已发布正式主题，条件为 `Theme.deleted=0`、`publishDate` 非空且不晚于当前产品日期。
+  - 主题列表和管理员主题列表展示 `coverImageUrl` 和最多前三张 `featuredImageIds` 对应的公开图片。
   - 只展示 `PublicImage`。
   - 实现 like/save。
   - 实现 view 和 unique view 聚合计数。
@@ -235,9 +241,10 @@ Worker 流程：
 验收标准：
 
 - 私有 `GeneratedImage` 不会直接公开。
+- Studio 中未锁定且状态为 `generated/rejected` 的图片可以选择任意公开主题投稿。
 - 只有投稿审核通过后才创建 `PublicImage`。
 - `PublicImage` 不使用 status，公开可见条件为 `deleted=0`。
-- `GeneratedImage.isLocked` 与状态一致：`generated/rejected=false`，其他状态为 `true`。
+- `GeneratedImage.isLocked` 与状态一致：`generated/rejected=false`，`under_review/approved` 等审核或公开状态为 `true`。
 - 点赞和收藏幂等。
 - Redis 计数异步落库后，`PublicImage.likeCount/saveCount/viewCount/uniqueViewCount` 可用于排序和兜底展示。
 - 投稿状态能在 Studio 中查看。
@@ -333,10 +340,10 @@ Worker 流程：
 | --- | --- | --- | --- |
 | 2026-06-13 | 计划 | 确认 QStash 使用真实链路，AI Provider 使用 mock | 已记录 |
 | 2026-06-13 | 阶段 2 | 实现 GenerationJob 创建 API、状态查询 API、QStash Worker API、mock image provider 和积分预扣减/返还封装 | build:prod 通过 |
-| 2026-06-13 | 阶段 3 | 实现 Reference Image 上传 API、R2StorageService、referenceId 归属校验和 Worker 侧 Provider 可访问 URL 生成 | 待联调 |
+| 2026-06-13 | 阶段 3 | 实现 Reference Image 上传 API、referenceId 归属校验和基于 CDN 域名、路径前缀、storageKey 的 Provider 可访问 URL 拼接 | 待联调 |
 | 2026-06-13 | 阶段 4 | 首页第一屏接入 Monica Creator，支持 prompt、参考图上传、创建任务、轮询状态和结果展示 | build:prod 通过 |
 | 2026-06-13 | 阶段 5 | 实现 Studio 图片列表、投稿发布、Explore 列表、like/save API，并新增 `/studio` 和 `/explore` 页面 | build:prod 通过 |
-| 2026-06-13 | 阶段 4/5 | 按项目 i18n 规范拆分 `messages/biz` 文案文件，新增 copy builder，补齐首页主题区、`/theme` 页面、Explore tabs/search/filter/detail、Studio tabs/prompt/submit modal | build:prod 通过 |
+| 2026-06-13 | 阶段 4/5 | 按项目 i18n 规范拆分 `messages/biz` 文案文件，新增 copy builder，补齐首页主题区、`/themes/[id]` 页面、Explore tabs/search/filter/detail、Studio tabs/prompt/submit modal | build:prod 通过 |
 | 2026-06-16 | 阶段 5 | 新增 POST body 分页查询接口，覆盖公开主题、公开图片、Studio 图片、我的主题提交、管理员主题提交、管理员主题和管理员图片提交列表 | build:prod 通过，lint 通过 |
 | 2026-06-16 | 阶段 5 | 新增 Monica 通用列表组件，统一分页、搜索、筛选、加载骨架、状态标签和审核流摘要展示 | build:prod 通过，lint 通过 |
 | 2026-06-16 | 阶段 5 | 重写 Explore 和 Studio 页面列表读取逻辑，改为 POST body 分页查询，并按 `GeneratedImage.status/isLocked` 控制图片投稿操作 | build:prod 通过，lint 通过 |
@@ -344,5 +351,6 @@ Worker 流程：
 | 2026-06-16 | 阶段 5 | 导航改为独立主题提交入口，并增加管理员 Monica 审核入口 | build:prod 通过，lint 通过 |
 | 2026-06-16 | 阶段 5 | 图片投稿改为进入审核流，管理员图片审核通过后创建或恢复 `PublicImage`，拒绝后解锁 `GeneratedImage`；独立主题提交页直接创建 `under_review` 记录；主题详情支持按 id 查询 | build:prod 通过，lint 通过 |
 | 2026-06-16 | 阶段 5 | 新增管理员正式 Theme 更新接口，并在 `/admin/monica` 正式主题列表中接入基础字段和 featured image id 行内编辑 | build:prod 通过，lint 通过 |
+| 2026-06-19 | 阶段 5 | 明确主题发布、图片投稿和参考图访问设计：公开主题由 `publishDate` 控制；Studio 投稿时选择公开主题；参考图按 CDN 域名、路径前缀和 storageKey 拼接访问 URL；移除静态主题详情 fallback | type check 通过，lint 通过 |
 
 </CheetTable>
