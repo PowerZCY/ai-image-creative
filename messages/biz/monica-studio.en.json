@@ -21,13 +21,35 @@
       "creatorNote": "Creation note optional",
       "creatorNotePlaceholder": "Share your creative thinking behind this image...",
       "submitHint": "Your image, prompt, and creation note will be public if approved.",
+      "createTitle": "Create",
+      "ideaThemeLabel": "Get ideas from a theme",
+      "noIdeaTheme": "Free creation",
+      "submitDialog": {
+        "title": "Submit image",
+        "close": "Close",
+        "cancel": "Cancel",
+        "submit": "Submit image",
+        "englishTitle": "English title",
+        "englishTitlePlaceholder": "A lonely figure under a red sun",
+        "theme": "Theme",
+        "creationNote": "Creation note optional",
+        "creationNotePlaceholder": "Share your creative thinking behind this image...",
+        "hint": "Your English title is used as the public image title and alt text. Prompt metadata is saved automatically and is not shown here.",
+        "loadingThemes": "Loading themes...",
+        "noThemes": "No published themes",
+        "duplicate": "This image has already been submitted. Please choose another image.",
+        "titleRequired": "English title is required.",
+        "themeRequired": "Theme is required."
+      },
       "tabs": {
         "all": "All",
-        "generated": "Generated",
         "submitted": "Submitted",
-        "underReview": "Under review",
-        "published": "Published",
+        "approved": "Approved",
         "rejected": "Rejected"
+      },
+      "filters": {
+        "searchPlaceholder": "Search prompt or metadata",
+        "pendingReview": "Pending review"
       },
       "statusLabels": {
         "active": "Active",

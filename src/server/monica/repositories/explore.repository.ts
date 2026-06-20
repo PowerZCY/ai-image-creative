@@ -26,31 +26,7 @@ export class ExploreRepository {
       take: 80,
     });
 
-    const imageIds = publicImages.map((publicImage) => publicImage.imageId);
-    const images = imageIds.length
-      ? await prisma.generatedImage.findMany({
-          where: {
-            imageId: { in: imageIds },
-            deleted: 0,
-          },
-        })
-      : [];
-    const imageById = new Map(images.map((image) => [image.imageId, image]));
-
-    return publicImages.map((publicImage) => {
-      const image = imageById.get(publicImage.imageId);
-      const imageUrl = image ? buildStoredImageUrl(image) : null;
-      return {
-        ...publicImage,
-        image: image
-          ? {
-              ...image,
-              imageUrl,
-              thumbnailUrl: imageUrl,
-            }
-          : null,
-      };
-    });
+    return this.enrichPublicImages(publicImages);
   }
 
   async searchPublicImages(input: MonicaPagedRequest<PublicImageFilters>) {
@@ -89,25 +65,64 @@ export class ExploreRepository {
       prisma.publicImage.count({ where }),
     ]);
 
+    return {
+      items: await this.enrichPublicImages(publicImages),
+      pagination: buildPagination({ page, pageSize, total }),
+    };
+  }
+
+  private async enrichPublicImages(publicImages: Awaited<ReturnType<typeof prisma.publicImage.findMany>>) {
     const imageIds = publicImages.map((publicImage) => publicImage.imageId);
+    const themeIds = [...new Set(publicImages.map((publicImage) => publicImage.themeId).filter((themeId): themeId is bigint => Boolean(themeId)))];
+    const userIds = [...new Set(publicImages.map((publicImage) => publicImage.userId))];
     const images = imageIds.length
       ? await prisma.generatedImage.findMany({
           where: { imageId: { in: imageIds }, deleted: 0 },
         })
       : [];
+    const jobIds = [...new Set(images.map((image) => image.jobId).filter((jobId): jobId is string => Boolean(jobId)))];
+    const [jobs, themes, users] = await Promise.all([
+      jobIds.length
+        ? prisma.generationJob.findMany({
+            where: { jobId: { in: jobIds }, deleted: 0 },
+            select: { jobId: true, prompt: true, model: true, style: true, ratio: true },
+          })
+        : [],
+      themeIds.length
+        ? prisma.theme.findMany({
+            where: { id: { in: themeIds }, deleted: 0 },
+            select: { id: true, title: true, brief: true },
+          })
+        : [],
+      userIds.length
+        ? prisma.user.findMany({
+            where: { userId: { in: userIds } },
+            select: { userId: true, userName: true, email: true },
+          })
+        : [],
+    ]);
     const imageById = new Map(images.map((image) => [image.imageId, image]));
+    const jobById = new Map(jobs.map((job) => [job.jobId, job]));
+    const themeById = new Map(themes.map((theme) => [theme.id.toString(), theme]));
+    const userById = new Map(users.map((user) => [user.userId, user]));
 
-    return {
-      items: publicImages.map((publicImage) => {
-        const image = imageById.get(publicImage.imageId);
-        const imageUrl = image ? buildStoredImageUrl(image) : null;
-        return {
-          ...publicImage,
-          image: image ? { ...image, imageUrl, thumbnailUrl: imageUrl } : null,
-        };
-      }),
-      pagination: buildPagination({ page, pageSize, total }),
-    };
+    return publicImages.map((publicImage) => {
+      const image = imageById.get(publicImage.imageId);
+      const job = image?.jobId ? jobById.get(image.jobId) : null;
+      const imageUrl = image ? buildStoredImageUrl(image) : null;
+      const theme = publicImage.themeId ? themeById.get(publicImage.themeId.toString()) : null;
+      const user = userById.get(publicImage.userId);
+      return {
+        ...publicImage,
+        promptUsed: job?.prompt ?? null,
+        model: job?.model ?? null,
+        style: job?.style ?? null,
+        ratio: job?.ratio ?? null,
+        theme: theme ? { id: theme.id.toString(), title: theme.title, brief: theme.brief } : null,
+        author: user ? { userName: user.userName, email: user.email } : null,
+        image: image ? { ...image, imageUrl, thumbnailUrl: imageUrl } : null,
+      };
+    });
   }
 
   async toggleLike(userId: string, publicImageId: string) {

@@ -141,7 +141,7 @@ export function StatusBadge({ children, tone = 'default' }: { children: ReactNod
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium',
+        'inline-flex max-w-full items-center rounded-full border px-3 py-1.5 text-xs font-semibold',
         tone === 'good' && 'border-emerald-300/70 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200',
         tone === 'warn' && 'border-amber-300/80 bg-amber-500/10 text-amber-800 dark:text-amber-200',
         tone === 'danger' && 'border-rose-300/80 bg-rose-500/10 text-rose-700 dark:text-rose-200',
@@ -177,7 +177,7 @@ export function SearchInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-9 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-foreground/40"
+        className="monica-input h-11 w-full pl-9 pr-9 text-base text-foreground placeholder:text-muted-foreground/70"
       />
       {value ? (
         <button
@@ -206,7 +206,7 @@ export function FilterPills<TValue extends string>({
 }) {
   return (
     <div className="min-w-0">
-      {label ? <div className="mb-2 text-xs font-medium text-muted-foreground">{label}</div> : null}
+      {label ? <div className="mb-2 text-xs font-semibold text-muted-foreground">{label}</div> : null}
       <div className="flex flex-wrap gap-2">
         {options.map((option) => (
           <button
@@ -214,7 +214,7 @@ export function FilterPills<TValue extends string>({
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              'h-9 rounded-md border px-3 text-sm transition',
+              'h-10 rounded-md border px-4 text-sm font-semibold transition',
               value === option.value
                 ? 'border-foreground bg-foreground text-background'
                 : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -258,16 +258,16 @@ export function ListShell<T>({
       {(title || description || actions) ? (
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
           <div>
-            {title ? <h2 className="text-xl font-semibold text-foreground">{title}</h2> : null}
-            {description ? <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
+            {title ? <h2 className="text-3xl font-semibold text-foreground">{title}</h2> : null}
+            {description ? <p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">{description}</p> : null}
           </div>
           {actions}
         </div>
       ) : null}
 
       {filters ? (
-        <div className="rounded-lg border border-border bg-card/70 p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <div className="rounded-lg border border-border bg-card/70 p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
             <Filter className="size-3.5" />
             <span>Filters</span>
           </div>
@@ -284,7 +284,7 @@ export function ListShell<T>({
       {loading ? (
         <ListSkeleton />
       ) : items.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card/60 p-6 text-sm text-muted-foreground">{empty}</div>
+        <div className="rounded-lg border border-border bg-card/60 p-6 text-base text-muted-foreground">{empty}</div>
       ) : (
         <div className="space-y-3">{items.map(renderItem)}</div>
       )}
@@ -300,7 +300,7 @@ export function ListSkeleton({ image = false }: { image?: boolean }) {
   return (
     <div className="space-y-3" aria-busy="true" aria-live="polite">
       {Array.from({ length: 6 }, (_, index) => (
-        <div key={index} className="grid gap-4 rounded-lg border border-border bg-card/60 p-4 md:grid-cols-[auto_minmax(0,1fr)_auto]">
+        <div key={index} className="grid gap-4 rounded-lg border border-border bg-card/60 p-5 md:grid-cols-[auto_minmax(0,1fr)_auto]">
           {image ? <div className="aspect-square w-full rounded-md bg-muted md:w-28" /> : null}
           <div className="min-w-0 flex-1 space-y-3">
             <div className="h-5 w-2/5 rounded-full bg-muted" />
@@ -324,7 +324,7 @@ export function ListSkeleton({ image = false }: { image?: boolean }) {
 function ListPagination({ pagination, onPageChange }: { pagination: Pagination; onPageChange: (page: number) => void }) {
   const maxPage = Math.max(1, pagination.totalPages);
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3 rounded-lg border border-border px-3 py-3 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-center gap-3 rounded-lg border border-border px-4 py-4 text-sm text-muted-foreground">
       <button
         type="button"
         onClick={() => onPageChange(Math.max(1, pagination.page - 1))}
@@ -355,11 +355,11 @@ export function ReviewFlowInline({ flow }: { flow?: unknown }) {
   const nodes = Array.isArray(flow) ? flow : [];
   const last = nodes.at(-1) as { status?: string; note?: string; actorType?: string; createdAt?: string } | undefined;
   if (!last) {
-    return <span className="text-xs text-muted-foreground">No review notes</span>;
+    return <span className="text-sm text-muted-foreground">No review notes</span>;
   }
 
   return (
-    <div className="min-w-0 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+    <div className="min-w-0 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge tone={getStatusTone(last.status)}>{last.status ?? 'review'}</StatusBadge>
         <span>{last.actorType ?? 'system'}</span>

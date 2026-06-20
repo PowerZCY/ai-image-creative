@@ -5,6 +5,13 @@ const DEFAULT_MODEL = 'mock-image-model';
 const DEFAULT_IMAGE_COUNT = 1;
 const MAX_IMAGE_COUNT = 4;
 const MAX_PROMPT_LENGTH = 4000;
+const SOURCE_PAGES = new Set([
+  'home',
+  'theme_detail',
+  'studio',
+  'explore_image_detail',
+  'theme_gallery',
+]);
 
 function readOptionalString(value: unknown): string | undefined {
   if (typeof value !== 'string') {
@@ -30,6 +37,16 @@ function readOptionalBigInt(value: unknown): bigint | undefined {
   }
 
   return BigInt(text);
+}
+
+function readSourcePage(value: unknown): string | undefined {
+  const sourcePage = readOptionalString(value);
+  if (!sourcePage) return undefined;
+  if (!SOURCE_PAGES.has(sourcePage)) {
+    throw new Error('sourcePage is invalid');
+  }
+
+  return sourcePage;
 }
 
 export function parseCreateGenerationJobInput(payload: unknown): CreateGenerationJobInput {
@@ -58,6 +75,7 @@ export function parseCreateGenerationJobInput(payload: unknown): CreateGeneratio
     imageCount,
     generationType: readGenerationType(body.generationType),
     themeId: readOptionalBigInt(body.themeId),
+    sourcePage: readSourcePage(body.sourcePage),
     referenceId: readOptionalString(body.referenceId),
   };
 }

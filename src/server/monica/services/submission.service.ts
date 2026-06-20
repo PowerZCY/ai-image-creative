@@ -7,7 +7,35 @@ export class SubmissionService {
     return imageRepository.searchImageSubmissions(input);
   }
 
-  async submitImage(userId: string, input: { imageId: string; themeId: string; title?: string; creatorNote?: string }) {
+  searchGeneratedImagesForAdmin(input: Parameters<typeof imageRepository.searchGeneratedImagesForAdmin>[0]) {
+    return imageRepository.searchGeneratedImagesForAdmin(input);
+  }
+
+  async addGeneratedImageToTheme(adminUserId: string, input: { imageId: string; themeId: string; title?: string; creationNote?: string }) {
+    if (!/^\d+$/.test(input.themeId)) {
+      throw new Error('themeId is required');
+    }
+    const image = await imageRepository.findGeneratedImage(input.imageId);
+    if (!image) {
+      throw new Error('Generated image not found');
+    }
+    const themeId = BigInt(input.themeId);
+    const theme = await themeRepository.findPublicThemeById(themeId);
+    if (!theme) {
+      throw new Error('Theme is not available');
+    }
+    const job = image.jobId ? await imageRepository.findGenerationJob(image.jobId) : null;
+    return submissionRepository.createPublicImageDirect({
+      imageId: image.imageId,
+      userId: image.userId,
+      themeId,
+      title: input.title?.trim().slice(0, 255) || 'Admin selected image',
+      creationNote: input.creationNote ?? job?.prompt ?? null,
+      createdBy: adminUserId,
+    });
+  }
+
+  async submitImage(userId: string, input: { imageId: string; themeId: string; title: string; creatorNote?: string }) {
     const image = await imageRepository.findOwnedGeneratedImage(userId, input.imageId);
     if (!image) {
       throw new Error('Generated image not found');
@@ -20,6 +48,11 @@ export class SubmissionService {
     if (!/^\d+$/.test(input.themeId)) {
       throw new Error('themeId is required');
     }
+    const title = input.title.trim();
+    if (!title) {
+      throw new Error('English title is required');
+    }
+
     const themeId = BigInt(input.themeId);
     const theme = await themeRepository.findPublicThemeById(themeId);
     if (!theme) {
@@ -29,14 +62,14 @@ export class SubmissionService {
     const job = image.jobId ? await imageRepository.findGenerationJob(image.jobId) : null;
     const existing = await submissionRepository.findExistingSubmission(userId, image.imageId);
     if (existing) {
-      return existing;
+      throw new Error('This image has already been submitted. Please choose another image.');
     }
 
     return submissionRepository.createForReview({
       userId,
       imageId: image.imageId,
       themeId,
-      title: input.title?.slice(0, 255) || input.creatorNote?.slice(0, 255) || 'Untitled image',
+      title: title.slice(0, 255),
       promptSnapshot: job?.prompt ?? null,
       creationNote: input.creatorNote,
     });

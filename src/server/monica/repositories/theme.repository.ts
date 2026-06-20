@@ -1,9 +1,10 @@
 import { prisma } from '@/server/prisma';
 import { Prisma } from '@app-prisma';
-import { THEME_STATUS, THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
+import { THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
 import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
 import { buildStoredImageUrl } from '../utils/image-url';
 import { slugifyThemeTitle } from '../utils/theme-slug';
+import { generatorIdeasToJson, normalizeGeneratorIdeas, type ThemeGeneratorIdea } from '../types/theme';
 
 type ThemeRecord = NonNullable<Awaited<ReturnType<typeof prisma.theme.findFirst>>>;
 
@@ -21,6 +22,7 @@ type PublishThemeInput = {
   brief?: string;
   description?: string;
   coverImageUrl?: string;
+  generatorIdeas: ThemeGeneratorIdea[];
   promptTexts: string[];
   tags: string[];
   publishDate?: string;
@@ -32,10 +34,21 @@ type AdminThemeUpdateInput = {
   brief?: string | null;
   description?: string | null;
   coverImageUrl?: string | null;
+  seoTitle?: string | null;
+  seoMetaDescription?: string | null;
+  seoKeywords?: string[];
+  imageSeoNotes?: unknown;
+  generatorIdeas?: ThemeGeneratorIdea[];
   promptTexts?: string[];
   tags?: string[];
   publishDate?: string | null;
-  featuredImageIds?: bigint[];
+};
+
+type AdminThemeCreateInput = {
+  title: string;
+  brief?: string;
+  description?: string;
+  publishDate?: string;
 };
 
 type ListThemeSubmissionsInput = {
@@ -56,6 +69,22 @@ type ThemeSubmissionSearchFilters = {
   keyword?: string;
   status?: string;
   userId?: string;
+};
+
+const USER_THEME_STATUS_TO_INTERNAL: Record<string, string[]> = {
+  under_review: [
+    THEME_SUBMISSION_STATUS.DRAFT,
+    THEME_SUBMISSION_STATUS.UNDER_REVIEW,
+    THEME_SUBMISSION_STATUS.ACCEPTED_TO_POOL,
+  ],
+  accepted: [
+    THEME_SUBMISSION_STATUS.SELECTED,
+    THEME_SUBMISSION_STATUS.PUBLISHED,
+  ],
+  not_selected: [
+    THEME_SUBMISSION_STATUS.REJECTED,
+    THEME_SUBMISSION_STATUS.DUPLICATE,
+  ],
 };
 
 const PUBLIC_THEME_TIME_ZONE = process.env.MONICA_PUBLICATION_TIME_ZONE || 'Asia/Shanghai';
@@ -96,21 +125,51 @@ function publicThemeWhere(keyword?: string): Prisma.ThemeWhereInput {
 }
 
 function normalizeTheme(theme: ThemeRecord) {
+  const generatorIdeas = normalizeGeneratorIdeas(theme.generatorIdeas);
+  const featuredCount = 0;
   return {
     ...theme,
     slug: slugifyThemeTitle(theme.title),
     description: theme.themeNote,
-    promptTexts: theme.generatorIdeas,
+    generatorIdeas,
+    promptTexts: generatorIdeas.map((idea) => idea.prompt),
     tags: Array.isArray(theme.tags) ? theme.tags : [],
     stats: theme.stats && typeof theme.stats === 'object' ? theme.stats : {},
+    readiness: {
+      contentOk: Boolean(theme.title && theme.brief && theme.themeNote),
+      seoOk: Boolean(theme.seoTitle && theme.seoMetaDescription && theme.seoKeywords.length > 0),
+      ideasOk: generatorIdeas.length >= 3,
+      featuredCount,
+      publishDateSet: Boolean(theme.publishDate),
+    },
   };
 }
 
 type NormalizedTheme = ReturnType<typeof normalizeTheme>;
 
 async function attachFeaturedImages(themes: NormalizedTheme[]) {
+  const themeIds = themes.map((theme) => theme.id);
+  const featuredRows = themeIds.length
+    ? await prisma.themeFeaturedImage.findMany({
+        where: {
+          themeId: { in: themeIds },
+          deleted: 0,
+        },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+      })
+    : [];
+  const rowsByThemeId = new Map<string, typeof featuredRows>();
+  for (const row of featuredRows) {
+    const key = row.themeId.toString();
+    rowsByThemeId.set(key, [...(rowsByThemeId.get(key) ?? []), row]);
+  }
   const featuredIds = [
-    ...new Set(themes.flatMap((theme) => (theme.featuredImageIds ?? []).slice(0, 3)).map((id) => id.toString())),
+    ...new Set(
+      themes.flatMap((theme) => {
+        const rows = rowsByThemeId.get(theme.id.toString());
+        return rows?.slice(0, 3).map((row) => row.publicImageId.toString()) ?? [];
+      }),
+    ),
   ].map((id) => BigInt(id));
 
   if (featuredIds.length === 0) {
@@ -149,9 +208,13 @@ async function attachFeaturedImages(themes: NormalizedTheme[]) {
 
   return themes.map((theme) => ({
     ...theme,
-    featuredImages: (theme.featuredImageIds ?? [])
+    readiness: {
+      ...theme.readiness,
+      featuredCount: rowsByThemeId.get(theme.id.toString())?.filter((row) => row.deleted === 0).length ?? 0,
+    },
+    featuredImages: (rowsByThemeId.get(theme.id.toString()) ?? [])
       .slice(0, 3)
-      .map((id) => publicImageById.get(id.toString()) ?? null),
+      .map((row) => publicImageById.get(row.publicImageId.toString()) ?? null),
   }));
 }
 
@@ -197,6 +260,38 @@ function mapSubmissionForApi<T extends { id: bigint; title: string; details: str
     editedDescription: submission.details,
     acceptedTheme: acceptedTheme ?? null,
     user: user ?? null,
+  };
+}
+
+function mapUserThemeSubmissionStatus(status: string) {
+  if (status === THEME_SUBMISSION_STATUS.SELECTED || status === THEME_SUBMISSION_STATUS.PUBLISHED) {
+    return 'accepted';
+  }
+  if (status === THEME_SUBMISSION_STATUS.REJECTED || status === THEME_SUBMISSION_STATUS.DUPLICATE) {
+    return 'not_selected';
+  }
+  return 'under_review';
+}
+
+function mapSubmissionForUserApi<T extends {
+  id: bigint;
+  title: string;
+  details: string;
+  submitReason?: string | null;
+  status: string;
+  submittedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  reviewFlow?: Prisma.JsonValue | null;
+}>(submission: T, acceptedTheme?: unknown) {
+  return {
+    themeSubmissionId: submission.id.toString(),
+    title: submission.title,
+    details: submission.details,
+    submitReason: submission.submitReason ?? null,
+    submittedAt: submission.submittedAt ?? submission.createdAt ?? null,
+    status: mapUserThemeSubmissionStatus(submission.status),
+    notes: submission.reviewFlow ?? null,
+    acceptedTheme: acceptedTheme ?? null,
   };
 }
 
@@ -300,10 +395,14 @@ export class ThemeRepository {
     if (input.brief !== undefined) data.brief = input.brief;
     if (input.description !== undefined) data.themeNote = input.description;
     if (input.coverImageUrl !== undefined) data.coverImageUrl = input.coverImageUrl;
-    if (input.promptTexts !== undefined) data.generatorIdeas = input.promptTexts;
+    if (input.seoTitle !== undefined) data.seoTitle = input.seoTitle;
+    if (input.seoMetaDescription !== undefined) data.seoMetaDescription = input.seoMetaDescription;
+    if (input.seoKeywords !== undefined) data.seoKeywords = input.seoKeywords;
+    if (input.imageSeoNotes !== undefined) data.imageSeoNotes = input.imageSeoNotes as Prisma.InputJsonValue;
+    if (input.generatorIdeas !== undefined) data.generatorIdeas = generatorIdeasToJson(input.generatorIdeas);
+    else if (input.promptTexts !== undefined) data.generatorIdeas = generatorIdeasToJson(normalizeGeneratorIdeas(input.promptTexts));
     if (input.tags !== undefined) data.tags = input.tags;
     if (input.publishDate !== undefined) data.publishDate = input.publishDate ? new Date(input.publishDate) : null;
-    if (input.featuredImageIds !== undefined) data.featuredImageIds = input.featuredImageIds;
 
     const theme = await prisma.theme.update({
       where: { id: BigInt(themeId) },
@@ -313,13 +412,36 @@ export class ThemeRepository {
     return normalizeTheme(theme);
   }
 
+  async createAdminTheme(input: AdminThemeCreateInput) {
+    const theme = await prisma.theme.create({
+      data: {
+        title: input.title,
+        brief: input.brief,
+        themeNote: input.description,
+        publishDate: input.publishDate ? new Date(input.publishDate) : null,
+        sourceType: 'admin',
+        generatorIdeas: generatorIdeasToJson([]),
+        tags: [],
+      },
+    });
+
+    return normalizeTheme(theme);
+  }
+
   async listSubmissions(input: ListThemeSubmissionsInput) {
     const page = Math.max(1, input.page ?? 1);
     const pageSize = Math.min(50, Math.max(5, input.pageSize ?? 12));
+    const userStatusFilter = !input.includeAll && input.status && input.status !== 'all'
+      ? USER_THEME_STATUS_TO_INTERNAL[input.status] ?? [input.status]
+      : null;
     const where = {
       deleted: 0,
       ...(input.includeAll ? {} : { userId: input.userId }),
-      ...(input.status && input.status !== 'all' ? { status: input.status } : {}),
+      ...(input.status && input.status !== 'all'
+        ? userStatusFilter
+          ? { status: { in: userStatusFilter } }
+          : { status: input.status }
+        : {}),
     };
 
     const [items, total] = await prisma.$transaction([
@@ -359,10 +481,10 @@ export class ThemeRepository {
     const userById = new Map(users.map((user) => [user.userId, user]));
 
     return {
-      items: items.map((item) => mapSubmissionForApi(
-        item,
-        themeBySubmissionId.get(item.id.toString()),
-        userById.get(item.userId),
+      items: items.map((item) => (
+        input.includeAll
+          ? mapSubmissionForApi(item, themeBySubmissionId.get(item.id.toString()), userById.get(item.userId))
+          : mapSubmissionForUserApi(item, themeBySubmissionId.get(item.id.toString()))
       )),
       pagination: {
         page,
@@ -379,10 +501,17 @@ export class ThemeRepository {
     const keyword = readStringFilter(input.filters?.keyword);
     const status = readStringFilter(input.filters?.status);
     const userId = input.includeAll ? readStringFilter(input.filters?.userId) : input.currentUserId;
+    const userStatusFilter = !input.includeAll && status && status !== 'all'
+      ? USER_THEME_STATUS_TO_INTERNAL[status] ?? [status]
+      : null;
     const where: Prisma.ThemeSubmissionWhereInput = {
       deleted: 0,
       ...(userId ? { userId } : {}),
-      ...(status && status !== 'all' ? { status } : {}),
+      ...(status && status !== 'all'
+        ? userStatusFilter
+          ? { status: { in: userStatusFilter } }
+          : { status }
+        : {}),
       ...(keyword
         ? {
             OR: [
@@ -427,10 +556,10 @@ export class ThemeRepository {
     const userById = new Map(users.map((user) => [user.userId, user]));
 
     return {
-      items: items.map((item) => mapSubmissionForApi(
-        item,
-        themeBySubmissionId.get(item.id.toString()),
-        userById.get(item.userId),
+      items: items.map((item) => (
+        input.includeAll
+          ? mapSubmissionForApi(item, themeBySubmissionId.get(item.id.toString()), userById.get(item.userId))
+          : mapSubmissionForUserApi(item, themeBySubmissionId.get(item.id.toString()))
       )),
       pagination: buildPagination({ page, pageSize, total }),
     };
@@ -572,7 +701,7 @@ export class ThemeRepository {
         brief: input.brief,
         themeNote: input.description,
         coverImageUrl: input.coverImageUrl,
-        generatorIdeas: input.promptTexts,
+        generatorIdeas: generatorIdeasToJson(input.generatorIdeas),
         tags: input.tags,
         sourceType: 'theme_submission',
         sourceSubmissionId: existing.id,
@@ -593,9 +722,7 @@ export class ThemeRepository {
             data: themeData,
           });
 
-      const submissionStatus = input.status === THEME_STATUS.PUBLISHED
-        ? THEME_SUBMISSION_STATUS.PUBLISHED
-        : THEME_SUBMISSION_STATUS.SELECTED;
+      const submissionStatus = THEME_SUBMISSION_STATUS.SELECTED;
 
       const submission = await tx.themeSubmission.update({
         where: { id: existing.id },

@@ -5,9 +5,12 @@ import { buildStoredImageUrl } from '../utils/image-url';
 
 type StudioImageFilters = {
   keyword?: string;
-  status?: string;
-  themeId?: string;
-  locked?: string;
+  tab?: string;
+  submissionStatus?: string;
+};
+
+type AdminGeneratedImageFilters = {
+  keyword?: string;
 };
 
 type ImageSubmissionFilters = {
@@ -18,6 +21,41 @@ type ImageSubmissionFilters = {
 };
 
 export class ImageRepository {
+  async searchGeneratedImagesForAdmin(input: MonicaPagedRequest<AdminGeneratedImageFilters>) {
+    const { page, pageSize, skip } = normalizePagination(input);
+    const keyword = readStringFilter(input.filters?.keyword);
+    const uuidKeyword = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(keyword)
+      ? keyword
+      : '';
+    const where: Prisma.GeneratedImageWhereInput = {
+      deleted: 0,
+      status: { in: ['generated', 'approved'] },
+      ...(uuidKeyword
+        ? {
+            OR: [
+              { imageId: uuidKeyword },
+              { jobId: uuidKeyword },
+            ],
+          }
+        : {}),
+    };
+
+    const [images, total] = await prisma.$transaction([
+      prisma.generatedImage.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      prisma.generatedImage.count({ where }),
+    ]);
+
+    return {
+      items: await this.enrichGeneratedImages(images),
+      pagination: buildPagination({ page, pageSize, total }),
+    };
+  }
+
   async listStudioImages(userId: string) {
     const images = await prisma.generatedImage.findMany({
       where: {
@@ -33,15 +71,20 @@ export class ImageRepository {
 
   async searchStudioImages(userId: string, input: MonicaPagedRequest<StudioImageFilters>) {
     const { page, pageSize, skip } = normalizePagination(input);
-    const status = readStringFilter(input.filters?.status);
-    const locked = readStringFilter(input.filters?.locked);
+    const tab = readStringFilter(input.filters?.tab);
+    const submissionStatus = readStringFilter(input.filters?.submissionStatus);
+    const submittedStatuses = ['under_review', 'approved', 'rejected'];
+    const statusFilter = tab === 'submitted'
+      ? submissionStatus && submissionStatus !== 'all'
+        ? [submissionStatus]
+        : submittedStatuses
+      : [];
     const where: Prisma.GeneratedImageWhereInput = {
       userId,
       deleted: 0,
-      ...(status && status !== 'all' && status !== 'submitted'
-        ? { status }
+      ...(statusFilter.length
+        ? { status: { in: statusFilter } }
         : {}),
-      ...(locked === 'locked' ? { isLocked: true } : locked === 'unlocked' ? { isLocked: false } : {}),
     };
 
     const [images, total] = await prisma.$transaction([
@@ -222,6 +265,15 @@ export class ImageRepository {
     return prisma.generationJob.findFirst({
       where: {
         jobId,
+        deleted: 0,
+      },
+    });
+  }
+
+  findGeneratedImage(imageId: string) {
+    return prisma.generatedImage.findFirst({
+      where: {
+        imageId,
         deleted: 0,
       },
     });

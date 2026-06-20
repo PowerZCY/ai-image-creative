@@ -208,8 +208,7 @@ model Theme {
   themeNote          String?   @map("theme_note") @db.Text
   publishDate        DateTime? @map("publish_date") @db.Date
   coverImageUrl      String?   @map("cover_image_url") @db.Text
-  featuredImageIds   BigInt[]  @default([]) @map("featured_image_ids")
-  generatorIdeas     String[]  @default([]) @map("generator_ideas")
+  generatorIdeas     Json      @default("[]") @map("generator_ideas")
   avoidCliches       String[]  @default([]) @map("avoid_cliches")
   tags               Json?
   seoTitle           String?   @map("seo_title") @db.VarChar(255)
@@ -254,6 +253,7 @@ model GenerationJob {
   jobId            String    @unique @default(dbgenerated("gen_random_uuid()")) @map("job_id") @db.Uuid
   userId           String    @map("user_id") @db.Uuid
   themeId          BigInt?   @map("theme_id")
+  sourcePage       String?   @map("source_page") @db.VarChar(50)
   referenceId      String?   @map("reference_id") @db.Uuid
   status           String    @default("pending") @db.VarChar(50)
   generationType   String    @default("text_to_image") @map("generation_type") @db.VarChar(50)
@@ -335,6 +335,8 @@ model PublicImage {
   publicImageId      String    @unique @default(dbgenerated("gen_random_uuid()")) @map("public_image_id") @db.Uuid
   imageId            String    @unique @map("image_id") @db.Uuid
   sourceSubmissionId BigInt?   @unique @map("source_submission_id")
+  sourceType         String    @default("user_submission") @map("source_type") @db.VarChar(50)
+  createdBy          String?   @map("created_by") @db.Uuid
   userId             String    @map("user_id") @db.Uuid
   themeId            BigInt?   @map("theme_id")
   title              String    @db.VarChar(255)
@@ -356,6 +358,58 @@ model PublicImage {
   @@index([themeId, featuredScore], map: "idx_public_images_theme_featured_score")
   @@index([likeCount], map: "idx_public_images_like_count")
   @@map("public_images")
+  @@schema("monica_ai")
+}
+
+model AssistantInteraction {
+  id                  BigInt    @id @default(autoincrement())
+  interactionId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("interaction_id") @db.Uuid
+  sessionId           String    @default(dbgenerated("gen_random_uuid()")) @map("session_id") @db.Uuid
+  userId              String?   @map("user_id") @db.Uuid
+  rootActionType      String    @map("root_action_type") @db.VarChar(50)
+  actionType          String    @map("action_type") @db.VarChar(50)
+  parentInteractionId String?   @map("parent_interaction_id") @db.Uuid
+  sourcePage          String?   @map("source_page") @db.VarChar(50)
+  themeId             BigInt?   @map("theme_id")
+  imageId             String?   @map("image_id") @db.Uuid
+  publicImageId       String?   @map("public_image_id") @db.Uuid
+  generationJobId     String?   @map("generation_job_id") @db.Uuid
+  userInput           String?   @map("user_input") @db.Text
+  inputPrompt         String?   @map("input_prompt") @db.Text
+  outputPrompt        String?   @map("output_prompt") @db.Text
+  ideas               Json?
+  selectedIdeaIndex   Int?      @map("selected_idea_index")
+  selectedIdea        Json?     @map("selected_idea")
+  requestPayload      Json?     @map("request_payload")
+  responsePayload     Json?     @map("response_payload")
+  provider            String?   @db.VarChar(100)
+  model               String?   @db.VarChar(100)
+  status              String    @default("succeeded") @db.VarChar(50)
+  errorMessage        String?   @map("error_message") @db.Text
+  usedForGeneration   Boolean   @default(false) @map("used_for_generation")
+  createdAt           DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([sessionId, createdAt], map: "idx_assistant_interactions_session_created_at")
+  @@index([userId, createdAt], map: "idx_assistant_interactions_user_created_at")
+  @@index([themeId, createdAt], map: "idx_assistant_interactions_theme_created_at")
+  @@index([rootActionType, actionType, createdAt], map: "idx_assistant_interactions_action_created_at")
+  @@map("assistant_interactions")
+  @@schema("monica_ai")
+}
+
+model ThemeFeaturedImage {
+  id            BigInt    @id @default(autoincrement())
+  themeId       BigInt    @map("theme_id")
+  publicImageId BigInt    @map("public_image_id")
+  position      Int       @default(0)
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  deleted       Int       @default(0)
+
+  @@unique([themeId, position], map: "theme_featured_images_theme_position_key")
+  @@unique([themeId, publicImageId], map: "theme_featured_images_theme_public_key")
+  @@index([themeId, position], map: "idx_theme_featured_images_theme_position")
+  @@map("theme_featured_images")
   @@schema("monica_ai")
 }
 

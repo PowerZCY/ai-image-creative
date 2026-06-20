@@ -1,3 +1,5 @@
+import type { SubmitImageDialogCopy } from './submit-image-dialog';
+
 export type MonicaCreatorCopy = {
   badge: string;
   title: string;
@@ -28,10 +30,53 @@ export type MonicaCreatorCopy = {
   failedNoCharge: string;
   imageLabel: string;
   initialPrompt: string;
+  promptDetails: string;
+  sessionResults: string;
+  openStudio: string;
+  noReference: string;
   modelOptions: {
-    mock: string;
-    openrouter: string;
+    gptImage: string;
+    fluxPro: string;
+    ideogram: string;
+    recraft: string;
+    stableDiffusion: string;
   };
+  assistant: {
+    getIdeasToday: string;
+    getIdeasTheme: string;
+    getIdeasFromTheme: string;
+    improvePrompt: string;
+    askAssistant: string;
+    output: string;
+    tryOne: string;
+    use: string;
+    moreLikeThis: string;
+    ideaHint: string;
+    ideasBasedOn: string;
+    originalPrompt: string;
+    addStartingIdea: string;
+    improveNeedsPrompt: string;
+    askIntro: string;
+    askPlaceholder: string;
+    send: string;
+    you: string;
+    assistantName: string;
+    chooseDirection: string;
+    assistantDirectionHint: string;
+    moreIdeas: string;
+    close: string;
+    improvedPrompt: string;
+    replacePrompt: string;
+    appendDetails: string;
+    tryAnother: string;
+  };
+  actions: {
+    submit: string;
+    delete: string;
+    favorite: string;
+    download: string;
+  };
+  submitDialog: SubmitImageDialogCopy;
   styleOptions: {
     editorial: string;
     cinematic: string;
@@ -62,12 +107,18 @@ export type MonicaStudioCopy = {
   creatorNote: string;
   creatorNotePlaceholder: string;
   submitHint: string;
+  submitDialog: SubmitImageDialogCopy;
+  createTitle: string;
+  ideaThemeLabel: string;
+  noIdeaTheme: string;
+  filters: {
+    searchPlaceholder: string;
+    pendingReview: string;
+  };
   tabs: {
     all: string;
-    generated: string;
     submitted: string;
-    underReview: string;
-    published: string;
+    approved: string;
     rejected: string;
   };
   statusLabels: Record<string, string>;
@@ -99,6 +150,7 @@ export type MonicaExploreCopy = {
   usePrompt: string;
   copyPrompt: string;
   copied: string;
+  useAsInspiration: string;
   tabs: {
     themes: string;
     images: string;

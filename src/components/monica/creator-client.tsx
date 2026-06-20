@@ -1,14 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
-import { ImagePlus, Loader2, Sparkles, UploadCloud, X } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronDown, Download, Heart, ImagePlus, Lightbulb, Loader2, MessageCircle, Send, Settings2, Sparkles, Trash2, UploadCloud, Wand2, X } from 'lucide-react';
 import {
   themeBgColor,
   themeBorderColor,
-  themeButtonGradientClass,
-  themeButtonGradientHoverClass,
-  themeHeroEyesOnClass,
   themeIconColor,
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
@@ -16,6 +14,7 @@ import { dispatchCreditOverviewRefresh } from '@windrun-huaiin/third-ui/main/cre
 import { createR2Client } from '@/lib/r2-explorer-sdk';
 import type { MonicaCreatorCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
+import { SubmitImageDialog, type SubmitImageTarget } from './submit-image-dialog';
 
 type ReferenceImageView = {
   referenceId: string;
@@ -41,6 +40,44 @@ type GenerationJobView = {
   images?: GeneratedImageView[];
 };
 
+type SourcePage = 'home' | 'theme_detail' | 'studio' | 'explore_image_detail' | 'theme_gallery';
+
+type StarterIdea = {
+  idea: string;
+  prompt: string;
+};
+
+type AssistantMode = 'ideas' | 'improve' | 'ask';
+
+type AskMessage = {
+  role: 'user' | 'assistant';
+  text: string;
+  ideas?: StarterIdea[];
+};
+
+type GenerationBatch = {
+  batchId: string;
+  job: GenerationJobView;
+  prompt: string;
+  negativePrompt?: string;
+  model: string;
+  style?: string;
+  ratio?: string;
+  imageCount: number;
+  referenceImage?: ReferenceImageView | null;
+  createdAt: string;
+};
+
+type GenerationSnapshot = {
+  prompt: string;
+  negativePrompt?: string;
+  model: string;
+  style?: string;
+  ratio?: string;
+  imageCount: number;
+  referenceImage?: ReferenceImageView | null;
+};
+
 type CreateGenerationJobResponse = {
   job: GenerationJobView;
   dispatchMode?: 'queue' | 'client-run' | 'inline';
@@ -52,6 +89,7 @@ type GenerationDispatchMode = NonNullable<CreateGenerationJobResponse['dispatchM
 const ratioOptions = [
   { value: '1:1', label: '1:1' },
   { value: '4:5', label: '4:5' },
+  { value: '9:16', label: '9:16' },
   { value: '16:9', label: '16:9' },
 ];
 
@@ -64,6 +102,33 @@ const r2EnableMock = process.env.NEXT_PUBLIC_R2_ENABLE_MOCK === 'true';
 const r2MockImgUrl = process.env.NEXT_PUBLIC_R2_MOCK_IMG_URL ?? '';
 const r2MockTimeoutMs = Number(process.env.NEXT_PUBLIC_R2_MOCK_TIMEOUT ?? 2) * 1000;
 const r2UploadImageMaxSizeMB = Number(process.env.NEXT_PUBLIC_R2_UPLOAD_IMAGE_MAX_SIZE ?? 10);
+
+const fallbackIdeas: StarterIdea[] = [
+  {
+    idea: 'A quiet moment with one strong visual metaphor',
+    prompt: 'A quiet cinematic image built around one strong visual metaphor, restrained composition, natural light, expressive details, no text, no watermark',
+  },
+  {
+    idea: 'A poster-like scene with bold negative space',
+    prompt: 'A refined poster-like scene with bold negative space, one clear subject, elegant color contrast, editorial art direction, crisp details, no text',
+  },
+  {
+    idea: 'A surreal object that explains the feeling',
+    prompt: 'A surreal everyday object transformed into a visual metaphor for an emotional idea, realistic materials, cinematic lighting, polished AI art style',
+  },
+  {
+    idea: 'A close-up story told through hands and objects',
+    prompt: 'A close-up scene told through hands and meaningful objects, tactile details, shallow depth of field, warm natural light, emotionally clear composition',
+  },
+  {
+    idea: 'A minimal scene with dramatic scale',
+    prompt: 'A minimal scene with dramatic scale, tiny human figure against a large symbolic environment, clean composition, atmospheric depth, high-detail finish',
+  },
+  {
+    idea: 'A cinematic before-and-after contrast',
+    prompt: 'A cinematic image showing a subtle before-and-after contrast in one frame, balanced composition, realistic lighting, rich but restrained colors',
+  },
+];
 
 function isAllowedImageFile(file: File) {
   return ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type);
@@ -101,6 +166,66 @@ function formatStatus(status: string, labels: Record<string, string>) {
   return labels[status] ?? status;
 }
 
+function normalizeStarterIdeas(value: unknown): StarterIdea[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === 'string') {
+        const text = item.trim();
+        return text ? { idea: text, prompt: text } : null;
+      }
+      if (!item || typeof item !== 'object') return null;
+      const record = item as Record<string, unknown>;
+      const idea = typeof record.idea === 'string' ? record.idea.trim() : '';
+      const prompt = typeof record.prompt === 'string' ? record.prompt.trim() : '';
+      if (!idea && !prompt) return null;
+      return {
+        idea: idea || prompt,
+        prompt: prompt || idea,
+      };
+    })
+    .filter((item): item is StarterIdea => Boolean(item));
+}
+
+function pickIdeas(ideas: StarterIdea[], count = 3) {
+  return [...ideas]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, count);
+}
+
+function improvePromptText(prompt: string) {
+  const trimmed = prompt.trim();
+  if (!trimmed) return '';
+  return `${trimmed}, with a clearer subject, richer sensory details, coherent composition, cinematic lighting, precise visual metaphor, polished AI image style, no text, no watermark`;
+}
+
+function promptFromIdea(idea: StarterIdea, themeLabel?: string | null) {
+  const themeLine = themeLabel ? `, connected to the theme "${themeLabel}" through visual metaphor` : '';
+  return `${idea.idea}, clear subject, thoughtful composition, rich scene details, coherent lighting, balanced color palette${themeLine}, ready for high-quality AI image generation.`;
+}
+
+function createIdeaFromSeed(seed: StarterIdea, index: number): StarterIdea {
+  const directions = [
+    `Change the main subject while keeping the core feeling from ${seed.idea}`,
+    `Make a more symbolic version of ${seed.idea} with a clearer visual metaphor`,
+    `Shift ${seed.idea} into a wider environmental scene with an unexpected focal point`,
+  ];
+  const idea = directions[index % directions.length];
+  return { idea, prompt: idea };
+}
+
+function askDirections(ask: string, currentPrompt: string, themeLabel?: string | null): StarterIdea[] {
+  const themeHint = themeLabel ? `, with a subtle connection to ${themeLabel}` : '';
+  const base = currentPrompt.trim()
+    ? `a variation of "${currentPrompt.trim().slice(0, 72)}"`
+    : ask;
+  return [
+    `${base}, focused on one clear subject, ${ask}, cinematic composition${themeHint}`,
+    `${base}, more abstract and symbolic, ${ask}, restrained color palette${themeHint}`,
+    `${base}, wider environmental scene, ${ask}, strong mood and readable visual metaphor${themeHint}`,
+  ].map((idea) => ({ idea, prompt: idea }));
+}
+
 async function readError(response: Response) {
   try {
     const data = await response.json();
@@ -110,19 +235,56 @@ async function readError(response: Response) {
   }
 }
 
-export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; themeId?: string | number | bigint | null }) {
+export function MonicaCreator({
+  copy,
+  themeId,
+  sourcePage = 'home',
+  starterIdeas = [],
+  mode = 'home',
+  themeLabel,
+  initialAssistantOpen = false,
+  onRequestThemeIdeas,
+}: {
+  copy: MonicaCreatorCopy;
+  themeId?: string | number | bigint | null;
+  sourcePage?: SourcePage;
+  starterIdeas?: unknown[];
+  mode?: 'home' | 'theme_detail' | 'studio';
+  themeLabel?: string | null;
+  initialAssistantOpen?: boolean;
+  onRequestThemeIdeas?: () => void;
+}) {
   const modelOptions = useMemo(() => [
-    { value: 'mock-image-model', label: copy.modelOptions.mock },
-    { value: 'openrouter-default', label: copy.modelOptions.openrouter },
-  ], [copy.modelOptions.mock, copy.modelOptions.openrouter]);
+    { value: 'gpt-image', label: copy.modelOptions.gptImage },
+    { value: 'flux-pro', label: copy.modelOptions.fluxPro },
+    { value: 'ideogram', label: copy.modelOptions.ideogram },
+    { value: 'recraft', label: copy.modelOptions.recraft },
+    { value: 'stable-diffusion', label: copy.modelOptions.stableDiffusion },
+  ], [copy.modelOptions.fluxPro, copy.modelOptions.gptImage, copy.modelOptions.ideogram, copy.modelOptions.recraft, copy.modelOptions.stableDiffusion]);
   const styleOptions = useMemo(() => [
     { value: 'editorial', label: copy.styleOptions.editorial },
     { value: 'cinematic', label: copy.styleOptions.cinematic },
     { value: 'product', label: copy.styleOptions.product },
     { value: 'illustration', label: copy.styleOptions.illustration },
   ], [copy.styleOptions.cinematic, copy.styleOptions.editorial, copy.styleOptions.illustration, copy.styleOptions.product]);
+  const starterIdeaPool = useMemo(() => {
+    const normalized = normalizeStarterIdeas(starterIdeas);
+    return normalized.length ? normalized : fallbackIdeas;
+  }, [starterIdeas]);
 
-  const [prompt, setPrompt] = useState(copy.initialPrompt);
+  const [prompt, setPrompt] = useState(() => {
+    if (typeof window === 'undefined') {
+      return copy.initialPrompt;
+    }
+
+    const storedPrompt = window.localStorage.getItem('monica:creator-prompt');
+    if (!storedPrompt) {
+      return copy.initialPrompt;
+    }
+
+    window.localStorage.removeItem('monica:creator-prompt');
+    return storedPrompt;
+  });
   const [negativePrompt, setNegativePrompt] = useState('');
   const [model, setModel] = useState(modelOptions[0].value);
   const [style, setStyle] = useState(styleOptions[0].value);
@@ -130,12 +292,27 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
   const [imageCount, setImageCount] = useState(1);
   const [referenceImage, setReferenceImage] = useState<ReferenceImageView | null>(null);
   const [job, setJob] = useState<GenerationJobView | null>(null);
+  const [batches, setBatches] = useState<GenerationBatch[]>([]);
+  const [deletedImageIds, setDeletedImageIds] = useState<Set<string>>(() => new Set());
+  const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
+  const [submittedImageIds, setSubmittedImageIds] = useState<Set<string>>(() => new Set());
+  const [submitTarget, setSubmitTarget] = useState<SubmitImageTarget | null>(null);
   const [activeDispatchMode, setActiveDispatchMode] = useState<GenerationDispatchMode | null>(null);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [openSelectKey, setOpenSelectKey] = useState<string | null>(null);
+  const [assistantMode, setAssistantMode] = useState<AssistantMode | null>(() => initialAssistantOpen ? 'ideas' : null);
+  const [assistantIdeas, setAssistantIdeas] = useState<StarterIdea[]>(() => initialAssistantOpen ? pickIdeas(starterIdeaPool) : []);
+  const [assistantMessage, setAssistantMessage] = useState<string | null>(() => initialAssistantOpen ? copy.assistant.tryOne : null);
+  const [improvedPrompt, setImprovedPrompt] = useState<string | null>(null);
+  const [originalPromptForImprove, setOriginalPromptForImprove] = useState('');
+  const [askInput, setAskInput] = useState('');
+  const [askMessages, setAskMessages] = useState<AskMessage[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const terminalCreditRefreshJobIdRef = useRef<string | null>(null);
+  const jobSnapshotsRef = useRef(new Map<string, GenerationSnapshot>());
   const r2Client = useMemo(() => createR2Client({
     baseUrl: r2BaseUrl,
     bucketName: r2BucketName,
@@ -144,6 +321,37 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
 
   const estimatedCredits = useMemo(() => Math.max(1, imageCount), [imageCount]);
   const isPolling = job ? !terminalStatuses.has(job.status) : false;
+
+  const upsertBatch = useCallback((nextJob: GenerationJobView) => {
+    setBatches((current) => {
+      const existingIndex = current.findIndex((batch) => batch.job.jobId === nextJob.jobId);
+      if (existingIndex >= 0) {
+        const updated = [...current];
+        updated[existingIndex] = { ...updated[existingIndex], job: nextJob };
+        return updated;
+      }
+
+      const snapshot = jobSnapshotsRef.current.get(nextJob.jobId) ?? {
+        prompt,
+        negativePrompt,
+        model,
+        style,
+        ratio,
+        imageCount,
+        referenceImage,
+      };
+
+      return [
+        {
+          batchId: nextJob.jobId,
+          job: nextJob,
+          ...snapshot,
+          createdAt: new Date().toISOString(),
+        },
+        ...current,
+      ];
+    });
+  }, [imageCount, model, negativePrompt, prompt, ratio, referenceImage, style]);
 
   const pollJob = useCallback(async (jobId: string) => {
     const response = await fetch(`/api/monica/generation/jobs/${jobId}`, {
@@ -157,6 +365,7 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
 
     const data = await response.json() as { job: GenerationJobView };
     setJob(data.job);
+    upsertBatch(data.job);
     if (terminalStatuses.has(data.job.status)) {
       setGenerating(false);
       if (terminalCreditRefreshJobIdRef.current !== data.job.jobId) {
@@ -164,7 +373,7 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
         dispatchCreditOverviewRefresh();
       }
     }
-  }, []);
+  }, [upsertBatch]);
 
   const runJob = useCallback(async (runUrl: string) => {
     const response = await fetch(runUrl, {
@@ -178,12 +387,13 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
 
     const data = await response.json() as { job: GenerationJobView };
     setJob(data.job);
+    upsertBatch(data.job);
     setGenerating(false);
     if (terminalCreditRefreshJobIdRef.current !== data.job.jobId) {
       terminalCreditRefreshJobIdRef.current = data.job.jobId;
       dispatchCreditOverviewRefresh();
     }
-  }, []);
+  }, [upsertBatch]);
 
   useEffect(() => {
     if (activeDispatchMode !== 'queue' || !job?.jobId || terminalStatuses.has(job.status)) {
@@ -266,10 +476,10 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
     }
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(promptOverride?: string) {
+    const promptForRequest = promptOverride ?? prompt;
     setGenerating(true);
     setError(null);
-    setJob(null);
     setActiveDispatchMode(null);
 
     try {
@@ -280,7 +490,7 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
           accept: 'application/json',
         },
         body: JSON.stringify({
-          prompt,
+          prompt: promptForRequest,
           negativePrompt,
           model,
           style,
@@ -288,7 +498,7 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
           imageCount,
           referenceId: referenceImage?.referenceId,
           themeId: themeId?.toString(),
-          sourcePage: 'home',
+          sourcePage,
         }),
       });
 
@@ -298,9 +508,19 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
 
       const data = await response.json() as CreateGenerationJobResponse;
       const dispatchMode = data.dispatchMode ?? 'queue';
+      jobSnapshotsRef.current.set(data.job.jobId, {
+        prompt: promptForRequest,
+        negativePrompt,
+        model,
+        style,
+        ratio,
+        imageCount,
+        referenceImage,
+      });
       terminalCreditRefreshJobIdRef.current = null;
       setActiveDispatchMode(dispatchMode);
       setJob(data.job);
+      upsertBatch(data.job);
       dispatchCreditOverviewRefresh();
       if (dispatchMode === 'client-run' && data.runUrl) {
         await runJob(data.runUrl);
@@ -316,15 +536,96 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
   }
 
   const canGenerate = prompt.trim().length > 0 && !generating;
-  const generatedImages = job?.images ?? [];
+
+  function handleGetIdeas() {
+    if (mode === 'studio' && !themeId && onRequestThemeIdeas) {
+      onRequestThemeIdeas();
+      return;
+    }
+
+    setAssistantMode('ideas');
+    setImprovedPrompt(null);
+    setOriginalPromptForImprove('');
+    setAskMessages([]);
+    setAssistantIdeas(pickIdeas(starterIdeaPool));
+    setAssistantMessage(copy.assistant.tryOne);
+  }
+
+  function handleMoreIdeas() {
+    const sourceIdeas = assistantIdeas.length ? assistantIdeas : starterIdeaPool;
+    setAssistantMode('ideas');
+    setImprovedPrompt(null);
+    setOriginalPromptForImprove('');
+    setAskMessages([]);
+    setAssistantIdeas(pickIdeas([...sourceIdeas, ...fallbackIdeas], 3).map((idea, index) => ({
+      idea: `${idea.idea}${index === 0 ? '' : ' variation'}`,
+      prompt: `${idea.prompt}, fresh variation ${index + 1}, distinctive composition`,
+    })));
+    setAssistantMessage(copy.assistant.tryOne);
+  }
+
+  function handleMoreLikeThis(idea: StarterIdea) {
+    setAssistantMode('ideas');
+    setImprovedPrompt(null);
+    setOriginalPromptForImprove('');
+    setAskMessages([]);
+    setAssistantIdeas([0, 1, 2].map((index) => createIdeaFromSeed(idea, index)));
+    setAssistantMessage(copy.assistant.tryOne);
+  }
+
+  function handleImprovePrompt() {
+    const nextPrompt = improvePromptText(prompt);
+    setAssistantMode('improve');
+    setAssistantIdeas([]);
+    setAskMessages([]);
+    setImprovedPrompt(nextPrompt || null);
+    setOriginalPromptForImprove(prompt.trim());
+    setAssistantMessage(nextPrompt ? copy.assistant.improvedPrompt : copy.assistant.addStartingIdea);
+  }
+
+  function handleAskAssistant() {
+    setAssistantMode('ask');
+    setImprovedPrompt(null);
+    setOriginalPromptForImprove('');
+    setAssistantIdeas([]);
+    setAssistantMessage(copy.assistant.askAssistant);
+  }
+
+  function handleSendAsk() {
+    const ask = askInput.trim();
+    if (!ask) return;
+    const ideas = askDirections(ask, prompt, themeLabel);
+    setAskMessages((current) => [
+      ...current,
+      { role: 'user', text: ask },
+      { role: 'assistant', text: copy.assistant.chooseDirection, ideas },
+    ]);
+    setAskInput('');
+  }
+
+  function handleAskMoreLikeThis(idea: StarterIdea) {
+    const ideas = askDirections(idea.idea, prompt, themeLabel);
+    setAskMessages((current) => [
+      ...current,
+      { role: 'user', text: idea.idea },
+      { role: 'assistant', text: copy.assistant.chooseDirection, ideas },
+    ]);
+  }
+
+  const shellClassName = mode === 'studio'
+    ? 'px-0 py-0'
+    : 'monica-surface px-0 py-16 md:py-20';
+  const contentClassName = mode === 'studio'
+    ? 'grid gap-5'
+    : cn(monicaContentWidthClass, 'grid gap-10');
 
   return (
-    <section className="min-h-[calc(100vh-4rem)] px-4 py-20 md:px-8 md:py-24">
-      <div className={cn(monicaContentWidthClass, 'grid gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)] lg:items-start')}>
-        <div className="space-y-6">
-          <div className="space-y-4">
+    <section className={shellClassName}>
+      <div className={contentClassName}>
+        {mode === 'studio' ? null : (
+          <div className="mx-auto max-w-4xl text-center">
             <div className={cn(
-              'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm',
+              'monica-chip mx-auto gap-2 normal-case',
               themeBgColor,
               themeBorderColor,
               themeIconColor,
@@ -332,136 +633,267 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
               <Sparkles className="size-4" />
               <span>{copy.badge}</span>
             </div>
-            <h1 className={cn('max-w-3xl bg-clip-text text-4xl font-semibold leading-tight text-transparent md:text-6xl', themeHeroEyesOnClass)}>
+            <h1 className="monica-page-title mt-5">
               {copy.title}
             </h1>
-            <p className="max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+            <p className="monica-copy mx-auto mt-5 max-w-2xl">
               {copy.description}
             </p>
           </div>
+        )}
 
-          <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
-            <Metric label={copy.estimatedLabel} value={`${estimatedCredits} ${copy.creditsUnit}`} />
-            <Metric label={copy.queueLabel} value={isPolling ? copy.running : copy.ready} />
-            <Metric label={copy.resultLabel} value={job ? formatStatus(job.status, copy.statusLabels) : copy.notStarted} />
+        <div className={cn('mx-auto grid w-full gap-3', mode === 'studio' ? '' : 'max-w-[1000px]')}>
+          <div className="flex flex-wrap gap-2 px-3">
+            <AssistantButton icon={<Lightbulb className="size-4" />} label={mode === 'theme_detail' ? copy.assistant.getIdeasTheme : mode === 'studio' ? copy.assistant.getIdeasFromTheme : copy.assistant.getIdeasToday} onClick={handleGetIdeas} />
+            <AssistantButton icon={<Wand2 className="size-4" />} label={copy.assistant.improvePrompt} onClick={handleImprovePrompt} />
+            <AssistantButton icon={<MessageCircle className="size-4" />} label={copy.assistant.askAssistant} onClick={handleAskAssistant} />
           </div>
-        </div>
 
-        <div className="rounded-lg border border-border bg-card/80 p-4 shadow-2xl shadow-black/10 backdrop-blur dark:shadow-black/30 md:p-5">
-          <div className="space-y-4">
-            <label className="block">
-              <span className="text-sm font-medium text-foreground">{copy.promptLabel}</span>
-              <textarea
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                className={cn(
-                  'mt-2 min-h-36 w-full resize-none rounded-md border border-border bg-background px-3 py-3 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground/70',
-                  'focus:border-current',
-                  themeIconColor,
-                )}
-                placeholder={copy.promptPlaceholder}
-                maxLength={4000}
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-medium text-foreground">{copy.negativePromptLabel}</span>
-              <input
-                value={negativePrompt}
-                onChange={(event) => setNegativePrompt(event.target.value)}
-                className={cn(
-                  'mt-2 h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70',
-                  'focus:border-current',
-                  themeIconColor,
-                )}
-                placeholder={copy.negativePromptPlaceholder}
-              />
-            </label>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <OptionGroup label={copy.modelLabel} value={model} options={modelOptions} onChange={setModel} />
-              <OptionGroup label={copy.styleLabel} value={style} options={styleOptions} onChange={setStyle} />
-              <OptionGroup label={copy.ratioLabel} value={ratio} options={ratioOptions} onChange={setRatio} />
-              <div>
-                <span className="text-sm font-medium text-foreground">{copy.imagesLabel}</span>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  {countOptions.map((count) => (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => setImageCount(count)}
-                      className={cn(
-                        'h-10 rounded-md border text-sm transition',
-                        imageCount === count
-                          ? cn('border-transparent text-white', themeButtonGradientClass)
-                          : 'border-border bg-background text-foreground hover:bg-muted',
+          <div className="monica-panel border-foreground/15 bg-linear-to-b from-white to-neutral-50 p-5 shadow-2xl shadow-black/10 md:p-7">
+            <div className="space-y-5">
+              <div className="flex gap-4 md:gap-6">
+                <div className="hidden shrink-0 md:block">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void handleUpload(file);
+                    }}
+                  />
+                  {referenceImage ? (
+                    <div className="relative h-32 w-24 overflow-hidden rounded-md border border-border bg-muted">
+                      {referenceImage.url ? (
+                        <Image src={referenceImage.url} alt="" width={96} height={128} unoptimized className="size-full object-cover" />
+                      ) : (
+                        <ImagePlus className="m-8 size-8 text-muted-foreground" />
                       )}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-md border border-dashed border-border bg-muted/40 p-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void handleUpload(file);
-                }}
-              />
-              {referenceImage ? (
-                <div className="flex items-center gap-3">
-                  <div className="h-16 w-16 overflow-hidden rounded-md border border-border bg-muted">
-                    {referenceImage.url ? (
-                      <Image
-                        src={referenceImage.url}
-                        alt=""
-                        width={64}
-                        height={64}
-                        unoptimized
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <ImagePlus className="m-5 size-6 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-foreground">{referenceImage.referenceId}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {referenceImage.safetyStatus ? formatStatus(referenceImage.safetyStatus, copy.statusLabels) : copy.uploaded}
+                      <button
+                        type="button"
+                        onClick={() => setReferenceImage(null)}
+                        className="absolute right-1 top-1 grid size-7 place-items-center rounded bg-black/55 text-white"
+                        aria-label={copy.removeReference}
+                        title={copy.removeReference}
+                      >
+                        <X className="size-3.5" />
+                      </button>
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setReferenceImage(null)}
-                    className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label={copy.removeReference}
-                    title={copy.removeReference}
-                  >
-                    <X className="size-4" />
-                  </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="grid h-32 w-24 place-items-center rounded-md border-2 border-dashed border-border bg-muted/50 text-muted-foreground transition hover:-rotate-2 hover:border-foreground/40 hover:bg-background hover:text-foreground disabled:opacity-60"
+                      aria-label={copy.uploadReference}
+                      title={copy.uploadReference}
+                    >
+                      {uploading ? <Loader2 className="size-5 animate-spin" /> : <UploadCloud className="size-6" />}
+                    </button>
+                  )}
                 </div>
-              ) : (
+
+                <label className="min-w-0 flex-1">
+                  <span className="sr-only">{copy.promptLabel}</span>
+                  <textarea
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    className="min-h-36 w-full resize-none border-0 bg-transparent p-0 text-xl font-medium leading-8 text-foreground outline-none placeholder:text-muted-foreground/55 focus:ring-0 md:text-[1.65rem] md:leading-10"
+                    placeholder={copy.promptPlaceholder}
+                    maxLength={4000}
+                  />
+                </label>
+              </div>
+
+            <AssistantPanel
+              mode={assistantMode}
+              title={assistantMessage}
+              ideas={assistantIdeas}
+              improvedPrompt={improvedPrompt}
+              originalPrompt={originalPromptForImprove}
+              askInput={askInput}
+              askMessages={askMessages}
+              themeLabel={themeLabel ?? (mode === 'home' ? "today's theme" : null)}
+              onAskInputChange={setAskInput}
+              onSendAsk={handleSendAsk}
+              onUseIdea={(idea) => {
+                setPrompt(promptFromIdea(idea, themeLabel));
+              }}
+              onMoreLikeThis={handleMoreLikeThis}
+              onAskMoreLikeThis={handleAskMoreLikeThis}
+              onMoreIdeas={handleMoreIdeas}
+              onReplacePrompt={(value) => {
+                setPrompt(value);
+                setImprovedPrompt(null);
+                setAssistantMessage('Prompt replaced');
+              }}
+              onAppendPrompt={(value) => {
+                setPrompt((current) => `${current.trim()} ${value}`.trim());
+                setImprovedPrompt(null);
+                setAssistantMessage('Details appended');
+              }}
+              onTryAnother={handleImprovePrompt}
+              onClose={() => {
+                setAssistantMode(null);
+                setAssistantIdeas([]);
+                setImprovedPrompt(null);
+                setOriginalPromptForImprove('');
+                setAskMessages([]);
+                setAssistantMessage(null);
+              }}
+              copy={copy}
+            />
+
+            <div className="flex flex-col gap-3 border-t border-border pt-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <ControlDropdown
+                  id="model"
+                  label={copy.modelLabel}
+                  icon={<Sparkles className="size-4" />}
+                  value={model}
+                  options={modelOptions}
+                  open={openSelectKey === 'model'}
+                  onToggle={() => setOpenSelectKey((key) => key === 'model' ? null : 'model')}
+                  onClose={() => setOpenSelectKey(null)}
+                  onChange={setModel}
+                />
+                <ControlDropdown
+                  id="style"
+                  label={copy.styleLabel}
+                  icon={<Wand2 className="size-4" />}
+                  value={style}
+                  options={styleOptions.map((option) => ({ ...option, label: `Style: ${option.label}` }))}
+                  open={openSelectKey === 'style'}
+                  onToggle={() => setOpenSelectKey((key) => key === 'style' ? null : 'style')}
+                  onClose={() => setOpenSelectKey(null)}
+                  onChange={setStyle}
+                />
+                <ControlDropdown
+                  id="images"
+                  label={copy.imagesLabel}
+                  icon={<ImagePlus className="size-4" />}
+                  value={imageCount.toString()}
+                  options={countOptions.map((count) => ({ value: count.toString(), label: `${count} img` }))}
+                  open={openSelectKey === 'images'}
+                  onToggle={() => setOpenSelectKey((key) => key === 'images' ? null : 'images')}
+                  onClose={() => setOpenSelectKey(null)}
+                  onChange={(value) => setImageCount(Number(value))}
+                />
+                <ControlDropdown
+                  id="ratio"
+                  label={copy.ratioLabel}
+                  icon={<span className="block size-4 rounded-[2px] border-2 border-current" aria-hidden="true" />}
+                  value={ratio}
+                  options={ratioOptions}
+                  open={openSelectKey === 'ratio'}
+                  onToggle={() => setOpenSelectKey((key) => key === 'ratio' ? null : 'ratio')}
+                  onClose={() => setOpenSelectKey(null)}
+                  onChange={setRatio}
+                />
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
+                  onClick={() => setDetailsOpen((open) => !open)}
                   className={cn(
-                    'flex w-full items-center justify-center gap-2 rounded-md border bg-background px-3 py-4 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60',
-                    themeBorderColor,
+                    'inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted',
+                    detailsOpen ? 'border-foreground' : '',
                   )}
+                  aria-label={copy.promptDetails}
+                  title={copy.promptDetails}
                 >
-                  {uploading ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
-                  <span>{uploading ? copy.uploadingReference : copy.uploadReference}</span>
+                  <Settings2 className="size-4" />
                 </button>
-              )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleGenerate()}
+                disabled={!canGenerate}
+                className="inline-flex h-[52px] min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-8 text-base font-bold text-background shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {generating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                <span>{generating ? copy.generating : copy.generate}</span>
+                <span className="text-background/70">{estimatedCredits} {copy.creditsUnit}</span>
+              </button>
             </div>
+
+            {detailsOpen ? (
+              <div className="rounded-md border border-border bg-muted/20">
+                <div className="grid gap-3 p-3">
+                  <label className="block">
+                    <span className="text-sm font-medium text-foreground">{copy.negativePromptLabel}</span>
+                    <input
+                      value={negativePrompt}
+                      onChange={(event) => setNegativePrompt(event.target.value)}
+                      className={cn(
+                        'mt-2 h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70',
+                        'focus:border-current',
+                        themeIconColor,
+                      )}
+                      placeholder={copy.negativePromptPlaceholder}
+                    />
+                  </label>
+
+                  <div className="rounded-md border border-dashed border-border bg-background p-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void handleUpload(file);
+                      }}
+                    />
+                    {referenceImage ? (
+                      <div className="flex items-center gap-3">
+                        <div className="h-16 w-16 overflow-hidden rounded-md border border-border bg-muted">
+                          {referenceImage.url ? (
+                            <Image
+                              src={referenceImage.url}
+                              alt=""
+                              width={64}
+                              height={64}
+                              unoptimized
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <ImagePlus className="m-5 size-6 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-foreground">{referenceImage.referenceId}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {referenceImage.safetyStatus ? formatStatus(referenceImage.safetyStatus, copy.statusLabels) : copy.uploaded}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReferenceImage(null)}
+                          className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                          aria-label={copy.removeReference}
+                          title={copy.removeReference}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className={cn(
+                          'flex w-full items-center justify-center gap-2 rounded-md border bg-background px-3 py-4 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60',
+                          themeBorderColor,
+                        )}
+                      >
+                        {uploading ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
+                        <span>{uploading ? copy.uploadingReference : copy.uploadReference}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {error && (
               <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
@@ -469,131 +901,435 @@ export function MonicaCreator({ copy, themeId }: { copy: MonicaCreatorCopy; them
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => void handleGenerate()}
-              disabled={!canGenerate}
-              className={cn(
-                'flex h-12 w-full items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60',
-                themeButtonGradientClass,
-                themeButtonGradientHoverClass,
-              )}
-            >
-              {generating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              <span>{generating ? copy.generating : copy.generate}</span>
-            </button>
+            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+              <span>{copy.queueLabel}: {isPolling ? copy.running : copy.ready}</span>
+              <span>{copy.resultLabel}: {job ? formatStatus(job.status, copy.statusLabels) : copy.notStarted}</span>
+            </div>
           </div>
         </div>
       </div>
-
-      <div className={cn(monicaContentWidthClass, 'mt-8')}>
-        <ResultPanel job={job} images={generatedImages} copy={copy} />
       </div>
+
+      {batches.length > 0 ? (
+        <div className={mode === 'studio' ? 'mt-6' : cn(monicaContentWidthClass, 'mt-10')}>
+          <ResultPanel
+            batches={batches}
+            copy={copy}
+            deletedImageIds={deletedImageIds}
+            favoriteImageIds={favoriteImageIds}
+            onDeleteImage={(imageId) => setDeletedImageIds((current) => new Set(current).add(imageId))}
+            onToggleFavorite={(imageId) => setFavoriteImageIds((current) => {
+              const next = new Set(current);
+              if (next.has(imageId)) next.delete(imageId);
+              else next.add(imageId);
+              return next;
+            })}
+            onSubmitImage={(target) => setSubmitTarget(target)}
+            submittedImageIds={submittedImageIds}
+            defaultThemeId={themeId}
+          />
+        </div>
+      ) : null}
+
+      {submitTarget ? (
+        <SubmitImageDialog
+          target={submitTarget}
+          defaultThemeId={themeId}
+          copy={copy.submitDialog}
+          onClose={() => setSubmitTarget(null)}
+          onSubmitted={() => setSubmittedImageIds((current) => new Set(current).add(submitTarget.imageId))}
+        />
+      ) : null}
     </section>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-border bg-card/70 px-3 py-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
-    </div>
-  );
-}
-
-function OptionGroup({
+function ControlDropdown({
+  id,
   label,
+  icon,
   value,
   options,
+  open,
+  onToggle,
+  onClose,
   onChange,
 }: {
+  id: string;
   label: string;
+  icon: ReactNode;
   value: string;
   options: Array<{ value: string; label: string }>;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
   onChange: (value: string) => void;
 }) {
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
   return (
-    <div>
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      <div className="mt-2 flex flex-wrap gap-2">
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
+        aria-expanded={open}
+        aria-controls={`creator-${id}-menu`}
+        title={label}
+      >
+        {icon}
+        <span>{selected?.label ?? value}</span>
+        <ChevronDown className={cn('size-3.5 text-muted-foreground transition', open ? 'rotate-180' : '')} />
+      </button>
+      {open ? (
+        <div
+          id={`creator-${id}-menu`}
+          className="absolute left-0 top-[calc(100%+6px)] z-20 grid min-w-full gap-1 rounded-md border border-border bg-popover p-1 shadow-lg"
+        >
+          <span className="sr-only">{label}</span>
         {options.map((option) => (
           <button
             key={option.value}
             type="button"
-            onClick={() => onChange(option.value)}
+            onClick={() => {
+              onChange(option.value);
+              onClose();
+            }}
             className={cn(
-              'h-10 rounded-md border px-3 text-sm transition',
+              'h-9 whitespace-nowrap rounded px-3 text-left text-sm font-medium transition',
               value === option.value
-                ? cn('border-transparent text-white', themeButtonGradientClass)
-                : 'border-border bg-background text-foreground hover:bg-muted',
+                ? 'bg-foreground text-background'
+                : 'text-foreground hover:bg-muted',
             )}
           >
             {option.label}
           </button>
         ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AssistantButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/25 hover:bg-white"
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function AssistantPanel({
+  mode,
+  title,
+  ideas,
+  improvedPrompt,
+  originalPrompt,
+  askInput,
+  askMessages,
+  themeLabel,
+  onAskInputChange,
+  onSendAsk,
+  onUseIdea,
+  onMoreLikeThis,
+  onAskMoreLikeThis,
+  onMoreIdeas,
+  onReplacePrompt,
+  onAppendPrompt,
+  onTryAnother,
+  onClose,
+  copy,
+}: {
+  mode: AssistantMode | null;
+  title: string | null;
+  ideas: StarterIdea[];
+  improvedPrompt: string | null;
+  originalPrompt: string;
+  askInput: string;
+  askMessages: AskMessage[];
+  themeLabel?: string | null;
+  onAskInputChange: (value: string) => void;
+  onSendAsk: () => void;
+  onUseIdea: (idea: StarterIdea) => void;
+  onMoreLikeThis: (idea: StarterIdea) => void;
+  onAskMoreLikeThis: (idea: StarterIdea) => void;
+  onMoreIdeas: () => void;
+  onReplacePrompt: (prompt: string) => void;
+  onAppendPrompt: (prompt: string) => void;
+  onTryAnother: () => void;
+  onClose: () => void;
+  copy: MonicaCreatorCopy;
+}) {
+  if (!mode && !title && ideas.length === 0 && !improvedPrompt) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-background p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-base font-semibold text-foreground">{title ?? copy.assistant.output}</div>
+        <button type="button" onClick={onClose} className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={copy.assistant.close}>
+          <X className="size-4" />
+        </button>
+      </div>
+
+      {mode === 'improve' && !improvedPrompt ? (
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">{copy.assistant.improveNeedsPrompt}</p>
+      ) : null}
+
+      {mode === 'improve' && improvedPrompt ? (
+        <div className="mt-3 grid gap-3">
+          <div className="rounded-md border border-border bg-card/60 p-4">
+            <div className="text-sm font-semibold text-foreground">{copy.assistant.originalPrompt}</div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{originalPrompt}</p>
+          </div>
+          <div className="rounded-md border border-border bg-card/60 p-4">
+            <div className="text-sm font-semibold text-foreground">{copy.assistant.improvedPrompt}</div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{improvedPrompt}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <SmallActionButton onClick={() => onReplacePrompt(improvedPrompt)}>{copy.assistant.replacePrompt}</SmallActionButton>
+            <SmallActionButton onClick={() => onAppendPrompt(improvedPrompt)}>{copy.assistant.appendDetails}</SmallActionButton>
+            <SmallActionButton onClick={onTryAnother}>{copy.assistant.tryAnother}</SmallActionButton>
+          </div>
+        </div>
+      ) : null}
+
+      {mode === 'ideas' && ideas.length > 0 ? (
+        <div className="mt-3 grid gap-2">
+          {ideas.map((idea, index) => (
+            <div key={`${idea.idea}-${index}`} className="rounded-md border border-border bg-card/60 p-4">
+              <div className="text-base font-semibold text-foreground">{index + 1}. {idea.idea}</div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.ideaHint}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
+                <SmallActionButton onClick={() => onMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
+              </div>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <SmallActionButton onClick={onMoreIdeas}>{copy.assistant.moreIdeas}</SmallActionButton>
+            <SmallActionButton onClick={onClose}>{copy.assistant.close}</SmallActionButton>
+          </div>
+          {themeLabel ? (
+            <p className="text-sm leading-6 text-muted-foreground">
+              {copy.assistant.ideasBasedOn.replace('{theme}', themeLabel)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === 'ask' ? (
+        <div className="mt-3 grid gap-3">
+          <p className="text-sm leading-6 text-muted-foreground">{copy.assistant.askIntro}</p>
+          {askMessages.length > 0 ? (
+            <div className="grid gap-3 rounded-md border border-border bg-card/60 p-4">
+              {askMessages.map((message, index) => (
+                <div key={`${message.role}-${index}`}>
+                  <div className="text-sm font-semibold text-foreground">
+                    {message.role === 'user' ? copy.assistant.you : copy.assistant.assistantName}
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{message.text}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {askMessages.flatMap((message) => message.ideas ?? []).length > 0 ? (
+            <div className="grid gap-2">
+              <div className="text-sm font-semibold text-foreground">{copy.assistant.chooseDirection}</div>
+              {askMessages.flatMap((message) => message.ideas ?? []).slice(-3).map((idea, index) => (
+                <div key={`${idea.idea}-${index}`} className="rounded-md border border-border bg-card/60 p-4">
+                  <div className="text-base font-semibold text-foreground">{index + 1}. {idea.idea}</div>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.assistantDirectionHint}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
+                    <SmallActionButton onClick={() => onAskMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <textarea
+            value={askInput}
+            onChange={(event) => onAskInputChange(event.target.value)}
+            className="min-h-24 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-foreground"
+            placeholder={copy.assistant.askPlaceholder}
+          />
+          <div className="flex flex-wrap gap-2">
+            <SmallActionButton onClick={onSendAsk}>{copy.assistant.send}</SmallActionButton>
+            <SmallActionButton onClick={onClose}>{copy.assistant.close}</SmallActionButton>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SmallActionButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm font-semibold text-foreground hover:bg-muted">
+      {children}
+    </button>
+  );
+}
+
+function ResultPanel({
+  batches,
+  copy,
+  deletedImageIds,
+  favoriteImageIds,
+  onDeleteImage,
+  onToggleFavorite,
+  onSubmitImage,
+  submittedImageIds,
+  defaultThemeId,
+}: {
+  batches: GenerationBatch[];
+  copy: MonicaCreatorCopy;
+  deletedImageIds: Set<string>;
+  favoriteImageIds: Set<string>;
+  onDeleteImage: (imageId: string) => void;
+  onToggleFavorite: (imageId: string) => void;
+  onSubmitImage: (target: SubmitImageTarget) => void;
+  submittedImageIds: Set<string>;
+  defaultThemeId?: string | number | bigint | null;
+}) {
+  return (
+    <div className="max-h-[760px] overflow-y-auto rounded-lg border border-border bg-card/40 p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between gap-3 px-1">
+        <div className="text-lg font-semibold text-foreground">{copy.sessionResults}</div>
+        <Link href="/studio" className="text-sm font-semibold text-foreground underline underline-offset-4">{copy.openStudio}</Link>
+      </div>
+      <div className="grid gap-3">
+        {batches.map((batch) => {
+          const visibleImages = (batch.job.images ?? []).filter((image) => !deletedImageIds.has(image.imageId));
+          const failed = batch.job.status === 'failed' || batch.job.status === 'blocked' || batch.job.status === 'cancelled';
+          return (
+            <article key={batch.batchId} className="grid gap-5 rounded-lg border border-border bg-background p-4 lg:grid-cols-[minmax(240px,0.72fr)_minmax(0,1.28fr)]">
+              <div className="min-w-0">
+                <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                  <span>{formatStatus(batch.job.status, copy.statusLabels)}</span>
+                  <span>{batch.ratio}</span>
+                  <span>{batch.model}</span>
+                  <span>{batch.job.chargedCredits}/{batch.job.estimatedCredits} {copy.creditsUnit}</span>
+                </div>
+                <p className="mt-3 line-clamp-5 text-base leading-7 text-foreground">{batch.prompt}</p>
+                <div className="mt-3 grid gap-1 text-sm text-muted-foreground">
+                  {batch.negativePrompt ? <span>{copy.negativePromptLabel}: {batch.negativePrompt}</span> : null}
+                  <span>{copy.styleLabel}: {batch.style || '-'}</span>
+                  <span>{copy.imagesLabel}: {batch.imageCount}</span>
+                  <span>{batch.referenceImage ? copy.uploaded : copy.noReference}</span>
+                </div>
+              </div>
+
+              {failed ? (
+                <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-800 dark:text-amber-100">
+                  {batch.job.failureMessage || `${formatStatus(batch.job.status, copy.statusLabels)}. ${copy.failedNoCharge}`}
+                </div>
+              ) : visibleImages.length === 0 ? (
+                <div className="rounded-md border border-border bg-card/50 p-4 text-sm text-muted-foreground">
+                  {formatStatus(batch.job.status, copy.statusLabels)}. {copy.waitingForImages}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {visibleImages.map((image) => (
+                    <figure key={image.imageId} className="group overflow-hidden rounded-lg border border-border bg-card">
+                      <div className="relative">
+                        {image.imageUrl ? (
+                          <Image
+                            src={image.imageUrl}
+                            alt=""
+                            width={1024}
+                            height={1024}
+                            unoptimized
+                            className="aspect-square w-full object-cover"
+                          />
+                        ) : (
+                          <div className="grid aspect-square place-items-center text-muted-foreground">
+                            <ImagePlus className="size-8" />
+                          </div>
+                        )}
+                        <div className="absolute right-2 top-2 flex gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100">
+                          <ImageActionButton
+                            label={submittedImageIds.has(image.imageId) ? copy.submitDialog.duplicate : copy.actions.submit}
+                            disabled={submittedImageIds.has(image.imageId)}
+                            onClick={() => onSubmitImage({
+                              imageId: image.imageId,
+                              imageUrl: image.imageUrl,
+                              defaultThemeId: defaultThemeId?.toString() ?? null,
+                            })}
+                          >
+                            <Send className="size-3.5" />
+                          </ImageActionButton>
+                          <ImageActionButton label={copy.actions.favorite} active={favoriteImageIds.has(image.imageId)} onClick={() => onToggleFavorite(image.imageId)}><Heart className="size-3.5" /></ImageActionButton>
+                          {image.imageUrl ? (
+                            <ImageActionLink label={copy.actions.download} href={image.imageUrl}><Download className="size-3.5" /></ImageActionLink>
+                          ) : null}
+                          <ImageActionButton label={copy.actions.delete} onClick={() => onDeleteImage(image.imageId)}><Trash2 className="size-3.5" /></ImageActionButton>
+                        </div>
+                      </div>
+                      <figcaption className="px-2 py-2 text-xs text-muted-foreground">
+                        {copy.imageLabel} {typeof image.providerImageIndex === 'number' ? image.providerImageIndex + 1 : ''}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </article>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function ResultPanel({
-  job,
-  images,
-  copy,
+function ImageActionButton({
+  children,
+  label,
+  onClick,
+  active = false,
+  disabled = false,
 }: {
-  job: GenerationJobView | null;
-  images: GeneratedImageView[];
-  copy: MonicaCreatorCopy;
+  children: ReactNode;
+  label: string;
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
 }) {
-  if (!job) {
-    return (
-      <div className="rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
-        {copy.emptyResult}
-      </div>
-    );
-  }
-
-  if (job.status === 'failed' || job.status === 'blocked' || job.status === 'cancelled') {
-    return (
-      <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-800 dark:text-amber-100">
-        {job.failureMessage || `${formatStatus(job.status, copy.statusLabels)}. ${copy.failedNoCharge}`}
-      </div>
-    );
-  }
-
-  if (images.length === 0) {
-    return (
-      <div className="rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
-        {formatStatus(job.status, copy.statusLabels)}. {copy.waitingForImages}
-      </div>
-    );
-  }
-
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {images.map((image) => (
-        <figure key={image.imageId} className="overflow-hidden rounded-lg border border-border bg-card">
-          {image.imageUrl ? (
-            <Image
-              src={image.imageUrl}
-              alt=""
-              width={1024}
-              height={1024}
-              unoptimized
-              className="aspect-square w-full object-cover"
-            />
-          ) : (
-            <div className="grid aspect-square place-items-center text-muted-foreground">
-              <ImagePlus className="size-8" />
-            </div>
-          )}
-          <figcaption className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
-            <span>{copy.imageLabel} {typeof image.providerImageIndex === 'number' ? image.providerImageIndex + 1 : ''}</span>
-            <span>{job.chargedCredits}/{job.estimatedCredits}</span>
-          </figcaption>
-        </figure>
-      ))}
-    </div>
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'grid size-8 place-items-center rounded-md border border-white/30 bg-black/55 text-white backdrop-blur transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-55',
+        active ? 'bg-rose-600 hover:bg-rose-600' : '',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ImageActionLink({ children, label, href }: { children: ReactNode; label: string; href: string }) {
+  return (
+    <a
+      href={href}
+      download
+      target="_blank"
+      rel="noreferrer"
+      title={label}
+      aria-label={label}
+      className="grid size-8 place-items-center rounded-md border border-white/30 bg-black/55 text-white backdrop-blur transition hover:bg-black/75"
+    >
+      {children}
+    </a>
   );
 }

@@ -9,6 +9,7 @@ export type CreateGenerationJobInput = {
   imageCount: number;
   generationType?: GenerationType;
   themeId?: bigint;
+  sourcePage?: string;
   referenceId?: string;
 };
 

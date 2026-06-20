@@ -17,17 +17,21 @@ export async function POST(request: NextRequest) {
     if (!body.themeId) {
       return NextResponse.json({ error: 'themeId is required' }, { status: 400 });
     }
+    if (typeof body.title !== 'string' || !body.title.trim()) {
+      return NextResponse.json({ error: 'English title is required' }, { status: 400 });
+    }
 
     const submission = await submissionService.submitImage(user.userId, {
       imageId: body.imageId,
       themeId: body.themeId,
-      title: typeof body.title === 'string' ? body.title : undefined,
+      title: body.title,
       creatorNote: typeof body.creatorNote === 'string' ? body.creatorNote : undefined,
     });
 
     return NextResponse.json({ submission });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    const status = message.includes('already been submitted') ? 409 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }

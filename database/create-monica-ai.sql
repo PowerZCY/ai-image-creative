@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS monica_ai.themes (
     theme_note        TEXT,
     publish_date      DATE,
     cover_image_url   TEXT,
-    featured_image_ids BIGINT[]    NOT NULL DEFAULT ARRAY[]::BIGINT[],
     generator_ideas   TEXT[]       NOT NULL DEFAULT ARRAY[]::TEXT[],
     avoid_cliches     TEXT[]       NOT NULL DEFAULT ARRAY[]::TEXT[],
     tags              JSONB,

@@ -230,7 +230,7 @@ Worker 流程：
   - 已公开作品不允许用户直接删除底层图片；用户只能申请撤销公开，后续由管理员审核后设置 `PublicImage.deleted=1` 并更新 `GeneratedImage(status=withdrawn, isLocked=true)`。
 - Explore / Theme Gallery：
   - Themes 只展示已发布正式主题，条件为 `Theme.deleted=0`、`publishDate` 非空且不晚于当前产品日期。
-  - 主题列表和管理员主题列表展示 `coverImageUrl` 和最多前三张 `featuredImageIds` 对应的公开图片。
+  - 主题列表和管理员主题列表展示 `coverImageUrl` 和最多前三张 `theme_featured_images` 对应的公开图片。
   - 只展示 `PublicImage`。
   - 实现 like/save。
   - 实现 view 和 unique view 聚合计数。

@@ -1,5 +1,5 @@
-import { MyThemeSubmissionsClient } from '@/components/monica/my-theme-submissions-client';
+import { redirect } from 'next/navigation';
 
 export default function MyThemeIdeasPage() {
-  return <MyThemeSubmissionsClient />;
+  redirect('/submit-theme');
 }

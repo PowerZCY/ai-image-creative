@@ -26,6 +26,10 @@ export class ThemeService {
     return themeRepository.updateAdminTheme(themeId, input);
   }
 
+  createAdminTheme(input: Parameters<typeof themeRepository.createAdminTheme>[0]) {
+    return themeRepository.createAdminTheme(input);
+  }
+
   listSubmissions(input: Parameters<typeof themeRepository.listSubmissions>[0]) {
     return themeRepository.listSubmissions(input);
   }

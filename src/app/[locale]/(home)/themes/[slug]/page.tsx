@@ -4,11 +4,11 @@ import { notFound } from 'next/navigation';
 import { MonicaCreator } from '@/components/monica/creator-client';
 import { getMonicaCreatorCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
 import { monicaContentWidthClass } from '@/components/monica/layout';
+import { ThemeGalleryClient } from '@/components/monica/theme-gallery-client';
 import { themeService } from '@/server/monica/services/theme.service';
 import {
   themeBgColor,
   themeBorderColor,
-  themeButtonGradientClass,
   themeHeroEyesOnClass,
   themeIconColor,
 } from '@windrun-huaiin/base-ui/lib';
@@ -37,6 +37,7 @@ export default async function ThemeDetailPage({
   const coverImageUrl = dbTheme.coverImageUrl;
   const tags = dbTheme.tags as string[];
   const promptTexts = dbTheme.promptTexts ?? [];
+  const starterIdeas = dbTheme.generatorIdeas ?? [];
 
   return (
     <>
@@ -91,30 +92,11 @@ export default async function ThemeDetailPage({
         </section>
       ) : null}
 
-      <MonicaCreator copy={creatorCopy} themeId={dbTheme.id} />
+      <MonicaCreator copy={creatorCopy} themeId={dbTheme.id} sourcePage="theme_detail" mode="theme_detail" starterIdeas={starterIdeas} />
 
       <section className="px-4 pb-24 md:px-8">
         <div className={monicaContentWidthClass}>
-          <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
-            <h2 className="text-2xl font-semibold text-foreground">{themeCopy.galleryTitle}</h2>
-            <div className="flex rounded-md border border-border bg-muted/50 p-1">
-              {Object.values(themeCopy.galleryTabs).map((label, index) => (
-                <button
-                  key={label}
-                  type="button"
-                  className={cn(
-                    'h-9 rounded px-3 text-sm transition',
-                    index === 0 ? cn('text-white', themeButtonGradientClass) : 'text-muted-foreground hover:bg-background hover:text-foreground',
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-card/60 p-6 text-sm text-muted-foreground">
-            Public gallery images will appear here after submissions are approved for this theme.
-          </div>
+          <ThemeGalleryClient themeId={dbTheme.id.toString()} copy={themeCopy} />
         </div>
       </section>
     </>

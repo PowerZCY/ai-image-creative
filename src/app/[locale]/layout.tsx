@@ -6,8 +6,6 @@ import { DocsRootProvider } from '@windrun-huaiin/third-ui/fuma/base/docs-root-p
 import { ClerkProviderClient } from '@windrun-huaiin/third-ui/clerk';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
-import { montserrat } from '@/lib/fonts';
-import { cn } from '@windrun-huaiin/lib/utils';
 import './globals.css';
 import React from 'react';
 
@@ -60,7 +58,7 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <NextIntlClientProvider messages={messages}>
-        <body className={cn(montserrat.className)}>
+        <body>
           <NProgressBar />
           <ClerkProviderClient locale={locale} localePrefixAsNeeded={localePrefixAsNeeded} defaultLocale={defaultLocale}>
             <DocsRootProvider

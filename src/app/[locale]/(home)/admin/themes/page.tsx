@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { AdminReviewClient } from '@/components/monica/admin-review-client';
 
 export default function AdminThemesPage() {
-  redirect('/themes/my');
+  return <AdminReviewClient initialTab="themes" initialThemeAdminTab="manage_themes" />;
 }

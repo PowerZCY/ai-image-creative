@@ -55,6 +55,39 @@ export class SubmissionRepository {
     };
   }
 
+  createPublicImageDirect(input: {
+    imageId: string;
+    userId: string;
+    themeId: bigint;
+    title: string;
+    creationNote?: string | null;
+    createdBy: string;
+  }) {
+    return prisma.publicImage.upsert({
+      where: { imageId: input.imageId },
+      update: {
+        userId: input.userId,
+        themeId: input.themeId,
+        title: input.title,
+        creationNote: input.creationNote,
+        sourceType: 'admin_direct',
+        createdBy: input.createdBy,
+        publishedAt: new Date(),
+        deleted: 0,
+      },
+      create: {
+        imageId: input.imageId,
+        userId: input.userId,
+        themeId: input.themeId,
+        title: input.title,
+        creationNote: input.creationNote,
+        sourceType: 'admin_direct',
+        createdBy: input.createdBy,
+        promptPublic: true,
+      },
+    });
+  }
+
   createForReview(input: CreateSubmissionInput) {
     return prisma.$transaction(async (tx) => {
       const submission = await tx.imageSubmission.create({
@@ -123,6 +156,7 @@ export class SubmissionRepository {
           },
           update: {
             sourceSubmissionId: existing.id,
+            sourceType: 'user_submission',
             userId: existing.userId,
             themeId: existing.themeId,
             title: existing.title,
@@ -133,6 +167,7 @@ export class SubmissionRepository {
           create: {
             imageId: existing.imageId,
             sourceSubmissionId: existing.id,
+            sourceType: 'user_submission',
             userId: existing.userId,
             themeId: existing.themeId,
             title: existing.title,

@@ -22,6 +22,7 @@ export class GenerationRepository {
       data: {
         userId,
         themeId: input.themeId,
+        sourcePage: input.sourcePage,
         referenceId: input.referenceId,
         status: GENERATION_STATUS.QUEUED,
         generationType: input.generationType,

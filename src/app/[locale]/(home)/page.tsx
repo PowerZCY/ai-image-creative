@@ -21,12 +21,24 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       { (forceShow || isDev) && <FingerprintStatus />}
       <HomeCreatorSection copy={creatorCopy} />
       <HomeThemeSection copy={themeCopy} themes={publicThemes} />
-      <Usage locale={locale} />
-      <Features locale={locale} />
-      <Tips locale={locale} />
-      <FAQ locale={locale} />
-      <SeoContent locale={locale} />
-      <CTA locale={locale} />
+      <section className="px-4 pb-20 md:px-8">
+        <div className="mx-auto max-w-6xl">
+          <details className="group rounded-lg border border-border bg-card/50">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-medium text-foreground marker:hidden">
+              <span>Learn more about Monica AI image creation</span>
+              <span className="text-muted-foreground transition group-open:rotate-180">v</span>
+            </summary>
+            <div className="border-t border-border">
+              <Usage locale={locale} />
+              <Features locale={locale} />
+              <Tips locale={locale} />
+              <FAQ locale={locale} />
+              <SeoContent locale={locale} />
+              <CTA locale={locale} />
+            </div>
+          </details>
+        </div>
+      </section>
     </>
   );
 }
