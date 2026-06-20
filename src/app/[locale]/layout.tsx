@@ -4,6 +4,7 @@ import { createLocalizedPageMetadata, createLocalizedSiteMetadata } from '@windr
 import { NProgressBar } from '@windrun-huaiin/third-ui/main';
 import { DocsRootProvider } from '@windrun-huaiin/third-ui/fuma/base/docs-root-provider';
 import { ClerkProviderClient } from '@windrun-huaiin/third-ui/clerk';
+import { appSans } from '@/lib/fonts';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import './globals.css';
@@ -56,7 +57,7 @@ export default async function RootLayout({
   const fumaTranslations = await getFumaTranslations(locale);
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} className={appSans.variable} suppressHydrationWarning>
       <NextIntlClientProvider messages={messages}>
         <body>
           <NProgressBar />
