@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Image from 'next/image';
-import { X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
+import { cn } from '@windrun-huaiin/lib/utils';
 import { SpinnerLabel } from './list-components';
 
 export type SubmitImageTarget = {
@@ -73,9 +74,11 @@ export function SubmitImageDialog({
   const [creationNote, setCreationNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const preferredThemeId = useMemo(() => (
     target.defaultThemeId ?? defaultThemeId?.toString() ?? ''
   ), [defaultThemeId, target.defaultThemeId]);
+  const selectedTheme = themes.find((theme) => theme.id === selectedThemeId) ?? null;
 
   useEffect(() => {
     let active = true;
@@ -117,6 +120,20 @@ export function SubmitImageDialog({
     };
   }, [preferredThemeId]);
 
+  useEffect(() => {
+    if (!themeDropdownOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const targetElement = event.target;
+      if (!(targetElement instanceof Element)) return;
+      if (targetElement.closest('[data-submit-theme-dropdown]')) return;
+      setThemeDropdownOpen(false);
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [themeDropdownOpen]);
+
   async function submitImage() {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
@@ -154,7 +171,7 @@ export function SubmitImageDialog({
 
   return (
     <DialogShell title={copy.title} closeLabel={copy.close} onClose={onClose}>
-      <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
         {target.imageUrl ? (
           <Image
             src={target.imageUrl}
@@ -162,68 +179,89 @@ export function SubmitImageDialog({
             width={dimensions(target).width}
             height={dimensions(target).height}
             unoptimized
-            className="aspect-square w-full rounded-md object-cover"
+            className="aspect-square w-full rounded-lg border border-neutral-200 object-cover"
           />
         ) : (
-          <div className="aspect-square rounded-md bg-muted" />
+          <div className="aspect-square rounded-lg border border-neutral-200 bg-neutral-100" />
         )}
 
         <div className="space-y-4">
           {error ? (
-            <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {error}
             </div>
           ) : null}
 
           <label className="block">
-            <span className="text-sm font-medium">{copy.englishTitle} *</span>
+            <span className="text-sm font-medium leading-none text-neutral-900">{copy.theme} *</span>
+            <div className="relative mt-2" data-submit-theme-dropdown>
+              <button
+                type="button"
+                onClick={() => setThemeDropdownOpen((open) => !open)}
+                disabled={themesLoading || themes.length === 0}
+                className="inline-flex h-10 w-full items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 shadow-sm outline-none transition hover:border-(--monica-accent-line) hover:bg-neutral-50 focus-visible:border-(--monica-accent) focus-visible:ring-4 focus-visible:ring-(--monica-accent-soft) disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="truncate">
+                  {selectedTheme?.title ?? (themesLoading ? copy.loadingThemes : copy.noThemes)}
+                </span>
+                <ChevronDown className={cn('size-4 shrink-0 text-neutral-500 transition', themeDropdownOpen ? 'rotate-180' : '')} />
+              </button>
+              {themeDropdownOpen && themes.length > 0 ? (
+                <div className="absolute left-0 top-[calc(100%+6px)] z-20 grid max-h-64 w-full gap-1 overflow-auto rounded-md border border-neutral-200 bg-white p-1 shadow-xl shadow-black/15">
+                  {themes.map((theme) => (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedThemeId(theme.id);
+                        setThemeDropdownOpen(false);
+                      }}
+                      className={cn(
+                        'min-h-9 rounded px-3 py-2 text-left text-sm font-medium transition',
+                        selectedThemeId === theme.id
+                          ? 'bg-(--monica-accent-soft) text-neutral-950'
+                          : 'text-neutral-800 hover:bg-neutral-100',
+                      )}
+                    >
+                      {theme.title}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium leading-none text-neutral-900">{copy.englishTitle} *</span>
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              className="monica-input mt-2 h-11 w-full px-3"
+              className="mt-2 flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-900 shadow-sm outline-none transition placeholder:text-neutral-400 focus-visible:border-(--monica-accent) focus-visible:ring-4 focus-visible:ring-(--monica-accent-soft)"
               placeholder={copy.englishTitlePlaceholder}
               maxLength={255}
             />
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium">{copy.theme} *</span>
-            <select
-              value={selectedThemeId}
-              onChange={(event) => setSelectedThemeId(event.target.value)}
-              disabled={themesLoading || themes.length === 0}
-              className="monica-input mt-2 h-11 w-full px-3 disabled:opacity-60"
-            >
-              {themes.length === 0 ? (
-                <option value="">{themesLoading ? copy.loadingThemes : copy.noThemes}</option>
-              ) : themes.map((theme) => (
-                <option key={theme.id} value={theme.id}>{theme.title}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium">{copy.creationNote}</span>
+            <span className="text-sm font-medium leading-none text-neutral-900">{copy.creationNote}</span>
             <textarea
               value={creationNote}
               onChange={(event) => setCreationNote(event.target.value)}
-              className="monica-input mt-2 w-full resize-none px-3 py-2"
+              className="mt-2 flex min-h-24 w-full resize-none rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm leading-6 text-neutral-900 shadow-sm outline-none transition placeholder:text-neutral-400 focus-visible:border-(--monica-accent) focus-visible:ring-4 focus-visible:ring-(--monica-accent-soft)"
               placeholder={copy.creationNotePlaceholder}
               rows={4}
             />
           </label>
 
-          <p className="text-xs leading-5 text-muted-foreground">{copy.hint}</p>
-
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="monica-button-secondary min-h-10 px-3 text-sm">
+            <button type="button" onClick={onClose} className="inline-flex h-10 items-center justify-center rounded-md border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-900 shadow-sm transition hover:bg-neutral-50">
               {copy.cancel}
             </button>
             <button
               type="button"
               onClick={() => void submitImage()}
               disabled={submitting || !selectedThemeId || !title.trim()}
-              className="monica-button-primary min-h-10 px-3 text-sm disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-800 disabled:pointer-events-none disabled:opacity-50"
             >
               {submitting ? <SpinnerLabel>{copy.submit}</SpinnerLabel> : copy.submit}
             </button>
@@ -246,15 +284,15 @@ export function DialogShell({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 px-4 py-6 backdrop-blur-md">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-border bg-background shadow-2xl ring-1 ring-foreground/10">
-        <div className="flex items-center justify-between border-b border-border bg-card px-5 py-4">
-          <h2 className="text-2xl font-semibold">{title}</h2>
-          <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-md border border-border hover:bg-muted" aria-label={closeLabel}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 py-6 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-neutral-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-5 py-4">
+          <h2 className="text-lg font-semibold leading-none tracking-tight text-neutral-950">{title}</h2>
+          <button type="button" onClick={onClose} className="grid size-8 place-items-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-950" aria-label={closeLabel}>
             <X className="size-4" />
           </button>
         </div>
-        <div className="bg-background p-5">{children}</div>
+        <div className="bg-white p-5">{children}</div>
       </div>
     </div>
   );

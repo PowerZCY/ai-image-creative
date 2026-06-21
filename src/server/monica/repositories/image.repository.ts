@@ -278,6 +278,32 @@ export class ImageRepository {
       },
     });
   }
+
+  async hasActiveSubmission(imageId: string) {
+    const submission = await prisma.imageSubmission.findFirst({
+      where: {
+        imageId,
+        deleted: 0,
+        status: { not: 'withdrawn' },
+      },
+      select: { id: true },
+    });
+
+    return Boolean(submission);
+  }
+
+  softDeleteOwnedGeneratedImage(userId: string, imageId: string) {
+    return prisma.generatedImage.updateMany({
+      where: {
+        imageId,
+        userId,
+        deleted: 0,
+      },
+      data: {
+        deleted: 1,
+      },
+    });
+  }
 }
 
 export const imageRepository = new ImageRepository();

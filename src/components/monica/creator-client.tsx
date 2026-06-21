@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronDown, Download, Heart, ImagePlus, Lightbulb, Loader2, MessageCircle, Send, Settings2, Sparkles, Trash2, UploadCloud, Wand2, X } from 'lucide-react';
+import { ChevronDown, Download, Heart, ImagePlus, Lightbulb, Loader2, MessageCircle, Settings2, Sparkles, Trash2, UploadCloud, Wand2, X } from 'lucide-react';
 import {
   themeBgColor,
   themeBorderColor,
@@ -162,9 +162,6 @@ function createReferenceImageStorageKey(file: File) {
   return `monica/reference-images/${Date.now()}-${crypto.randomUUID()}-${safeName}.${ext}`;
 }
 
-function formatStatus(status: string, labels: Record<string, string>) {
-  return labels[status] ?? status;
-}
 
 function normalizeStarterIdeas(value: unknown): StarterIdea[] {
   if (!Array.isArray(value)) return [];
@@ -193,10 +190,16 @@ function pickIdeas(ideas: StarterIdea[], count = 3) {
     .slice(0, count);
 }
 
-function improvePromptText(prompt: string) {
+const improvementDetailOptions = [
+  'with a clearer subject, richer sensory details, coherent composition, cinematic lighting, precise visual metaphor, polished AI image style, no text, no watermark',
+  'with a stronger focal point, more specific environment details, balanced color contrast, natural depth, refined lighting, editorial image composition, no text, no watermark',
+  'with more tactile materials, intentional negative space, a readable emotional tone, cinematic framing, consistent visual style, high-detail finish, no text, no watermark',
+];
+
+function improvePromptText(prompt: string, details: string) {
   const trimmed = prompt.trim();
   if (!trimmed) return '';
-  return `${trimmed}, with a clearer subject, richer sensory details, coherent composition, cinematic lighting, precise visual metaphor, polished AI image style, no text, no watermark`;
+  return `${trimmed}, ${details}`;
 }
 
 function promptFromIdea(idea: StarterIdea, themeLabel?: string | null) {
@@ -244,6 +247,7 @@ export function MonicaCreator({
   themeLabel,
   initialAssistantOpen = false,
   onRequestThemeIdeas,
+  onGenerationUpdated,
 }: {
   copy: MonicaCreatorCopy;
   themeId?: string | number | bigint | null;
@@ -253,6 +257,7 @@ export function MonicaCreator({
   themeLabel?: string | null;
   initialAssistantOpen?: boolean;
   onRequestThemeIdeas?: () => void;
+  onGenerationUpdated?: () => void;
 }) {
   const modelOptions = useMemo(() => [
     { value: 'gpt-image', label: copy.modelOptions.gptImage },
@@ -297,6 +302,10 @@ export function MonicaCreator({
   const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
   const [submittedImageIds, setSubmittedImageIds] = useState<Set<string>>(() => new Set());
   const [submitTarget, setSubmitTarget] = useState<SubmitImageTarget | null>(null);
+  const [deletingImageIds, setDeletingImageIds] = useState<Set<string>>(() => new Set());
+  const [downloadingImageIds, setDownloadingImageIds] = useState<Set<string>>(() => new Set());
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [pendingDeleteImageId, setPendingDeleteImageId] = useState<string | null>(null);
   const [activeDispatchMode, setActiveDispatchMode] = useState<GenerationDispatchMode | null>(null);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -307,7 +316,7 @@ export function MonicaCreator({
   const [assistantIdeas, setAssistantIdeas] = useState<StarterIdea[]>(() => initialAssistantOpen ? pickIdeas(starterIdeaPool) : []);
   const [assistantMessage, setAssistantMessage] = useState<string | null>(() => initialAssistantOpen ? copy.assistant.tryOne : null);
   const [improvedPrompt, setImprovedPrompt] = useState<string | null>(null);
-  const [originalPromptForImprove, setOriginalPromptForImprove] = useState('');
+  const [improvementVariantIndex, setImprovementVariantIndex] = useState(0);
   const [askInput, setAskInput] = useState('');
   const [askMessages, setAskMessages] = useState<AskMessage[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -320,7 +329,26 @@ export function MonicaCreator({
   }), []);
 
   const estimatedCredits = useMemo(() => Math.max(1, imageCount), [imageCount]);
-  const isPolling = job ? !terminalStatuses.has(job.status) : false;
+
+  useEffect(() => {
+    if (!openSelectKey) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-creator-dropdown]')) return;
+      setOpenSelectKey(null);
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [openSelectKey]);
+
+  useEffect(() => {
+    if (!actionMessage) return;
+    const timeout = window.setTimeout(() => setActionMessage(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [actionMessage]);
 
   const upsertBatch = useCallback((nextJob: GenerationJobView) => {
     setBatches((current) => {
@@ -368,12 +396,13 @@ export function MonicaCreator({
     upsertBatch(data.job);
     if (terminalStatuses.has(data.job.status)) {
       setGenerating(false);
+      onGenerationUpdated?.();
       if (terminalCreditRefreshJobIdRef.current !== data.job.jobId) {
         terminalCreditRefreshJobIdRef.current = data.job.jobId;
         dispatchCreditOverviewRefresh();
       }
     }
-  }, [upsertBatch]);
+  }, [onGenerationUpdated, upsertBatch]);
 
   const runJob = useCallback(async (runUrl: string) => {
     const response = await fetch(runUrl, {
@@ -389,11 +418,12 @@ export function MonicaCreator({
     setJob(data.job);
     upsertBatch(data.job);
     setGenerating(false);
+    onGenerationUpdated?.();
     if (terminalCreditRefreshJobIdRef.current !== data.job.jobId) {
       terminalCreditRefreshJobIdRef.current = data.job.jobId;
       dispatchCreditOverviewRefresh();
     }
-  }, [upsertBatch]);
+  }, [onGenerationUpdated, upsertBatch]);
 
   useEffect(() => {
     if (activeDispatchMode !== 'queue' || !job?.jobId || terminalStatuses.has(job.status)) {
@@ -497,7 +527,6 @@ export function MonicaCreator({
           ratio,
           imageCount,
           referenceId: referenceImage?.referenceId,
-          themeId: themeId?.toString(),
           sourcePage,
         }),
       });
@@ -528,6 +557,7 @@ export function MonicaCreator({
         await pollJob(data.job.jobId);
       } else {
         setGenerating(false);
+        onGenerationUpdated?.();
       }
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : String(generateError));
@@ -545,7 +575,6 @@ export function MonicaCreator({
 
     setAssistantMode('ideas');
     setImprovedPrompt(null);
-    setOriginalPromptForImprove('');
     setAskMessages([]);
     setAssistantIdeas(pickIdeas(starterIdeaPool));
     setAssistantMessage(copy.assistant.tryOne);
@@ -555,7 +584,6 @@ export function MonicaCreator({
     const sourceIdeas = assistantIdeas.length ? assistantIdeas : starterIdeaPool;
     setAssistantMode('ideas');
     setImprovedPrompt(null);
-    setOriginalPromptForImprove('');
     setAskMessages([]);
     setAssistantIdeas(pickIdeas([...sourceIdeas, ...fallbackIdeas], 3).map((idea, index) => ({
       idea: `${idea.idea}${index === 0 ? '' : ' variation'}`,
@@ -567,26 +595,27 @@ export function MonicaCreator({
   function handleMoreLikeThis(idea: StarterIdea) {
     setAssistantMode('ideas');
     setImprovedPrompt(null);
-    setOriginalPromptForImprove('');
     setAskMessages([]);
     setAssistantIdeas([0, 1, 2].map((index) => createIdeaFromSeed(idea, index)));
     setAssistantMessage(copy.assistant.tryOne);
   }
 
   function handleImprovePrompt() {
-    const nextPrompt = improvePromptText(prompt);
+    const nextIndex = assistantMode === 'improve' && improvedPrompt
+      ? improvementVariantIndex + 1
+      : improvementVariantIndex;
+    const nextPrompt = improvePromptText(prompt, improvementDetailOptions[nextIndex % improvementDetailOptions.length]);
+    setImprovementVariantIndex(nextIndex);
     setAssistantMode('improve');
     setAssistantIdeas([]);
     setAskMessages([]);
     setImprovedPrompt(nextPrompt || null);
-    setOriginalPromptForImprove(prompt.trim());
     setAssistantMessage(nextPrompt ? copy.assistant.improvedPrompt : copy.assistant.addStartingIdea);
   }
 
   function handleAskAssistant() {
     setAssistantMode('ask');
     setImprovedPrompt(null);
-    setOriginalPromptForImprove('');
     setAssistantIdeas([]);
     setAssistantMessage(copy.assistant.askAssistant);
   }
@@ -612,17 +641,81 @@ export function MonicaCreator({
     ]);
   }
 
+  async function handleDownloadImage(image: GeneratedImageView) {
+    if (!image.imageUrl) return;
+    setDownloadingImageIds((current) => new Set(current).add(image.imageId));
+    setActionMessage(null);
+
+    try {
+      const response = await fetch(image.imageUrl);
+      if (!response.ok) throw new Error('Download failed');
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `monica-${image.imageId}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setActionMessage(downloadError instanceof Error ? downloadError.message : 'Download failed');
+    } finally {
+      setDownloadingImageIds((current) => {
+        const next = new Set(current);
+        next.delete(image.imageId);
+        return next;
+      });
+    }
+  }
+
+  function handleRequestDeleteImage(imageId: string) {
+    if (submittedImageIds.has(imageId)) {
+      setActionMessage('Submitted images cannot be deleted.');
+      return;
+    }
+
+    setPendingDeleteImageId(imageId);
+  }
+
+  async function handleConfirmDeleteImage() {
+    const imageId = pendingDeleteImageId;
+    if (!imageId) return;
+    setDeletingImageIds((current) => new Set(current).add(imageId));
+    setPendingDeleteImageId(null);
+    setActionMessage(null);
+
+    try {
+      const response = await fetch(`/api/monica/studio/images/${imageId}`, {
+        method: 'DELETE',
+        headers: { accept: 'application/json' },
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setDeletedImageIds((current) => new Set(current).add(imageId));
+      setActionMessage('Image deleted.');
+    } catch (deleteError) {
+      setActionMessage(deleteError instanceof Error ? deleteError.message : 'Delete failed');
+    } finally {
+      setDeletingImageIds((current) => {
+        const next = new Set(current);
+        next.delete(imageId);
+        return next;
+      });
+    }
+  }
+
   const shellClassName = mode === 'studio'
     ? 'px-0 py-0'
     : 'monica-surface px-0 py-16 md:py-20';
   const contentClassName = mode === 'studio'
     ? 'grid gap-5'
     : cn(monicaContentWidthClass, 'grid gap-10');
+  const creatorWidthClassName = 'mx-auto w-full max-w-[1000px]';
 
   return (
     <section className={shellClassName}>
       <div className={contentClassName}>
-        {mode === 'studio' ? null : (
+        {mode === 'home' ? (
           <div className="mx-auto max-w-4xl text-center">
             <div className={cn(
               'monica-chip mx-auto gap-2 normal-case',
@@ -640,9 +733,9 @@ export function MonicaCreator({
               {copy.description}
             </p>
           </div>
-        )}
+        ) : null}
 
-        <div className={cn('mx-auto grid w-full gap-3', mode === 'studio' ? '' : 'max-w-[1000px]')}>
+        <div className={cn(creatorWidthClassName, 'grid gap-3')}>
           <div className="flex flex-wrap gap-2 px-3">
             <AssistantButton icon={<Lightbulb className="size-4" />} label={mode === 'theme_detail' ? copy.assistant.getIdeasTheme : mode === 'studio' ? copy.assistant.getIdeasFromTheme : copy.assistant.getIdeasToday} onClick={handleGetIdeas} />
             <AssistantButton icon={<Wand2 className="size-4" />} label={copy.assistant.improvePrompt} onClick={handleImprovePrompt} />
@@ -685,7 +778,7 @@ export function MonicaCreator({
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploading}
-                      className="grid h-32 w-24 place-items-center rounded-md border-2 border-dashed border-border bg-muted/50 text-muted-foreground transition hover:-rotate-2 hover:border-foreground/40 hover:bg-background hover:text-foreground disabled:opacity-60"
+                      className="grid h-32 w-24 place-items-center rounded-md border-2 border-dashed border-border bg-muted/50 text-muted-foreground transition hover:-rotate-2 hover:border-(--monica-accent-line) hover:bg-background hover:text-foreground disabled:opacity-60"
                       aria-label={copy.uploadReference}
                       title={copy.uploadReference}
                     >
@@ -711,7 +804,6 @@ export function MonicaCreator({
               title={assistantMessage}
               ideas={assistantIdeas}
               improvedPrompt={improvedPrompt}
-              originalPrompt={originalPromptForImprove}
               askInput={askInput}
               askMessages={askMessages}
               themeLabel={themeLabel ?? (mode === 'home' ? "today's theme" : null)}
@@ -729,7 +821,13 @@ export function MonicaCreator({
                 setAssistantMessage('Prompt replaced');
               }}
               onAppendPrompt={(value) => {
-                setPrompt((current) => `${current.trim()} ${value}`.trim());
+                setPrompt((current) => {
+                  const trimmed = current.trim();
+                  const details = value.startsWith(trimmed)
+                    ? value.slice(trimmed.length).replace(/^,\s*/, '').trim()
+                    : value.trim();
+                  return `${trimmed}${details ? `, ${details}` : ''}`.trim();
+                });
                 setImprovedPrompt(null);
                 setAssistantMessage('Details appended');
               }}
@@ -738,7 +836,6 @@ export function MonicaCreator({
                 setAssistantMode(null);
                 setAssistantIdeas([]);
                 setImprovedPrompt(null);
-                setOriginalPromptForImprove('');
                 setAskMessages([]);
                 setAssistantMessage(null);
               }}
@@ -795,8 +892,8 @@ export function MonicaCreator({
                   type="button"
                   onClick={() => setDetailsOpen((open) => !open)}
                   className={cn(
-                    'inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted',
-                    detailsOpen ? 'border-foreground' : '',
+                    'inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft)',
+                    detailsOpen ? 'border-(--monica-accent) bg-(--monica-accent-soft)' : '',
                   )}
                   aria-label={copy.promptDetails}
                   title={copy.promptDetails}
@@ -808,11 +905,11 @@ export function MonicaCreator({
                 type="button"
                 onClick={() => void handleGenerate()}
                 disabled={!canGenerate}
-                className="inline-flex h-[52px] min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-8 text-base font-bold text-background shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-[52px] min-h-[52px] items-center justify-center gap-2 rounded-full bg-(--monica-accent) px-8 text-base font-bold text-white shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:bg-(--monica-accent-hover) hover:shadow-xl hover:shadow-black/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {generating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                 <span>{generating ? copy.generating : copy.generate}</span>
-                <span className="text-background/70">{estimatedCredits} {copy.creditsUnit}</span>
+                <span className="text-white/75">{estimatedCredits} {copy.creditsUnit}</span>
               </button>
             </div>
 
@@ -826,71 +923,11 @@ export function MonicaCreator({
                       onChange={(event) => setNegativePrompt(event.target.value)}
                       className={cn(
                         'mt-2 h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70',
-                        'focus:border-current',
-                        themeIconColor,
+                        'focus:border-(--monica-accent) focus:shadow-[0_0_0_4px_var(--monica-accent-soft)]',
                       )}
                       placeholder={copy.negativePromptPlaceholder}
                     />
                   </label>
-
-                  <div className="rounded-md border border-dashed border-border bg-background p-3">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) void handleUpload(file);
-                      }}
-                    />
-                    {referenceImage ? (
-                      <div className="flex items-center gap-3">
-                        <div className="h-16 w-16 overflow-hidden rounded-md border border-border bg-muted">
-                          {referenceImage.url ? (
-                            <Image
-                              src={referenceImage.url}
-                              alt=""
-                              width={64}
-                              height={64}
-                              unoptimized
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <ImagePlus className="m-5 size-6 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-foreground">{referenceImage.referenceId}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {referenceImage.safetyStatus ? formatStatus(referenceImage.safetyStatus, copy.statusLabels) : copy.uploaded}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setReferenceImage(null)}
-                          className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                          aria-label={copy.removeReference}
-                          title={copy.removeReference}
-                        >
-                          <X className="size-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                        className={cn(
-                          'flex w-full items-center justify-center gap-2 rounded-md border bg-background px-3 py-4 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60',
-                          themeBorderColor,
-                        )}
-                      >
-                        {uploading ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
-                        <span>{uploading ? copy.uploadingReference : copy.uploadReference}</span>
-                      </button>
-                    )}
-                  </div>
                 </div>
               </div>
             ) : null}
@@ -901,33 +938,35 @@ export function MonicaCreator({
               </div>
             )}
 
-            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-              <span>{copy.queueLabel}: {isPolling ? copy.running : copy.ready}</span>
-              <span>{copy.resultLabel}: {job ? formatStatus(job.status, copy.statusLabels) : copy.notStarted}</span>
-            </div>
           </div>
         </div>
       </div>
       </div>
 
-      {batches.length > 0 ? (
-        <div className={mode === 'studio' ? 'mt-6' : cn(monicaContentWidthClass, 'mt-10')}>
-          <ResultPanel
-            batches={batches}
-            copy={copy}
-            deletedImageIds={deletedImageIds}
-            favoriteImageIds={favoriteImageIds}
-            onDeleteImage={(imageId) => setDeletedImageIds((current) => new Set(current).add(imageId))}
-            onToggleFavorite={(imageId) => setFavoriteImageIds((current) => {
-              const next = new Set(current);
-              if (next.has(imageId)) next.delete(imageId);
-              else next.add(imageId);
-              return next;
-            })}
-            onSubmitImage={(target) => setSubmitTarget(target)}
-            submittedImageIds={submittedImageIds}
-            defaultThemeId={themeId}
-          />
+      {mode !== 'studio' && batches.length > 0 ? (
+        <div className={cn(monicaContentWidthClass, 'mt-10')}>
+          <div className={creatorWidthClassName}>
+            <ResultPanel
+              batches={batches}
+              copy={copy}
+              actionMessage={actionMessage}
+              deletedImageIds={deletedImageIds}
+              deletingImageIds={deletingImageIds}
+              downloadingImageIds={downloadingImageIds}
+              favoriteImageIds={favoriteImageIds}
+              onDeleteImage={handleRequestDeleteImage}
+              onDownloadImage={(image) => void handleDownloadImage(image)}
+              onToggleFavorite={(imageId) => setFavoriteImageIds((current) => {
+                const next = new Set(current);
+                if (next.has(imageId)) next.delete(imageId);
+                else next.add(imageId);
+                return next;
+              })}
+              onSubmitImage={(target) => setSubmitTarget(target)}
+              submittedImageIds={submittedImageIds}
+              defaultThemeId={themeId}
+            />
+          </div>
         </div>
       ) : null}
 
@@ -938,6 +977,17 @@ export function MonicaCreator({
           copy={copy.submitDialog}
           onClose={() => setSubmitTarget(null)}
           onSubmitted={() => setSubmittedImageIds((current) => new Set(current).add(submitTarget.imageId))}
+        />
+      ) : null}
+
+      {pendingDeleteImageId ? (
+        <ConfirmDialog
+          title="Delete image?"
+          description="This image will be removed from your Studio. This action cannot be undone."
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onCancel={() => setPendingDeleteImageId(null)}
+          onConfirm={() => void handleConfirmDeleteImage()}
         />
       ) : null}
     </section>
@@ -968,11 +1018,11 @@ function ControlDropdown({
   const selected = options.find((option) => option.value === value) ?? options[0];
 
   return (
-    <div className="relative">
+    <div className="relative" data-creator-dropdown>
       <button
         type="button"
         onClick={onToggle}
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft)"
         aria-expanded={open}
         aria-controls={`creator-${id}-menu`}
         title={label}
@@ -984,7 +1034,7 @@ function ControlDropdown({
       {open ? (
         <div
           id={`creator-${id}-menu`}
-          className="absolute left-0 top-[calc(100%+6px)] z-20 grid min-w-full gap-1 rounded-md border border-border bg-popover p-1 shadow-lg"
+          className="absolute left-0 top-[calc(100%+6px)] z-20 grid min-w-full gap-1 rounded-md border border-border bg-white p-1 shadow-xl shadow-black/15"
         >
           <span className="sr-only">{label}</span>
         {options.map((option) => (
@@ -998,7 +1048,7 @@ function ControlDropdown({
             className={cn(
               'h-9 whitespace-nowrap rounded px-3 text-left text-sm font-medium transition',
               value === option.value
-                ? 'bg-foreground text-background'
+                ? 'bg-(--monica-accent-soft) text-foreground'
                 : 'text-foreground hover:bg-muted',
             )}
           >
@@ -1016,7 +1066,7 @@ function AssistantButton({ icon, label, onClick }: { icon: ReactNode; label: str
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/25 hover:bg-white"
+      className="flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-(--monica-accent-line) hover:bg-white"
     >
       {icon}
       <span>{label}</span>
@@ -1029,7 +1079,6 @@ function AssistantPanel({
   title,
   ideas,
   improvedPrompt,
-  originalPrompt,
   askInput,
   askMessages,
   themeLabel,
@@ -1049,7 +1098,6 @@ function AssistantPanel({
   title: string | null;
   ideas: StarterIdea[];
   improvedPrompt: string | null;
-  originalPrompt: string;
   askInput: string;
   askMessages: AskMessage[];
   themeLabel?: string | null;
@@ -1083,15 +1131,10 @@ function AssistantPanel({
       {mode === 'improve' && improvedPrompt ? (
         <div className="mt-3 grid gap-3">
           <div className="rounded-md border border-border bg-card/60 p-4">
-            <div className="text-sm font-semibold text-foreground">{copy.assistant.originalPrompt}</div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{originalPrompt}</p>
-          </div>
-          <div className="rounded-md border border-border bg-card/60 p-4">
-            <div className="text-sm font-semibold text-foreground">{copy.assistant.improvedPrompt}</div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{improvedPrompt}</p>
+            <p className="text-sm leading-6 text-muted-foreground">{improvedPrompt}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <SmallActionButton onClick={() => onReplacePrompt(improvedPrompt)}>{copy.assistant.replacePrompt}</SmallActionButton>
+            <SmallActionButton onClick={() => onReplacePrompt(improvedPrompt)}>{copy.assistant.use}</SmallActionButton>
             <SmallActionButton onClick={() => onAppendPrompt(improvedPrompt)}>{copy.assistant.appendDetails}</SmallActionButton>
             <SmallActionButton onClick={onTryAnother}>{copy.assistant.tryAnother}</SmallActionButton>
           </div>
@@ -1104,7 +1147,7 @@ function AssistantPanel({
             <div key={`${idea.idea}-${index}`} className="rounded-md border border-border bg-card/60 p-4">
               <div className="text-base font-semibold text-foreground">{index + 1}. {idea.idea}</div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.ideaHint}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-nowrap gap-2">
                 <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
                 <SmallActionButton onClick={() => onMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
               </div>
@@ -1124,15 +1167,21 @@ function AssistantPanel({
 
       {mode === 'ask' ? (
         <div className="mt-3 grid gap-3">
-          <p className="text-sm leading-6 text-muted-foreground">{copy.assistant.askIntro}</p>
           {askMessages.length > 0 ? (
             <div className="grid gap-3 rounded-md border border-border bg-card/60 p-4">
               {askMessages.map((message, index) => (
-                <div key={`${message.role}-${index}`}>
-                  <div className="text-sm font-semibold text-foreground">
-                    {message.role === 'user' ? copy.assistant.you : copy.assistant.assistantName}
+                <div key={`${message.role}-${index}`} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  <div className={cn(
+                    'max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-6 shadow-sm',
+                    message.role === 'user'
+                      ? 'rounded-br-md bg-foreground text-background'
+                      : 'rounded-bl-md border border-border bg-white text-foreground',
+                  )}>
+                    <div className={cn('mb-0.5 text-[11px] font-semibold', message.role === 'user' ? 'text-background/70' : 'text-muted-foreground')}>
+                      {message.role === 'user' ? copy.assistant.you : copy.assistant.assistantName}
+                    </div>
+                    <p>{message.text}</p>
                   </div>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{message.text}</p>
                 </div>
               ))}
             </div>
@@ -1145,7 +1194,7 @@ function AssistantPanel({
                 <div key={`${idea.idea}-${index}`} className="rounded-md border border-border bg-card/60 p-4">
                   <div className="text-base font-semibold text-foreground">{index + 1}. {idea.idea}</div>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.assistantDirectionHint}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-nowrap gap-2">
                     <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
                     <SmallActionButton onClick={() => onAskMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
                   </div>
@@ -1172,7 +1221,7 @@ function AssistantPanel({
 
 function SmallActionButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm font-semibold text-foreground hover:bg-muted">
+    <button type="button" onClick={onClick} className="inline-flex h-8 shrink-0 items-center rounded-full border border-border bg-white px-3 text-[11px] font-medium text-muted-foreground transition hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft) hover:text-foreground">
       {children}
     </button>
   );
@@ -1181,9 +1230,13 @@ function SmallActionButton({ children, onClick }: { children: ReactNode; onClick
 function ResultPanel({
   batches,
   copy,
+  actionMessage,
   deletedImageIds,
+  deletingImageIds,
+  downloadingImageIds,
   favoriteImageIds,
   onDeleteImage,
+  onDownloadImage,
   onToggleFavorite,
   onSubmitImage,
   submittedImageIds,
@@ -1191,55 +1244,69 @@ function ResultPanel({
 }: {
   batches: GenerationBatch[];
   copy: MonicaCreatorCopy;
+  actionMessage: string | null;
   deletedImageIds: Set<string>;
+  deletingImageIds: Set<string>;
+  downloadingImageIds: Set<string>;
   favoriteImageIds: Set<string>;
   onDeleteImage: (imageId: string) => void;
+  onDownloadImage: (image: GeneratedImageView) => void;
   onToggleFavorite: (imageId: string) => void;
   onSubmitImage: (target: SubmitImageTarget) => void;
   submittedImageIds: Set<string>;
   defaultThemeId?: string | number | bigint | null;
 }) {
   return (
-    <div className="max-h-[760px] overflow-y-auto rounded-lg border border-border bg-card/40 p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-3 px-1">
-        <div className="text-lg font-semibold text-foreground">{copy.sessionResults}</div>
-        <Link href="/studio" className="text-sm font-semibold text-foreground underline underline-offset-4">{copy.openStudio}</Link>
+    <div className="monica-panel max-h-[780px] overflow-y-auto p-5 md:p-7">
+      <div className="mb-5 flex flex-col justify-between gap-3 border-b border-border pb-4 md:flex-row md:items-center">
+        <div>
+          <div className="text-lg font-semibold text-foreground">Your new images</div>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            Your latest creations are shown here. Open Studio to view everything you have generated.
+          </p>
+        </div>
+        <Link href="/studio" className="monica-button-secondary min-h-10 shrink-0 px-4 text-sm">
+          {copy.openStudio}
+        </Link>
       </div>
-      <div className="grid gap-3">
+      {actionMessage ? (
+        <div className="mb-4 rounded-md border border-(--monica-accent-line) bg-(--monica-accent-soft) px-3 py-2 text-sm font-medium text-foreground">
+          {actionMessage}
+        </div>
+      ) : null}
+      <div className="grid gap-5">
         {batches.map((batch) => {
           const visibleImages = (batch.job.images ?? []).filter((image) => !deletedImageIds.has(image.imageId));
           const failed = batch.job.status === 'failed' || batch.job.status === 'blocked' || batch.job.status === 'cancelled';
           return (
-            <article key={batch.batchId} className="grid gap-5 rounded-lg border border-border bg-background p-4 lg:grid-cols-[minmax(240px,0.72fr)_minmax(0,1.28fr)]">
+            <article key={batch.batchId} className="grid gap-5 rounded-xl border border-border bg-background p-4 lg:grid-cols-[minmax(220px,0.62fr)_minmax(0,1.38fr)]">
               <div className="min-w-0">
-                <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                  <span>{formatStatus(batch.job.status, copy.statusLabels)}</span>
-                  <span>{batch.ratio}</span>
-                  <span>{batch.model}</span>
-                  <span>{batch.job.chargedCredits}/{batch.job.estimatedCredits} {copy.creditsUnit}</span>
-                </div>
-                <p className="mt-3 line-clamp-5 text-base leading-7 text-foreground">{batch.prompt}</p>
-                <div className="mt-3 grid gap-1 text-sm text-muted-foreground">
-                  {batch.negativePrompt ? <span>{copy.negativePromptLabel}: {batch.negativePrompt}</span> : null}
-                  <span>{copy.styleLabel}: {batch.style || '-'}</span>
-                  <span>{copy.imagesLabel}: {batch.imageCount}</span>
-                  <span>{batch.referenceImage ? copy.uploaded : copy.noReference}</span>
+                <p className="line-clamp-6 text-sm leading-6 text-foreground md:text-base md:leading-7">{batch.prompt}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <ResultMetaItem value={batch.model} />
+                  <ResultMetaItem value={batch.ratio} />
+                  {batch.style ? <ResultMetaItem value={batch.style} /> : null}
+                  {batch.referenceImage ? <ResultMetaItem value="Reference image" /> : null}
                 </div>
               </div>
 
               {failed ? (
                 <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-800 dark:text-amber-100">
-                  {batch.job.failureMessage || `${formatStatus(batch.job.status, copy.statusLabels)}. ${copy.failedNoCharge}`}
+                  {batch.job.failureMessage || copy.failedNoCharge}
                 </div>
               ) : visibleImages.length === 0 ? (
-                <div className="rounded-md border border-border bg-card/50 p-4 text-sm text-muted-foreground">
-                  {formatStatus(batch.job.status, copy.statusLabels)}. {copy.waitingForImages}
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {Array.from({ length: Math.max(1, batch.imageCount) }).map((_, index) => (
+                    <div key={`${batch.batchId}-placeholder-${index}`} className={cn('grid place-items-center rounded-lg border border-border bg-card/60 text-muted-foreground', getRatioClassName(batch.ratio))}>
+                      <Loader2 className="size-5 animate-spin" />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   {visibleImages.map((image) => (
-                    <figure key={image.imageId} className="group overflow-hidden rounded-lg border border-border bg-card">
-                      <div className="relative">
+                    <figure key={image.imageId} className="group relative">
+                      <div className={cn('relative overflow-hidden rounded-lg bg-muted shadow-sm', getRatioClassName(batch.ratio))}>
                         {image.imageUrl ? (
                           <Image
                             src={image.imageUrl}
@@ -1247,35 +1314,42 @@ function ResultPanel({
                             width={1024}
                             height={1024}
                             unoptimized
-                            className="aspect-square w-full object-cover"
+                            className="h-full w-full object-cover"
                           />
                         ) : (
-                          <div className="grid aspect-square place-items-center text-muted-foreground">
+                          <div className="grid h-full w-full place-items-center text-muted-foreground">
                             <ImagePlus className="size-8" />
                           </div>
                         )}
+                        {favoriteImageIds.has(image.imageId) ? (
+                          <div className="absolute left-2 top-2 grid size-8 place-items-center rounded-full border border-rose-200 bg-white/92 text-rose-600 shadow-sm">
+                            <Heart className="size-4 fill-current" />
+                          </div>
+                        ) : null}
                         <div className="absolute right-2 top-2 flex gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100">
                           <ImageActionButton
-                            label={submittedImageIds.has(image.imageId) ? copy.submitDialog.duplicate : copy.actions.submit}
+                            label={submittedImageIds.has(image.imageId) ? 'Submitted' : copy.actions.submit}
                             disabled={submittedImageIds.has(image.imageId)}
+                            active={submittedImageIds.has(image.imageId)}
                             onClick={() => onSubmitImage({
                               imageId: image.imageId,
                               imageUrl: image.imageUrl,
                               defaultThemeId: defaultThemeId?.toString() ?? null,
                             })}
                           >
-                            <Send className="size-3.5" />
+                            <UploadCloud className="size-3.5" />
                           </ImageActionButton>
                           <ImageActionButton label={copy.actions.favorite} active={favoriteImageIds.has(image.imageId)} onClick={() => onToggleFavorite(image.imageId)}><Heart className="size-3.5" /></ImageActionButton>
                           {image.imageUrl ? (
-                            <ImageActionLink label={copy.actions.download} href={image.imageUrl}><Download className="size-3.5" /></ImageActionLink>
+                            <ImageActionButton label={copy.actions.download} disabled={downloadingImageIds.has(image.imageId)} onClick={() => onDownloadImage(image)}>
+                              {downloadingImageIds.has(image.imageId) ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                            </ImageActionButton>
                           ) : null}
-                          <ImageActionButton label={copy.actions.delete} onClick={() => onDeleteImage(image.imageId)}><Trash2 className="size-3.5" /></ImageActionButton>
+                          <ImageActionButton label={copy.actions.delete} disabled={deletingImageIds.has(image.imageId)} onClick={() => onDeleteImage(image.imageId)}>
+                            {deletingImageIds.has(image.imageId) ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                          </ImageActionButton>
                         </div>
                       </div>
-                      <figcaption className="px-2 py-2 text-xs text-muted-foreground">
-                        {copy.imageLabel} {typeof image.providerImageIndex === 'number' ? image.providerImageIndex + 1 : ''}
-                      </figcaption>
                     </figure>
                   ))}
                 </div>
@@ -1285,6 +1359,23 @@ function ResultPanel({
         })}
       </div>
     </div>
+  );
+}
+
+function getRatioClassName(ratio?: string | null) {
+  if (ratio === '4:5') return 'aspect-[4/5]';
+  if (ratio === '9:16') return 'aspect-[9/16]';
+  if (ratio === '16:9') return 'aspect-[16/9]';
+  return 'aspect-square';
+}
+
+function ResultMetaItem({ value }: { value?: string | null }) {
+  if (!value) return null;
+
+  return (
+    <span className="inline-flex min-h-8 items-center rounded-full border border-border bg-card/70 px-3 text-xs font-medium text-muted-foreground">
+      <span>{value}</span>
+    </span>
   );
 }
 
@@ -1309,27 +1400,54 @@ function ImageActionButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'grid size-8 place-items-center rounded-md border border-white/30 bg-black/55 text-white backdrop-blur transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-55',
-        active ? 'bg-rose-600 hover:bg-rose-600' : '',
+        'group/action relative grid size-8 place-items-center rounded-md border border-white/30 bg-black/55 text-white shadow-sm backdrop-blur transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-55',
+        active ? 'border-rose-200 bg-rose-600 hover:bg-rose-600' : '',
       )}
     >
       {children}
+      <span className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-30 whitespace-nowrap rounded-md bg-black px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition group-hover/action:opacity-100">
+        {label}
+      </span>
     </button>
   );
 }
 
-function ImageActionLink({ children, label, href }: { children: ReactNode; label: string; href: string }) {
+function ConfirmDialog({
+  title,
+  description,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
   return (
-    <a
-      href={href}
-      download
-      target="_blank"
-      rel="noreferrer"
-      title={label}
-      aria-label={label}
-      className="grid size-8 place-items-center rounded-md border border-white/30 bg-black/55 text-white backdrop-blur transition hover:bg-black/75"
-    >
-      {children}
-    </a>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-neutral-200 bg-white p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold leading-none text-neutral-950">{title}</h2>
+            <p className="mt-3 text-sm leading-6 text-neutral-600">{description}</p>
+          </div>
+          <button type="button" onClick={onCancel} className="grid size-8 shrink-0 place-items-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-950" aria-label={cancelLabel}>
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onCancel} className="inline-flex h-10 items-center justify-center rounded-md border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-900 shadow-sm transition hover:bg-neutral-50">
+            {cancelLabel}
+          </button>
+          <button type="button" onClick={onConfirm} className="inline-flex h-10 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-800">
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

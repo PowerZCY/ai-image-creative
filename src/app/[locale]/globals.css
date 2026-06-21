@@ -15,7 +15,10 @@
   --monica-muted: #737373;
   --monica-line: rgba(0, 0, 0, 0.08);
   --monica-line-strong: rgba(0, 0, 0, 0.15);
-  --monica-purple: #635bff;
+  --monica-accent: #48C892;
+  --monica-accent-hover: #36B07D;
+  --monica-accent-soft: rgba(72, 200, 146, 0.12);
+  --monica-accent-line: rgba(72, 200, 146, 0.32);
   --monica-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
   --monica-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.08);
   --monica-shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.12);
@@ -55,7 +58,7 @@ select {
 
 .monica-panel {
   border: 1px solid var(--monica-line);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--monica-panel);
   box-shadow: var(--monica-shadow-md);
 }
@@ -166,6 +169,6 @@ select {
 }
 
 .monica-input:focus {
-  border-color: var(--monica-purple);
-  box-shadow: 0 0 0 4px rgba(99, 91, 255, 0.1);
+  border-color: var(--monica-accent);
+  box-shadow: 0 0 0 4px var(--monica-accent-soft);
 }
