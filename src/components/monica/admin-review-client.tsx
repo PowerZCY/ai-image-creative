@@ -1,11 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Check, ImagePlus, Pencil, Plus, Star, X } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
 import { monicaContentWidthClass } from './layout';
-import { FilterPills, ListShell, ReviewFlowInline, SearchInput, SpinnerLabel, StatusBadge, getStatusTone, useMonicaPagedList } from './list-components';
+import {
+  FilterPills,
+  ListShell,
+  ReviewFlowInline,
+  SearchInput,
+  SpinnerLabel,
+  StatusBadge,
+  getStatusTone,
+  useMonicaPagedList,
+} from './list-components';
+import { DialogShell } from './submit-image-dialog';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type AdminTab = 'themes' | 'image_submissions';
 type ThemeAdminTab = 'theme_submissions' | 'manage_themes';
@@ -28,7 +40,13 @@ type ThemeItem = {
   sourceType?: string | null;
   publishDate?: string | null;
   coverImageUrl?: string | null;
-  featuredImages?: Array<{ id: string; publicImageId?: string | null; title?: string | null; imageUrl?: string | null; thumbnailUrl?: string | null } | null>;
+  featuredImages?: Array<{
+    id: string;
+    publicImageId?: string | null;
+    title?: string | null;
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+  } | null>;
   promptTexts?: string[];
   tags?: string[];
   seoTitle?: string | null;
@@ -85,14 +103,899 @@ type EditAcceptDraft = {
   tags: string;
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function splitLines(value: string) {
+  return value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseJsonOrNull(value: string) {
+  const text = value.trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return { notes: text };
+  }
+}
+
 async function readError(response: Response) {
   try {
-    const data = await response.json() as { error?: unknown };
+    const data = (await response.json()) as { error?: unknown };
     return typeof data.error === 'string' ? data.error : response.statusText;
   } catch {
     return response.statusText;
   }
 }
+
+// ─── Shared style constants ───────────────────────────────────────────────────
+
+const inputCls =
+  'h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:border-foreground';
+const textareaCls =
+  'w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground';
+const labelSpanCls = 'text-xs font-medium text-muted-foreground';
+
+// ─── Side nav button ──────────────────────────────────────────────────────────
+
+function SideNavButton({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex h-10 w-full items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors',
+        selected
+          ? 'border-foreground bg-foreground text-background'
+          : 'border-transparent text-muted-foreground hover:bg-muted',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Inner tab button (horizontal) ───────────────────────────────────────────
+
+function InnerTabButton({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors',
+        selected
+          ? 'border-foreground bg-foreground text-background'
+          : 'border-transparent text-muted-foreground hover:bg-muted',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── ThemeFieldsModal ─────────────────────────────────────────────────────────
+
+function ThemeFieldsModal({
+  theme,
+  onClose,
+  onSaved,
+}: {
+  theme: ThemeItem;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(theme.title);
+  const [brief, setBrief] = useState(theme.brief ?? '');
+  const [description, setDescription] = useState(theme.description ?? '');
+  const [coverImageUrl, setCoverImageUrl] = useState(theme.coverImageUrl ?? '');
+  const [publishDate, setPublishDate] = useState(
+    theme.publishDate ? theme.publishDate.slice(0, 10) : '',
+  );
+  const [promptTexts, setPromptTexts] = useState((theme.promptTexts ?? []).join('\n'));
+  const [tags, setTags] = useState((theme.tags ?? []).join('\n'));
+  const [seoTitle, setSeoTitle] = useState(theme.seoTitle ?? '');
+  const [seoMetaDescription, setSeoMetaDescription] = useState(theme.seoMetaDescription ?? '');
+  const [seoKeywords, setSeoKeywords] = useState((theme.seoKeywords ?? []).join('\n'));
+  const [imageSeoNotes, setImageSeoNotes] = useState(
+    theme.imageSeoNotes && typeof theme.imageSeoNotes === 'object'
+      ? JSON.stringify(theme.imageSeoNotes, null, 2)
+      : '',
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/monica/admin/themes/${theme.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+          title,
+          brief,
+          description,
+          coverImageUrl,
+          publishDate,
+          promptTexts: splitLines(promptTexts),
+          tags: splitLines(tags),
+          seoTitle,
+          seoMetaDescription,
+          seoKeywords: splitLines(seoKeywords),
+          imageSeoNotes: parseJsonOrNull(imageSeoNotes),
+        }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <DialogShell title="Edit theme fields" closeLabel="Close" onClose={onClose}>
+      <div className="grid gap-3">
+        {error ? (
+          <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
+            {error}
+          </div>
+        ) : null}
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="block">
+            <span className={labelSpanCls}>Title</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+          <label className="block">
+            <span className={labelSpanCls}>Publish date</span>
+            <input
+              type="date"
+              value={publishDate}
+              onChange={(e) => setPublishDate(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+        </div>
+        <label className="block">
+          <span className={labelSpanCls}>Brief</span>
+          <textarea
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            rows={2}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Theme note</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Cover image URL</span>
+          <input
+            value={coverImageUrl}
+            onChange={(e) => setCoverImageUrl(e.target.value)}
+            className={cn('mt-1', inputCls)}
+          />
+        </label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="block">
+            <span className={labelSpanCls}>SEO title</span>
+            <input
+              value={seoTitle}
+              onChange={(e) => setSeoTitle(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+          <label className="block">
+            <span className={labelSpanCls}>Meta description</span>
+            <input
+              value={seoMetaDescription}
+              onChange={(e) => setSeoMetaDescription(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+        </div>
+        <label className="block">
+          <span className={labelSpanCls}>Generator ideas (one per line)</span>
+          <textarea
+            value={promptTexts}
+            onChange={(e) => setPromptTexts(e.target.value)}
+            rows={4}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Tags (one per line)</span>
+          <textarea
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            rows={4}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>SEO keywords (one per line)</span>
+          <textarea
+            value={seoKeywords}
+            onChange={(e) => setSeoKeywords(e.target.value)}
+            rows={4}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Image SEO notes JSON</span>
+          <textarea
+            value={imageSeoNotes}
+            onChange={(e) => setImageSeoNotes(e.target.value)}
+            rows={3}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            disabled={saving || !title.trim()}
+            onClick={() => void handleSave()}
+            className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
+          >
+            {saving ? <SpinnerLabel>Save</SpinnerLabel> : 'Save fields'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
+// ─── FeaturedImagesModal ──────────────────────────────────────────────────────
+
+function FeaturedImagesModal({
+  theme,
+  onClose,
+  onSaved,
+}: {
+  theme: ThemeItem;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [featuredPool, setFeaturedPool] = useState<FeaturedPoolImage[]>([]);
+  const [selectedFeaturedIds, setSelectedFeaturedIds] = useState<string[]>(
+    theme.featuredImages
+      ?.map((img) => img?.id)
+      .filter((id): id is string => Boolean(id)) ?? [],
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`/api/monica/admin/themes/${theme.id}/featured-images`, {
+          headers: { accept: 'application/json' },
+        });
+        if (!response.ok) throw new Error(await readError(response));
+        const data = (await response.json()) as {
+          selected?: Array<{ publicImageId: string | number }>;
+          pool?: FeaturedPoolImage[];
+        };
+        setFeaturedPool(data.pool ?? []);
+        if (data.selected?.length) {
+          setSelectedFeaturedIds(data.selected.map((item) => item.publicImageId.toString()));
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [theme.id]);
+
+  function toggleFeatured(publicImageId: string) {
+    setSelectedFeaturedIds((current) => {
+      if (current.includes(publicImageId)) return current.filter((id) => id !== publicImageId);
+      return [...current, publicImageId].slice(0, 3);
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/monica/admin/themes/${theme.id}/featured-images`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ publicImageIds: selectedFeaturedIds }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <DialogShell title={`Featured images: ${theme.title}`} closeLabel="Close" onClose={onClose}>
+      <div className="grid gap-3">
+        {error ? (
+          <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
+            {error}
+          </div>
+        ) : null}
+        {loading ? (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
+            Loading image pool...
+          </div>
+        ) : featuredPool.length === 0 ? (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
+            No public images in this theme pool yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {featuredPool.map((image) => {
+              const imageUrl = image.image?.thumbnailUrl || image.image?.imageUrl;
+              const selected = selectedFeaturedIds.includes(image.id);
+              return (
+                <button
+                  key={image.id}
+                  type="button"
+                  onClick={() => toggleFeatured(image.id)}
+                  className={cn(
+                    'overflow-hidden rounded-lg border bg-card text-left',
+                    selected
+                      ? 'border-foreground ring-2 ring-foreground/20'
+                      : 'border-border',
+                  )}
+                >
+                  {imageUrl ? (
+                    <Image
+                      src={imageUrl}
+                      alt={image.title ?? ''}
+                      width={512}
+                      height={512}
+                      unoptimized
+                      className="aspect-square w-full object-cover"
+                    />
+                  ) : (
+                    <div className="grid aspect-square place-items-center bg-muted text-muted-foreground">
+                      <ImagePlus className="size-6" />
+                    </div>
+                  )}
+                  <div className="p-2 text-xs text-muted-foreground">
+                    {selected ? 'Selected' : (image.title || 'Public image')}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            disabled={saving || loading}
+            onClick={() => void handleSave()}
+            className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
+          >
+            {saving ? <SpinnerLabel>Save</SpinnerLabel> : 'Save featured images'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
+// ─── SubmitImagesModal ────────────────────────────────────────────────────────
+
+function SubmitImagesModal({
+  theme,
+  onClose,
+  onSaved,
+}: {
+  theme: ThemeItem;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [generatedPool, setGeneratedPool] = useState<AdminGeneratedImage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch('/api/monica/admin/generated-images/search', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ page: 1, pageSize: 24, filters: { keyword: '' } }),
+        });
+        if (!response.ok) throw new Error(await readError(response));
+        const data = (await response.json()) as { items?: AdminGeneratedImage[] };
+        setGeneratedPool(data.items ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function submitImage(image: AdminGeneratedImage) {
+    setSubmittingId(image.imageId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/monica/admin/themes/${theme.id}/submit-images`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+          imageId: image.imageId,
+          title: image.promptUsed?.slice(0, 80) || 'Admin selected image',
+          creationNote: image.promptUsed,
+        }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmittingId(null);
+    }
+  }
+
+  return (
+    <DialogShell title={`Submit images: ${theme.title}`} closeLabel="Close" onClose={onClose}>
+      <div className="grid gap-3">
+        {error ? (
+          <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
+            {error}
+          </div>
+        ) : null}
+        {loading ? (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
+            Loading generated images...
+          </div>
+        ) : generatedPool.length === 0 ? (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
+            No generated images available.
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {generatedPool.map((image) => {
+              const imageUrl = image.thumbnailUrl || image.imageUrl;
+              const alreadyPublic = Boolean(image.publicImage);
+              const isSubmitting = submittingId === image.imageId;
+              return (
+                <article key={image.imageId} className="overflow-hidden rounded-lg border border-border bg-card">
+                  {imageUrl ? (
+                    <Image
+                      src={imageUrl}
+                      alt=""
+                      width={512}
+                      height={512}
+                      unoptimized
+                      className="aspect-square w-full object-cover"
+                    />
+                  ) : (
+                    <div className="grid aspect-square place-items-center bg-muted text-muted-foreground">
+                      <ImagePlus className="size-6" />
+                    </div>
+                  )}
+                  <div className="grid gap-2 p-2">
+                    <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
+                      {image.promptUsed || image.imageId}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={Boolean(submittingId) || alreadyPublic}
+                      onClick={() => void submitImage(image)}
+                      className="monica-button-primary min-h-9 px-3 text-xs disabled:opacity-50"
+                    >
+                      {alreadyPublic ? 'Already public' : isSubmitting ? 'Submitting...' : 'Add to theme'}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
+// ─── NewThemeModal ────────────────────────────────────────────────────────────
+
+function NewThemeModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [brief, setBrief] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleCreate() {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/monica/admin/themes', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ title, brief, description: brief }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <DialogShell title="New theme" closeLabel="Close" onClose={onClose}>
+      <div className="grid gap-3">
+        {error ? (
+          <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
+            {error}
+          </div>
+        ) : null}
+        <label className="block">
+          <span className={labelSpanCls}>Theme</span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={cn('mt-1', inputCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Brief</span>
+          <input
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            className={cn('mt-1', inputCls)}
+          />
+        </label>
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            disabled={saving || !title.trim()}
+            onClick={() => void handleCreate()}
+            className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
+          >
+            {saving ? <SpinnerLabel>Create</SpinnerLabel> : 'Create theme'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
+// ─── ThemeTableRow ────────────────────────────────────────────────────────────
+
+function ThemeTableRow({ theme, onSaved }: { theme: ThemeItem; onSaved: () => void }) {
+  const [modal, setModal] = useState<'fields' | 'featured' | 'submit_images' | null>(null);
+
+  return (
+    <>
+      <tr className="border-b border-border last:border-0 hover:bg-muted/30">
+        {/* Theme title + brief */}
+        <td className="py-3 pr-4 align-top">
+          <div className="font-medium leading-5">{theme.title}</div>
+          {theme.brief ? (
+            <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{theme.brief}</div>
+          ) : null}
+        </td>
+        {/* Source */}
+        <td className="py-3 pr-4 align-top">
+          <span className="text-sm text-muted-foreground">{theme.sourceType || 'admin'}</span>
+        </td>
+        {/* Publish date */}
+        <td className="py-3 pr-4 align-top">
+          <span className="text-sm text-muted-foreground">
+            {theme.publishDate ? new Date(theme.publishDate).toLocaleDateString() : '—'}
+          </span>
+        </td>
+        {/* Readiness chips */}
+        <td className="py-3 pr-4 align-top">
+          <div className="flex flex-wrap gap-1">
+            <StatusBadge tone={theme.readiness?.contentOk ? 'good' : 'warn'}>
+              {theme.readiness?.contentOk ? 'Content' : 'No content'}
+            </StatusBadge>
+            <StatusBadge tone={theme.readiness?.seoOk ? 'good' : 'warn'}>
+              {theme.readiness?.seoOk ? 'SEO' : 'No SEO'}
+            </StatusBadge>
+            <StatusBadge tone={theme.readiness?.ideasOk ? 'good' : 'warn'}>
+              {theme.readiness?.ideasOk ? 'Ideas' : 'No ideas'}
+            </StatusBadge>
+          </div>
+        </td>
+        {/* Featured strip */}
+        <td className="py-3 pr-4 align-top">
+          <FeaturedImageStrip images={theme.featuredImages} />
+        </td>
+        {/* Actions */}
+        <td className="py-3 align-top">
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setModal('fields')}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
+            >
+              <Pencil className="size-3" />Edit fields
+            </button>
+            <button
+              type="button"
+              onClick={() => setModal('featured')}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
+            >
+              <Star className="size-3" />Featured images
+            </button>
+            <button
+              type="button"
+              onClick={() => setModal('submit_images')}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
+            >
+              <ImagePlus className="size-3" />Submit images
+            </button>
+          </div>
+        </td>
+      </tr>
+
+      {modal === 'fields' ? (
+        <ThemeFieldsModal theme={theme} onClose={() => setModal(null)} onSaved={onSaved} />
+      ) : null}
+      {modal === 'featured' ? (
+        <FeaturedImagesModal theme={theme} onClose={() => setModal(null)} onSaved={onSaved} />
+      ) : null}
+      {modal === 'submit_images' ? (
+        <SubmitImagesModal theme={theme} onClose={() => setModal(null)} onSaved={onSaved} />
+      ) : null}
+    </>
+  );
+}
+
+// ─── EditAcceptPanel ──────────────────────────────────────────────────────────
+
+function EditAcceptPanel({
+  item,
+  draft,
+  saving,
+  disabled,
+  onChange,
+  onCancel,
+  onSave,
+}: {
+  item: ThemeSubmission;
+  draft: EditAcceptDraft;
+  saving: boolean;
+  disabled: boolean;
+  onChange: (patch: Partial<EditAcceptDraft>) => void;
+  onCancel: () => void;
+  onSave: (draft: EditAcceptDraft) => void;
+}) {
+  return (
+    <div className="mt-4 grid gap-3 rounded-md border border-border bg-background/50 p-3">
+      <div className="grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_180px]">
+        <label className="block">
+          <span className={labelSpanCls}>Theme title</span>
+          <input
+            value={draft.title}
+            onChange={(e) => onChange({ title: e.target.value })}
+            className={cn('mt-1', inputCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Publish date</span>
+          <input
+            type="date"
+            value={draft.publishDate}
+            onChange={(e) => onChange({ publishDate: e.target.value })}
+            className={cn('mt-1', inputCls)}
+          />
+        </label>
+      </div>
+      <label className="block">
+        <span className={labelSpanCls}>Brief</span>
+        <textarea
+          value={draft.brief}
+          onChange={(e) => onChange({ brief: e.target.value })}
+          rows={2}
+          className={cn('mt-1', textareaCls)}
+        />
+      </label>
+      <label className="block">
+        <span className={labelSpanCls}>Theme note</span>
+        <textarea
+          value={draft.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          rows={4}
+          className={cn('mt-1', textareaCls)}
+        />
+      </label>
+      {item.submitReason ? (
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+          Submit reason: {item.submitReason}
+        </div>
+      ) : null}
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="block">
+          <span className={labelSpanCls}>Generator ideas, one per line</span>
+          <textarea
+            value={draft.promptTexts}
+            onChange={(e) => onChange({ promptTexts: e.target.value })}
+            rows={4}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Tags, one per line</span>
+          <textarea
+            value={draft.tags}
+            onChange={(e) => onChange({ tags: e.target.value })}
+            rows={4}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={disabled || !draft.title.trim()}
+          onClick={() => onSave(draft)}
+          className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
+        >
+          {saving ? <SpinnerLabel>Schedule</SpinnerLabel> : 'Save scheduled theme'}
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onCancel}
+          className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── ThemeCoverPreview ────────────────────────────────────────────────────────
+
+function ThemeCoverPreview({ imageUrl }: { imageUrl?: string | null }) {
+  return (
+    <div className="h-[88px] overflow-hidden rounded-md bg-muted">
+      {imageUrl ? (
+        <Image
+          src={imageUrl}
+          alt=""
+          width={312}
+          height={176}
+          unoptimized
+          className="size-full object-cover"
+        />
+      ) : (
+        <div className="grid size-full place-items-center text-muted-foreground">
+          <ImagePlus className="size-5" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── FeaturedImageStrip ───────────────────────────────────────────────────────
+
+function FeaturedImageStrip({
+  images,
+}: {
+  images?: Array<{
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+    title?: string | null;
+  } | null>;
+}) {
+  const slots = Array.from({ length: 3 }, (_, index) => images?.[index] ?? null);
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      {slots.map((image, index) => {
+        const imageUrl = image?.thumbnailUrl || image?.imageUrl;
+        return (
+          <div
+            key={`${imageUrl ?? 'empty'}-${index}`}
+            className="h-10 overflow-hidden rounded bg-muted"
+          >
+            {imageUrl ? (
+              <Image
+                src={imageUrl}
+                alt={image?.title ?? ''}
+                width={80}
+                height={80}
+                unoptimized
+                className="size-full object-cover"
+              />
+            ) : (
+              <div className="grid size-full place-items-center text-muted-foreground/60">
+                <ImagePlus className="size-3.5" />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── AdminReviewClient ────────────────────────────────────────────────────────
 
 export function AdminReviewClient({
   initialTab = 'themes',
@@ -106,11 +1009,12 @@ export function AdminReviewClient({
   const [actionError, setActionError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [editAcceptId, setEditAcceptId] = useState<string | null>(null);
-  const [editAcceptDraftById, setEditAcceptDraftById] = useState<Record<string, EditAcceptDraft>>({});
+  const [editAcceptDraftById, setEditAcceptDraftById] = useState<Record<string, EditAcceptDraft>>(
+    {},
+  );
   const [newThemeOpen, setNewThemeOpen] = useState(false);
-  const [newThemeTitle, setNewThemeTitle] = useState('');
-  const [newThemeBrief, setNewThemeBrief] = useState('');
   const [imageRejectNoteById, setImageRejectNoteById] = useState<Record<string, string>>({});
+
   const themeSubmissions = useMonicaPagedList<Filters, ThemeSubmission>({
     endpoint: '/api/monica/admin/theme-submissions/search',
     initialFilters: { keyword: '', status: 'all' },
@@ -173,10 +1077,13 @@ export function AdminReviewClient({
   }
 
   function openEditAccept(item: ThemeSubmission) {
-    setEditAcceptId((currentId) => currentId === item.themeSubmissionId ? null : item.themeSubmissionId);
+    setEditAcceptId((currentId) =>
+      currentId === item.themeSubmissionId ? null : item.themeSubmissionId,
+    );
     setEditAcceptDraftById((current) => ({
       ...current,
-      [item.themeSubmissionId]: current[item.themeSubmissionId] ?? buildInitialEditAcceptDraft(item),
+      [item.themeSubmissionId]:
+        current[item.themeSubmissionId] ?? buildInitialEditAcceptDraft(item),
     }));
   }
 
@@ -202,19 +1109,22 @@ export function AdminReviewClient({
     setActingId(`${item.themeSubmissionId}:${status}`);
     setActionError(null);
     try {
-      const response = await fetch(`/api/monica/admin/theme-submissions/${item.themeSubmissionId}/publish`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({
-          title: draft.title,
-          brief: draft.brief,
-          description: draft.description,
-          promptTexts: splitLines(draft.promptTexts),
-          tags: splitLines(draft.tags),
-          publishDate: draft.publishDate,
-          status,
-        }),
-      });
+      const response = await fetch(
+        `/api/monica/admin/theme-submissions/${item.themeSubmissionId}/publish`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({
+            title: draft.title,
+            brief: draft.brief,
+            description: draft.description,
+            promptTexts: splitLines(draft.promptTexts),
+            tags: splitLines(draft.tags),
+            publishDate: draft.publishDate,
+            status,
+          }),
+        },
+      );
       if (!response.ok) throw new Error(await readError(response));
       setEditAcceptId(null);
       themeSubmissions.reload();
@@ -249,756 +1159,369 @@ export function AdminReviewClient({
     }
   }
 
-  async function createTheme() {
-    setActingId('new-theme');
-    setActionError(null);
-    try {
-      const response = await fetch('/api/monica/admin/themes', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({
-          title: newThemeTitle,
-          brief: newThemeBrief,
-          description: newThemeBrief,
-        }),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      setNewThemeOpen(false);
-      setNewThemeTitle('');
-      setNewThemeBrief('');
-      themes.reload();
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setActingId(null);
-    }
-  }
-
   return (
     <section className="monica-surface min-h-screen py-20 md:py-24">
       <div className={cn(monicaContentWidthClass, 'space-y-6')}>
-        <div>
-          <h1 className="monica-page-title">
-            Admin review
-          </h1>
-          <p className="monica-copy mt-4 max-w-3xl">
-            Review theme submissions, manage official themes, and moderate image submissions.
-          </p>
-        </div>
-        <FilterPills value={tab} options={tabOptions} onChange={setTab} />
-        {actionError ? <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-100">{actionError}</div> : null}
+        <h1 className="monica-page-title">Admin</h1>
 
-        {tab === 'themes' ? (
-          <div className="monica-panel-soft p-5">
-            <div className="mb-3">
-              <h2 className="text-3xl font-semibold text-foreground">Themes</h2>
-              <p className="mt-2 text-base leading-7 text-muted-foreground">
-                Review user-submitted ideas, then manage accepted and admin-created themes from one list.
-              </p>
-            </div>
-            <FilterPills value={themeAdminTab} options={themeAdminTabOptions} onChange={setThemeAdminTab} />
+        {actionError ? (
+          <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-100">
+            {actionError}
           </div>
         ) : null}
 
-        {tab === 'themes' && themeAdminTab === 'theme_submissions' ? (
-          <ListShell
-            title="User submissions"
-            description="Review user submitted theme ideas, then accept them into the formal theme workflow."
-            items={themeSubmissions.items}
-            loading={themeSubmissions.loading}
-            error={themeSubmissions.error}
-            empty="No theme submissions."
-            pagination={themeSubmissions.pagination}
-            onPageChange={themeSubmissions.setPage}
-            filters={(
-              <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
-                <SearchInput value={themeSubmissions.filters.keyword} placeholder="Search submissions" onChange={(keyword) => themeSubmissions.updateFilters({ keyword })} />
-                <FilterPills value={themeSubmissions.filters.status} options={statusOptions} onChange={(status) => themeSubmissions.updateFilters({ status })} />
-              </div>
-            )}
-            renderItem={(item) => (
-              <article key={item.themeSubmissionId} className="rounded-lg border border-border bg-card p-5 shadow-sm">
-                <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-xl font-semibold">{item.title}</h3>
-                      <StatusBadge tone={getStatusTone(item.status)}>{item.status}</StatusBadge>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{item.user?.email || item.user?.userName || 'Unknown user'}</p>
-                    <p className="mt-3 line-clamp-3 text-base leading-7 text-muted-foreground">{item.details}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 md:justify-end">
-                    {item.status === 'under_review' ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => void reviewThemeSubmission(item.themeSubmissionId, 'accepted_to_pool')}
-                          disabled={Boolean(actingId)}
-                          className="monica-button-primary min-h-10 px-3 text-sm disabled:opacity-50"
-                        >
-                          {actingId === `${item.themeSubmissionId}:accepted_to_pool` ? <SpinnerLabel>Accept</SpinnerLabel> : <><Check className="size-4" />Accept as theme</>}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void reviewThemeSubmission(item.themeSubmissionId, 'rejected')}
-                          disabled={Boolean(actingId)}
-                          className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
-                        >
-                          <X className="size-4" />Reject
-                        </button>
-                      </>
-                    ) : null}
-                    {item.status === 'under_review' || item.status === 'accepted_to_pool' || item.status === 'selected' ? (
-                      <button
-                        type="button"
-                        onClick={() => openEditAccept(item)}
-                        disabled={Boolean(actingId)}
-                        className="monica-button-primary min-h-10 px-3 text-sm disabled:opacity-50"
-                      >
-                        <Pencil className="size-4" />Edit and accept
-                      </button>
-                    ) : null}
-                  </div>
+        {/* Layout: left side-nav (220px) + right content panel */}
+        <div className="flex items-start gap-6">
+          {/* Left sticky nav */}
+          <nav className="sticky top-24 w-[220px] shrink-0 space-y-1">
+            {tabOptions.map((opt) => (
+              <SideNavButton
+                key={opt.value}
+                selected={tab === opt.value}
+                onClick={() => setTab(opt.value)}
+              >
+                {opt.label}
+              </SideNavButton>
+            ))}
+          </nav>
+
+          {/* Right panel */}
+          <div className="min-w-0 flex-1 rounded-lg border border-border bg-card p-6">
+
+            {/* ── Themes panel ─────────────────────────────────── */}
+            {tab === 'themes' ? (
+              <div className="space-y-5">
+                {/* Inner horizontal sub-tabs */}
+                <div className="flex gap-2">
+                  {themeAdminTabOptions.map((opt) => (
+                    <InnerTabButton
+                      key={opt.value}
+                      selected={themeAdminTab === opt.value}
+                      onClick={() => setThemeAdminTab(opt.value)}
+                    >
+                      {opt.label}
+                    </InnerTabButton>
+                  ))}
                 </div>
-                <div className="mt-3"><ReviewFlowInline flow={item.reviewFlow} /></div>
-                {editAcceptId === item.themeSubmissionId ? (
-                  <EditAcceptPanel
-                    item={item}
-                    draft={editAcceptDraftById[item.themeSubmissionId] ?? buildInitialEditAcceptDraft(item)}
-                    saving={actingId === `${item.themeSubmissionId}:scheduled`}
-                    disabled={Boolean(actingId)}
-                    onChange={(patch) => updateEditAcceptDraft(item.themeSubmissionId, patch)}
-                    onCancel={() => setEditAcceptId(null)}
-                    onSave={(draft) => void publishThemeSubmission(item, draft)}
+
+                {/* User submissions tab */}
+                {themeAdminTab === 'theme_submissions' ? (
+                  <ListShell
+                    items={themeSubmissions.items}
+                    loading={themeSubmissions.loading}
+                    error={themeSubmissions.error}
+                    empty="No theme submissions."
+                    pagination={themeSubmissions.pagination}
+                    onPageChange={themeSubmissions.setPage}
+                    filters={(
+                      <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
+                        <SearchInput
+                          value={themeSubmissions.filters.keyword}
+                          placeholder="Search submissions"
+                          onChange={(keyword) => themeSubmissions.updateFilters({ keyword })}
+                        />
+                        <FilterPills
+                          value={themeSubmissions.filters.status}
+                          options={statusOptions}
+                          onChange={(status) => themeSubmissions.updateFilters({ status })}
+                        />
+                      </div>
+                    )}
+                    renderItem={(item) => (
+                      <article
+                        key={item.themeSubmissionId}
+                        className="rounded-lg border border-border bg-card p-5 shadow-sm"
+                      >
+                        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-xl font-semibold">{item.title}</h3>
+                              <StatusBadge tone={getStatusTone(item.status)}>
+                                {item.status}
+                              </StatusBadge>
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {item.user?.email || item.user?.userName || 'Unknown user'}
+                            </p>
+                            <p className="mt-3 line-clamp-3 text-base leading-7 text-muted-foreground">
+                              {item.details}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 md:justify-end">
+                            {item.status === 'under_review' ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void reviewThemeSubmission(
+                                      item.themeSubmissionId,
+                                      'accepted_to_pool',
+                                    )
+                                  }
+                                  disabled={Boolean(actingId)}
+                                  className="monica-button-primary min-h-10 px-3 text-sm disabled:opacity-50"
+                                >
+                                  {actingId === `${item.themeSubmissionId}:accepted_to_pool` ? (
+                                    <SpinnerLabel>Accept</SpinnerLabel>
+                                  ) : (
+                                    <>
+                                      <Check className="size-4" />
+                                      Accept as theme
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void reviewThemeSubmission(item.themeSubmissionId, 'rejected')
+                                  }
+                                  disabled={Boolean(actingId)}
+                                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
+                                >
+                                  <X className="size-4" />
+                                  Reject
+                                </button>
+                              </>
+                            ) : null}
+                            {item.status === 'under_review' ||
+                            item.status === 'accepted_to_pool' ||
+                            item.status === 'selected' ? (
+                              <button
+                                type="button"
+                                onClick={() => openEditAccept(item)}
+                                disabled={Boolean(actingId)}
+                                className="monica-button-primary min-h-10 px-3 text-sm disabled:opacity-50"
+                              >
+                                <Pencil className="size-4" />
+                                Edit and accept
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <ReviewFlowInline flow={item.reviewFlow} />
+                        </div>
+                        {editAcceptId === item.themeSubmissionId ? (
+                          <EditAcceptPanel
+                            item={item}
+                            draft={
+                              editAcceptDraftById[item.themeSubmissionId] ??
+                              buildInitialEditAcceptDraft(item)
+                            }
+                            saving={actingId === `${item.themeSubmissionId}:scheduled`}
+                            disabled={Boolean(actingId)}
+                            onChange={(patch) =>
+                              updateEditAcceptDraft(item.themeSubmissionId, patch)
+                            }
+                            onCancel={() => setEditAcceptId(null)}
+                            onSave={(draft) => void publishThemeSubmission(item, draft)}
+                          />
+                        ) : null}
+                      </article>
+                    )}
                   />
                 ) : null}
-              </article>
-            )}
-          />
-        ) : null}
 
-        {tab === 'themes' && themeAdminTab === 'manage_themes' ? (
-          <ListShell
-            title="Manage themes"
-            description="Official themes used by theme detail, generation context, and public galleries."
-            items={themes.items}
-            loading={themes.loading}
-            error={themes.error}
-            empty="No themes."
-            pagination={themes.pagination}
-            onPageChange={themes.setPage}
-            filters={(
-              <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
-                <SearchInput value={themes.filters.keyword} placeholder="Search themes" onChange={(keyword) => themes.updateFilters({ keyword })} />
-                <button
-                  type="button"
-                  onClick={() => setNewThemeOpen((open) => !open)}
-                  className="monica-button-primary min-h-10 px-3 text-sm"
-                >
-                  <Plus className="size-4" />New theme
-                </button>
-              </div>
-            )}
-            renderItem={(theme) => (
-              <ThemeEditor key={theme.id} theme={theme} onSaved={themes.reload} />
-            )}
-          />
-        ) : null}
+                {/* Manage themes tab — compact table */}
+                {themeAdminTab === 'manage_themes' ? (
+                  <div className="space-y-4">
+                    {/* Toolbar */}
+                    <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
+                      <SearchInput
+                        value={themes.filters.keyword}
+                        placeholder="Search themes"
+                        onChange={(keyword) => themes.updateFilters({ keyword })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setNewThemeOpen(true)}
+                        className="monica-button-primary min-h-10 px-3 text-sm"
+                      >
+                        <Plus className="size-4" />New theme
+                      </button>
+                    </div>
 
-        {tab === 'themes' && themeAdminTab === 'manage_themes' && newThemeOpen ? (
-          <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-            <div className="grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)_auto] md:items-end">
-              <label className="block">
-                <span className="text-xs font-medium text-muted-foreground">Theme</span>
-                <input value={newThemeTitle} onChange={(event) => setNewThemeTitle(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none" />
-              </label>
-              <label className="block">
-                <span className="text-xs font-medium text-muted-foreground">Brief</span>
-                <input value={newThemeBrief} onChange={(event) => setNewThemeBrief(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none" />
-              </label>
-              <button type="button" disabled={!newThemeTitle.trim() || Boolean(actingId)} onClick={() => void createTheme()} className="monica-button-primary min-h-10 px-3 text-sm disabled:opacity-50">
-                {actingId === 'new-theme' ? <SpinnerLabel>Create</SpinnerLabel> : 'Create theme'}
-              </button>
-            </div>
-          </div>
-        ) : null}
+                    {/* Table body */}
+                    {themes.loading ? (
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        Loading...
+                      </div>
+                    ) : themes.error ? (
+                      <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
+                        {themes.error}
+                      </div>
+                    ) : themes.items.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        No themes.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground">
+                              <th className="py-2 pr-4 text-left font-medium">Theme</th>
+                              <th className="py-2 pr-4 text-left font-medium">Source</th>
+                              <th className="py-2 pr-4 text-left font-medium">Publish date</th>
+                              <th className="py-2 pr-4 text-left font-medium">Readiness</th>
+                              <th className="py-2 pr-4 text-left font-medium">Featured</th>
+                              <th className="py-2 text-left font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {themes.items.map((theme) => (
+                              <ThemeTableRow
+                                key={theme.id}
+                                theme={theme}
+                                onSaved={themes.reload}
+                              />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
 
-        {tab === 'image_submissions' ? (
-          <ListShell
-            title="Image submissions"
-            description="Review submitted images before they become public images."
-            items={imageSubmissions.items}
-            loading={imageSubmissions.loading}
-            error={imageSubmissions.error}
-            empty="No image submissions."
-            pagination={imageSubmissions.pagination}
-            onPageChange={imageSubmissions.setPage}
-            filters={(
-              <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
-                <SearchInput value={imageSubmissions.filters.keyword} placeholder="Search image submissions" onChange={(keyword) => imageSubmissions.updateFilters({ keyword })} />
-                <FilterPills value={imageSubmissions.filters.status} options={statusOptions} onChange={(status) => imageSubmissions.updateFilters({ status })} />
-              </div>
-            )}
-            renderItem={(item) => (
-              <article key={item.id} className="grid gap-5 rounded-lg border border-border bg-card p-4 shadow-sm md:grid-cols-[180px_minmax(0,1fr)_auto]">
-                <div className="overflow-hidden rounded-md bg-muted">
-                  {item.image?.imageUrl ? (
-                    <Image src={item.image.imageUrl} alt="" width={1024} height={1024} unoptimized className="aspect-square w-full object-cover" />
-                  ) : (
-                    <div className="grid aspect-square place-items-center text-muted-foreground"><ImagePlus className="size-8" /></div>
-                  )}
-                </div>
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-xl font-semibold">{item.title}</h3>
-                    <StatusBadge tone={getStatusTone(item.status)}>{item.status}</StatusBadge>
+                    {/* Pagination */}
+                    {themes.pagination && themes.items.length > 0 ? (
+                      <div className="flex justify-center gap-2 pt-2">
+                        {Array.from(
+                          { length: themes.pagination.totalPages },
+                          (_, i) => i + 1,
+                        ).map((page) => (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => themes.setPage(page)}
+                            className={cn(
+                              'h-8 min-w-8 rounded-md border px-2 text-sm',
+                              themes.pagination?.page === page
+                                ? 'border-foreground bg-foreground text-background'
+                                : 'border-border hover:bg-muted',
+                            )}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                  <p className="text-sm text-muted-foreground">{item.theme?.title || 'No theme'} · {item.user?.email || item.user?.userName || 'Unknown user'}</p>
-                  <p className="line-clamp-2 text-base leading-7 text-muted-foreground">{item.creationNote || item.promptSnapshot || 'No note.'}</p>
-                  <ReviewFlowInline flow={item.reviewFlow} />
-                  <label className="mt-2 block">
-                    <span className="text-xs font-medium text-muted-foreground">Reject note</span>
-                    <textarea
-                      value={imageRejectNoteById[item.id] ?? ''}
-                      onChange={(event) => setImageRejectNoteById((current) => ({ ...current, [item.id]: event.target.value }))}
-                      rows={2}
-                      className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* ── Image submissions panel ───────────────────────── */}
+            {tab === 'image_submissions' ? (
+              <ListShell
+                items={imageSubmissions.items}
+                loading={imageSubmissions.loading}
+                error={imageSubmissions.error}
+                empty="No image submissions."
+                pagination={imageSubmissions.pagination}
+                onPageChange={imageSubmissions.setPage}
+                filters={(
+                  <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
+                    <SearchInput
+                      value={imageSubmissions.filters.keyword}
+                      placeholder="Search image submissions"
+                      onChange={(keyword) => imageSubmissions.updateFilters({ keyword })}
                     />
-                  </label>
-                </div>
-                <div className="flex gap-2 md:w-28 md:flex-col">
-                  <button
-                    type="button"
-                    onClick={() => void reviewImageSubmission(item.id, 'approved')}
-                    disabled={Boolean(actingId)}
-                    className="h-10 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
+                    <FilterPills
+                      value={imageSubmissions.filters.status}
+                      options={statusOptions}
+                      onChange={(status) => imageSubmissions.updateFilters({ status })}
+                    />
+                  </div>
+                )}
+                renderItem={(item) => (
+                  <article
+                    key={item.id}
+                    className="grid gap-5 rounded-lg border border-border bg-card p-4 shadow-sm md:grid-cols-[180px_minmax(0,1fr)_auto]"
                   >
-                    {actingId === `${item.id}:approved` ? <SpinnerLabel>Approve</SpinnerLabel> : 'Approve'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void reviewImageSubmission(item.id, 'rejected')}
-                    disabled={Boolean(actingId)}
-                    className="h-10 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
-                  >
-                    {actingId === `${item.id}:rejected` ? <SpinnerLabel>Reject</SpinnerLabel> : 'Reject'}
-                  </button>
-                </div>
-              </article>
-            )}
-          />
-        ) : null}
+                    <div className="overflow-hidden rounded-md bg-muted">
+                      {item.image?.imageUrl ? (
+                        <Image
+                          src={item.image.imageUrl}
+                          alt=""
+                          width={1024}
+                          height={1024}
+                          unoptimized
+                          className="aspect-square w-full object-cover"
+                        />
+                      ) : (
+                        <div className="grid aspect-square place-items-center text-muted-foreground">
+                          <ImagePlus className="size-8" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-xl font-semibold">{item.title}</h3>
+                        <StatusBadge tone={getStatusTone(item.status)}>
+                          {item.status}
+                        </StatusBadge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {item.theme?.title || 'No theme'} &middot;{' '}
+                        {item.user?.email || item.user?.userName || 'Unknown user'}
+                      </p>
+                      <p className="line-clamp-2 text-base leading-7 text-muted-foreground">
+                        {item.creationNote || item.promptSnapshot || 'No note.'}
+                      </p>
+                      <ReviewFlowInline flow={item.reviewFlow} />
+                      <label className="mt-2 block">
+                        <span className={labelSpanCls}>Reject note</span>
+                        <textarea
+                          value={imageRejectNoteById[item.id] ?? ''}
+                          onChange={(e) =>
+                            setImageRejectNoteById((current) => ({
+                              ...current,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                          rows={2}
+                          className={cn('mt-1', textareaCls)}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex gap-2 md:w-28 md:flex-col">
+                      <button
+                        type="button"
+                        onClick={() => void reviewImageSubmission(item.id, 'approved')}
+                        disabled={Boolean(actingId)}
+                        className="h-10 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
+                      >
+                        {actingId === `${item.id}:approved` ? (
+                          <SpinnerLabel>Approve</SpinnerLabel>
+                        ) : (
+                          'Approve'
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void reviewImageSubmission(item.id, 'rejected')}
+                        disabled={Boolean(actingId)}
+                        className="h-10 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-50"
+                      >
+                        {actingId === `${item.id}:rejected` ? (
+                          <SpinnerLabel>Reject</SpinnerLabel>
+                        ) : (
+                          'Reject'
+                        )}
+                      </button>
+                    </div>
+                  </article>
+                )}
+              />
+            ) : null}
+          </div>
+        </div>
       </div>
+
+      {/* New theme modal */}
+      {newThemeOpen ? (
+        <NewThemeModal onClose={() => setNewThemeOpen(false)} onCreated={themes.reload} />
+      ) : null}
     </section>
   );
 }
 
-type ThemeEditMode = 'summary' | 'fields' | 'featured' | 'submit_images';
-
-function splitLines(value: string) {
-  return value
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function parseJsonOrNull(value: string) {
-  const text = value.trim();
-  if (!text) return null;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return { notes: text };
-  }
-}
-
-function EditAcceptPanel({
-  item,
-  draft,
-  saving,
-  disabled,
-  onChange,
-  onCancel,
-  onSave,
-}: {
-  item: ThemeSubmission;
-  draft: EditAcceptDraft;
-  saving: boolean;
-  disabled: boolean;
-  onChange: (patch: Partial<EditAcceptDraft>) => void;
-  onCancel: () => void;
-  onSave: (draft: EditAcceptDraft) => void;
-}) {
-  return (
-    <div className="mt-4 grid gap-3 rounded-md border border-border bg-background/50 p-3">
-      <div className="grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_180px]">
-        <label className="block">
-          <span className="text-xs font-medium text-muted-foreground">Theme title</span>
-          <input
-            value={draft.title}
-            onChange={(event) => onChange({ title: event.target.value })}
-            className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none"
-          />
-        </label>
-        <label className="block">
-          <span className="text-xs font-medium text-muted-foreground">Publish date</span>
-          <input
-            type="date"
-            value={draft.publishDate}
-            onChange={(event) => onChange({ publishDate: event.target.value })}
-            className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none"
-          />
-        </label>
-      </div>
-      <label className="block">
-        <span className="text-xs font-medium text-muted-foreground">Brief</span>
-        <textarea
-          value={draft.brief}
-          onChange={(event) => onChange({ brief: event.target.value })}
-          rows={2}
-          className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-        />
-      </label>
-      <label className="block">
-        <span className="text-xs font-medium text-muted-foreground">Theme note</span>
-        <textarea
-          value={draft.description}
-          onChange={(event) => onChange({ description: event.target.value })}
-          rows={4}
-          className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-        />
-      </label>
-      {item.submitReason ? (
-        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
-          Submit reason: {item.submitReason}
-        </div>
-      ) : null}
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className="block">
-          <span className="text-xs font-medium text-muted-foreground">Generator ideas, one per line</span>
-          <textarea
-            value={draft.promptTexts}
-            onChange={(event) => onChange({ promptTexts: event.target.value })}
-            rows={4}
-            className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-          />
-        </label>
-        <label className="block">
-          <span className="text-xs font-medium text-muted-foreground">Tags, one per line</span>
-          <textarea
-            value={draft.tags}
-            onChange={(event) => onChange({ tags: event.target.value })}
-            rows={4}
-            className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
-          />
-        </label>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={disabled || !draft.title.trim()}
-          onClick={() => onSave(draft)}
-          className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
-        >
-          {saving ? <SpinnerLabel>Schedule</SpinnerLabel> : 'Save scheduled theme'}
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={onCancel}
-          className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted disabled:opacity-50"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ThemeEditor({ theme, onSaved }: { theme: ThemeItem; onSaved: () => void }) {
-  const [mode, setMode] = useState<ThemeEditMode>('summary');
-  const [title, setTitle] = useState(theme.title);
-  const [brief, setBrief] = useState(theme.brief ?? '');
-  const [description, setDescription] = useState(theme.description ?? '');
-  const [coverImageUrl, setCoverImageUrl] = useState(theme.coverImageUrl ?? '');
-  const [publishDate, setPublishDate] = useState(theme.publishDate ? theme.publishDate.slice(0, 10) : '');
-  const [promptTexts, setPromptTexts] = useState((theme.promptTexts ?? []).join('\n'));
-  const [tags, setTags] = useState((theme.tags ?? []).join('\n'));
-  const [seoTitle, setSeoTitle] = useState(theme.seoTitle ?? '');
-  const [seoMetaDescription, setSeoMetaDescription] = useState(theme.seoMetaDescription ?? '');
-  const [seoKeywords, setSeoKeywords] = useState((theme.seoKeywords ?? []).join('\n'));
-  const [imageSeoNotes, setImageSeoNotes] = useState(
-    theme.imageSeoNotes && typeof theme.imageSeoNotes === 'object'
-      ? JSON.stringify(theme.imageSeoNotes, null, 2)
-      : '',
-  );
-  const [featuredPool, setFeaturedPool] = useState<FeaturedPoolImage[]>([]);
-  const [selectedFeaturedIds, setSelectedFeaturedIds] = useState<string[]>(theme.featuredImages?.map((image) => image?.id).filter((id): id is string => Boolean(id)) ?? []);
-  const [featuredLoading, setFeaturedLoading] = useState(false);
-  const [generatedPool, setGeneratedPool] = useState<AdminGeneratedImage[]>([]);
-  const [generatedLoading, setGeneratedLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function saveTheme(payload: Record<string, unknown>) {
-    setSaving(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/monica/admin/themes/${theme.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      setMode('summary');
-      onSaved();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function loadFeaturedPool() {
-    setFeaturedLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/monica/admin/themes/${theme.id}/featured-images`, {
-        headers: { accept: 'application/json' },
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      const data = await response.json() as { selected?: Array<{ publicImageId: string | number }>; pool?: FeaturedPoolImage[] };
-      setFeaturedPool(data.pool ?? []);
-      if (data.selected?.length) {
-        setSelectedFeaturedIds(data.selected.map((item) => item.publicImageId.toString()));
-      }
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
-    } finally {
-      setFeaturedLoading(false);
-    }
-  }
-
-  async function saveFeaturedImages() {
-    setSaving(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/monica/admin/themes/${theme.id}/featured-images`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ publicImageIds: selectedFeaturedIds }),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      setMode('summary');
-      onSaved();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function toggleFeatured(publicImageId: string) {
-    setSelectedFeaturedIds((current) => {
-      if (current.includes(publicImageId)) return current.filter((id) => id !== publicImageId);
-      return [...current, publicImageId].slice(0, 3);
-    });
-  }
-
-  async function loadGeneratedPool() {
-    setGeneratedLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/monica/admin/generated-images/search', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({
-          page: 1,
-          pageSize: 24,
-          filters: { keyword: '' },
-        }),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      const data = await response.json() as { items?: AdminGeneratedImage[] };
-      setGeneratedPool(data.items ?? []);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
-    } finally {
-      setGeneratedLoading(false);
-    }
-  }
-
-  async function submitGeneratedImageToTheme(image: AdminGeneratedImage) {
-    setSaving(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/monica/admin/themes/${theme.id}/submit-images`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({
-          imageId: image.imageId,
-          title: image.promptUsed?.slice(0, 80) || 'Admin selected image',
-          creationNote: image.promptUsed,
-        }),
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      setMode('summary');
-      onSaved();
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : String(submitError));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
-      <div className="grid gap-4 md:grid-cols-[156px_minmax(0,1fr)_auto]">
-        <div className="grid gap-2">
-          <ThemeCoverPreview imageUrl={theme.coverImageUrl} />
-          <FeaturedImageStrip images={theme.featuredImages} />
-        </div>
-        <div className="min-w-0">
-          <h3 className="text-xl font-semibold">{theme.title}</h3>
-          <p className="mt-2 line-clamp-2 text-base leading-7 text-muted-foreground">{theme.brief || 'No brief yet.'}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatusBadge>{theme.sourceType || 'admin'}</StatusBadge>
-            <StatusBadge>{theme.publishDate ? new Date(theme.publishDate).toLocaleDateString() : 'No publish date'}</StatusBadge>
-            <StatusBadge>{theme.featuredImages?.filter(Boolean).length ?? 0} featured</StatusBadge>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatusBadge tone={theme.readiness?.contentOk ? 'good' : 'warn'}>{theme.readiness?.contentOk ? 'Content ok' : 'Missing content'}</StatusBadge>
-            <StatusBadge tone={theme.readiness?.seoOk ? 'good' : 'warn'}>{theme.readiness?.seoOk ? 'SEO ok' : 'Missing SEO'}</StatusBadge>
-            <StatusBadge tone={theme.readiness?.ideasOk ? 'good' : 'warn'}>{theme.readiness?.ideasOk ? 'Ideas ok' : 'Missing ideas'}</StatusBadge>
-            <StatusBadge tone={(theme.readiness?.featuredCount ?? 0) >= 3 ? 'good' : 'warn'}>Featured {theme.readiness?.featuredCount ?? 0}/3</StatusBadge>
-          </div>
-        </div>
-        <div className="flex gap-2 md:flex-col">
-          <button
-            type="button"
-            onClick={() => setMode(mode === 'fields' ? 'summary' : 'fields')}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted"
-          >
-            <Pencil className="size-4" />Edit fields
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const nextMode = mode === 'featured' ? 'summary' : 'featured';
-              setMode(nextMode);
-              if (nextMode === 'featured') void loadFeaturedPool();
-            }}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted"
-          >
-            <Star className="size-4" />Featured images
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const nextMode = mode === 'submit_images' ? 'summary' : 'submit_images';
-              setMode(nextMode);
-              if (nextMode === 'submit_images') void loadGeneratedPool();
-            }}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted"
-          >
-            <ImagePlus className="size-4" />Submit images
-          </button>
-        </div>
-      </div>
-
-      {error ? <div className="mt-3 rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">{error}</div> : null}
-
-      {mode === 'fields' ? (
-        <div className="mt-4 grid gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Title</span>
-              <input value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none" />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Publish date</span>
-              <input type="date" value={publishDate} onChange={(event) => setPublishDate(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none" />
-            </label>
-          </div>
-          <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Brief</span>
-            <textarea value={brief} onChange={(event) => setBrief(event.target.value)} rows={2} className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none" />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Theme note</span>
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none" />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Cover image URL</span>
-            <input value={coverImageUrl} onChange={(event) => setCoverImageUrl(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none" />
-          </label>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">SEO title</span>
-              <input value={seoTitle} onChange={(event) => setSeoTitle(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none" />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Meta description</span>
-              <input value={seoMetaDescription} onChange={(event) => setSeoMetaDescription(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none" />
-            </label>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Generator ideas, one per line</span>
-              <textarea value={promptTexts} onChange={(event) => setPromptTexts(event.target.value)} rows={4} className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none" />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Tags, one per line</span>
-              <textarea value={tags} onChange={(event) => setTags(event.target.value)} rows={4} className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none" />
-            </label>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">SEO keywords, one per line</span>
-              <textarea value={seoKeywords} onChange={(event) => setSeoKeywords(event.target.value)} rows={4} className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none" />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Image SEO notes JSON</span>
-              <textarea value={imageSeoNotes} onChange={(event) => setImageSeoNotes(event.target.value)} rows={4} className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none" />
-            </label>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={saving || !title.trim()}
-              onClick={() => void saveTheme({
-                title,
-                brief,
-                description,
-                coverImageUrl,
-                publishDate,
-                promptTexts: splitLines(promptTexts),
-                tags: splitLines(tags),
-                seoTitle,
-                seoMetaDescription,
-                seoKeywords: splitLines(seoKeywords),
-                imageSeoNotes: parseJsonOrNull(imageSeoNotes),
-              })}
-              className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
-            >
-              {saving ? <SpinnerLabel>Save</SpinnerLabel> : 'Save fields'}
-            </button>
-            <button type="button" onClick={() => setMode('summary')} className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted">Cancel</button>
-          </div>
-        </div>
-      ) : null}
-
-      {mode === 'featured' ? (
-        <div className="mt-4 grid gap-3">
-          {featuredLoading ? (
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Loading image pool...</div>
-          ) : featuredPool.length === 0 ? (
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">No public images in this theme pool yet.</div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {featuredPool.map((image) => {
-                const imageUrl = image.image?.thumbnailUrl || image.image?.imageUrl;
-                const selected = selectedFeaturedIds.includes(image.id);
-                return (
-                  <button
-                    key={image.id}
-                    type="button"
-                    onClick={() => toggleFeatured(image.id)}
-                    className={cn('overflow-hidden rounded-lg border bg-card text-left', selected ? 'border-foreground ring-2 ring-foreground/20' : 'border-border')}
-                  >
-                    {imageUrl ? (
-                      <Image src={imageUrl} alt={image.title ?? ''} width={512} height={512} unoptimized className="aspect-square w-full object-cover" />
-                    ) : (
-                      <div className="grid aspect-square place-items-center bg-muted text-muted-foreground"><ImagePlus className="size-6" /></div>
-                    )}
-                    <div className="p-2 text-xs text-muted-foreground">{selected ? 'Selected' : image.title || 'Public image'}</div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button type="button" disabled={saving} onClick={() => void saveFeaturedImages()} className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50">
-              {saving ? <SpinnerLabel>Save</SpinnerLabel> : 'Save featured images'}
-            </button>
-            <button type="button" onClick={() => setMode('summary')} className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted">Cancel</button>
-          </div>
-        </div>
-      ) : null}
-
-      {mode === 'submit_images' ? (
-        <div className="mt-4 grid gap-3">
-          {generatedLoading ? (
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Loading generated images...</div>
-          ) : generatedPool.length === 0 ? (
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">No generated images available.</div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {generatedPool.map((image) => {
-                const imageUrl = image.thumbnailUrl || image.imageUrl;
-                const alreadyPublic = Boolean(image.publicImage);
-                return (
-                  <article key={image.imageId} className="overflow-hidden rounded-lg border border-border bg-card">
-                    {imageUrl ? (
-                      <Image src={imageUrl} alt="" width={512} height={512} unoptimized className="aspect-square w-full object-cover" />
-                    ) : (
-                      <div className="grid aspect-square place-items-center bg-muted text-muted-foreground"><ImagePlus className="size-6" /></div>
-                    )}
-                    <div className="grid gap-2 p-2">
-                      <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">{image.promptUsed || image.imageId}</p>
-                      <button
-                        type="button"
-                        disabled={saving || alreadyPublic}
-                        onClick={() => void submitGeneratedImageToTheme(image)}
-                        className="monica-button-primary min-h-9 px-3 text-xs disabled:opacity-50"
-                      >
-                        {alreadyPublic ? 'Already public' : saving ? 'Submitting' : 'Add to theme'}
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-          <button type="button" onClick={() => setMode('summary')} className="h-10 w-fit rounded-md border border-border px-4 text-sm hover:bg-muted">Cancel</button>
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function ThemeCoverPreview({ imageUrl }: { imageUrl?: string | null }) {
-  return (
-    <div className="h-[88px] overflow-hidden rounded-md bg-muted">
-      {imageUrl ? (
-        <Image src={imageUrl} alt="" width={312} height={176} unoptimized className="size-full object-cover" />
-      ) : (
-        <div className="grid size-full place-items-center text-muted-foreground">
-          <ImagePlus className="size-5" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FeaturedImageStrip({ images }: { images?: Array<{ imageUrl?: string | null; thumbnailUrl?: string | null; title?: string | null } | null> }) {
-  const slots = Array.from({ length: 3 }, (_, index) => images?.[index] ?? null);
-  return (
-    <div className="grid grid-cols-3 gap-1">
-      {slots.map((image, index) => {
-        const imageUrl = image?.thumbnailUrl || image?.imageUrl;
-        return (
-          <div key={`${imageUrl ?? 'empty'}-${index}`} className="h-10 overflow-hidden rounded bg-muted">
-            {imageUrl ? (
-              <Image src={imageUrl} alt={image?.title ?? ''} width={80} height={80} unoptimized className="size-full object-cover" />
-            ) : (
-              <div className="grid size-full place-items-center text-muted-foreground/60">
-                <ImagePlus className="size-3.5" />
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+export { ThemeCoverPreview, FeaturedImageStrip };
