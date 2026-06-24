@@ -63,7 +63,7 @@
         "assistantName": "Assistant",
         "chooseDirection": "Choose a direction",
         "assistantDirectionHint": "Use fills the prompt. More like this keeps the assistant focused on this direction.",
-        "moreIdeas": "More ideas",
+        "moreIdeas": "Generate 3 new ideas",
         "close": "Close",
         "improvedPrompt": "Improved prompt",
         "replacePrompt": "Replace prompt",
