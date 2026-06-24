@@ -12,7 +12,6 @@ import {
 import { cn } from '@windrun-huaiin/lib/utils';
 import { dispatchCreditOverviewRefresh } from '@windrun-huaiin/third-ui/main/credit';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
@@ -1086,13 +1085,13 @@ function AssistantDialog({
     <Dialog open={open} onOpenChange={onOpenChange} modal={false} disablePointerDismissal>
       <DialogContent
         className={cn(
-          'fixed bottom-3 right-3 left-auto top-16 z-30 flex h-auto w-[calc(100vw-1.5rem)] max-w-none translate-x-0 translate-y-0 grid-rows-none flex-col gap-0 overflow-hidden rounded-lg border border-foreground/15 bg-linear-to-b from-white to-neutral-50 p-0 shadow-xl shadow-black/10 ring-0 duration-200 data-closed:slide-out-to-right data-open:slide-in-from-right',
+          'fixed bottom-3 right-3 left-auto top-16 z-30 flex h-auto w-[calc(100vw-1.5rem)] max-w-none translate-x-0 translate-y-0 grid-rows-none flex-col gap-0 overflow-hidden rounded-2xl border border-black/5 bg-white p-0 shadow-[0_8px_30px_rgb(0,0,0,0.08)] ring-0 duration-200 data-closed:slide-out-to-right data-open:slide-in-from-right',
           'sm:w-[440px] lg:w-[460px]',
         )}
         showCloseButton={false}
         showOverlay={false}
       >
-        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+        <DialogHeader className="px-5 pt-5 pb-3 text-left">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <DialogTitle className="truncate text-lg font-semibold text-foreground">
@@ -1172,11 +1171,9 @@ function AssistantPanelContent({
 
       {mode === 'improve' && improvedPrompt ? (
         <div className="grid gap-3">
-          <Card>
-            <CardContent>
-            <p className="text-sm leading-6 text-muted-foreground">{improvedPrompt}</p>
-            </CardContent>
-          </Card>
+          <div className="rounded-2xl bg-neutral-50 px-4 py-3">
+            <p className="text-sm leading-6 text-neutral-700">{improvedPrompt}</p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <SmallActionButton onClick={() => onReplacePrompt(improvedPrompt)}>{copy.assistant.use}</SmallActionButton>
             <SmallActionButton onClick={() => onAppendPrompt(improvedPrompt)}>{copy.assistant.appendDetails}</SmallActionButton>
@@ -1188,23 +1185,21 @@ function AssistantPanelContent({
       {mode === 'ideas' && ideas.length > 0 ? (
         <div className="grid gap-3">
           {ideas.map((idea, index) => (
-            <Card key={`${idea.idea}-${index}`} className="bg-white">
-              <CardContent>
-                <div className="text-base font-semibold leading-6 text-foreground">{index + 1}. {idea.idea}</div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.ideaHint}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
-                  <SmallActionButton onClick={() => onMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
-                </div>
-              </CardContent>
-            </Card>
+            <div key={`${idea.idea}-${index}`} className="group rounded-2xl bg-neutral-50/60 px-4 py-4 transition hover:bg-neutral-50">
+              <div className="text-[15px] font-medium leading-6 text-neutral-900">{idea.idea}</div>
+              <p className="mt-1.5 text-sm leading-6 text-neutral-500">{copy.assistant.ideaHint}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
+                <SmallActionButton onClick={() => onMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
+              </div>
+            </div>
           ))}
           <div className="flex flex-wrap gap-2 pt-1">
             <SmallActionButton onClick={onMoreIdeas}>{copy.assistant.moreIdeas}</SmallActionButton>
             <SmallActionButton onClick={onClose}>{copy.assistant.close}</SmallActionButton>
           </div>
           {themeLabel ? (
-            <p className="text-sm leading-6 text-muted-foreground">
+            <p className="px-1 text-sm leading-6 text-neutral-400">
               {copy.assistant.ideasBasedOn.replace('{theme}', themeLabel)}
             </p>
           ) : null}
@@ -1212,56 +1207,58 @@ function AssistantPanelContent({
       ) : null}
 
       {mode === 'ask' ? (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {askMessages.length > 0 ? (
-            <Card className="bg-muted/30">
-              <CardContent className="grid gap-3">
+            <div className="grid gap-4">
               {askMessages.map((message, index) => (
-                <div key={`${message.role}-${index}`} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
+                <div key={`${message.role}-${index}`} className={cn('flex flex-col', message.role === 'user' ? 'items-end' : 'items-start')}>
+                  <div className={cn('mb-1 px-1 text-[11px] font-medium', message.role === 'user' ? 'text-neutral-400' : 'text-neutral-400')}>
+                    {message.role === 'user' ? copy.assistant.you : copy.assistant.assistantName}
+                  </div>
                   <div className={cn(
-                    'max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-6 shadow-sm',
+                    'max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] leading-6',
                     message.role === 'user'
-                      ? 'rounded-br-md bg-foreground text-background'
-                      : 'rounded-bl-md border border-border bg-white text-foreground',
+                      ? 'rounded-br-sm bg-(--monica-accent-soft) text-neutral-900'
+                      : 'rounded-bl-sm bg-neutral-50 text-neutral-800',
                   )}>
-                    <div className={cn('mb-0.5 text-[11px] font-semibold', message.role === 'user' ? 'text-background/70' : 'text-muted-foreground')}>
-                      {message.role === 'user' ? copy.assistant.you : copy.assistant.assistantName}
-                    </div>
                     <p>{message.text}</p>
                   </div>
                 </div>
               ))}
-              </CardContent>
-            </Card>
+            </div>
           ) : null}
 
           {askMessages.flatMap((message) => message.ideas ?? []).length > 0 ? (
-            <div className="grid gap-2">
-              <div className="text-sm font-semibold text-foreground">{copy.assistant.chooseDirection}</div>
+            <div className="grid gap-2 pt-2">
+              <div className="px-1 text-[13px] font-medium text-neutral-500">{copy.assistant.chooseDirection}</div>
               {askMessages.flatMap((message) => message.ideas ?? []).slice(-3).map((idea, index) => (
-                <Card key={`${idea.idea}-${index}`} className="bg-white">
-                  <CardContent>
-                    <div className="text-base font-semibold leading-6 text-foreground">{index + 1}. {idea.idea}</div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.assistantDirectionHint}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
-                      <SmallActionButton onClick={() => onAskMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
-                    </div>
-                  </CardContent>
-                </Card>
+                <div key={`${idea.idea}-${index}`} className="group rounded-2xl bg-neutral-50/60 px-4 py-3 transition hover:bg-neutral-50">
+                  <div className="text-[14px] font-medium leading-6 text-neutral-900">{idea.idea}</div>
+                  <p className="mt-1 text-[13px] leading-5 text-neutral-500">{copy.assistant.assistantDirectionHint}</p>
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
+                    <SmallActionButton onClick={() => onAskMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
+                  </div>
+                </div>
               ))}
             </div>
           ) : null}
 
-          <Textarea
-            value={askInput}
-            onChange={(event) => onAskInputChange(event.target.value)}
-            className="min-h-28"
-            placeholder={copy.assistant.askPlaceholder}
-          />
-          <div className="flex flex-wrap gap-2">
-            <SmallActionButton onClick={onSendAsk}>{copy.assistant.send}</SmallActionButton>
-            <SmallActionButton onClick={onClose}>{copy.assistant.close}</SmallActionButton>
+          <div className="relative mt-2">
+            <Textarea
+              value={askInput}
+              onChange={(event) => onAskInputChange(event.target.value)}
+              className="min-h-[100px] resize-none rounded-xl border-0 bg-neutral-100 pb-12 pt-3 text-[15px] focus-visible:ring-1 focus-visible:ring-neutral-200"
+              placeholder={copy.assistant.askPlaceholder}
+            />
+            <div className="absolute bottom-2 right-2 flex gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose} className="h-8 rounded-lg px-3 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900">
+                {copy.assistant.close}
+              </Button>
+              <Button type="button" size="sm" onClick={onSendAsk} className="h-8 rounded-lg bg-neutral-900 px-4 font-medium text-white hover:bg-neutral-800">
+                {copy.assistant.send}
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -1271,9 +1268,9 @@ function AssistantPanelContent({
 
 function SmallActionButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
-    <Button type="button" variant="outline" size="sm" onClick={onClick} className="rounded-full bg-white text-muted-foreground hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft) hover:text-foreground">
+    <button type="button" onClick={onClick} className="inline-flex h-7 items-center justify-center rounded-lg bg-neutral-100 px-3 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900">
       {children}
-    </Button>
+    </button>
   );
 }
 
