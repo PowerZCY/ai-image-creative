@@ -12,6 +12,7 @@
     "react"
   ],
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@clerk/nextjs": "^7.3.3",
     "@types/mdx": "^2.0.13",
     "@windrun-huaiin/backend-core": "31.0.1",

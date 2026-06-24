@@ -34,6 +34,7 @@ type ThemeSubmission = {
 
 type ThemeItem = {
   id: string;
+  issueNumber?: number | null;
   title: string;
   brief?: string | null;
   description?: string | null;
@@ -96,6 +97,7 @@ type Filters = {
 
 type EditAcceptDraft = {
   title: string;
+  issueNumber: string;
   brief: string;
   description: string;
   publishDate: string;
@@ -205,6 +207,7 @@ function ThemeFieldsModal({
   onSaved: () => void;
 }) {
   const [title, setTitle] = useState(theme.title);
+  const [issueNumber, setIssueNumber] = useState(theme.issueNumber?.toString() ?? '');
   const [brief, setBrief] = useState(theme.brief ?? '');
   const [description, setDescription] = useState(theme.description ?? '');
   const [coverImageUrl, setCoverImageUrl] = useState(theme.coverImageUrl ?? '');
@@ -233,6 +236,7 @@ function ThemeFieldsModal({
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({
           title,
+          issueNumber,
           brief,
           description,
           coverImageUrl,
@@ -263,12 +267,22 @@ function ThemeFieldsModal({
             {error}
           </div>
         ) : null}
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_180px]">
           <label className="block">
             <span className={labelSpanCls}>Title</span>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+          <label className="block">
+            <span className={labelSpanCls}>Issue #</span>
+            <input
+              type="number"
+              min={1}
+              value={issueNumber}
+              onChange={(e) => setIssueNumber(e.target.value)}
               className={cn('mt-1', inputCls)}
             />
           </label>
@@ -672,6 +686,7 @@ function NewThemeModal({
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState('');
+  const [issueNumber, setIssueNumber] = useState('');
   const [brief, setBrief] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -683,7 +698,7 @@ function NewThemeModal({
       const response = await fetch('/api/monica/admin/themes', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ title, brief, description: brief }),
+        body: JSON.stringify({ title, issueNumber, brief, description: brief }),
       });
       if (!response.ok) throw new Error(await readError(response));
       onCreated();
@@ -703,14 +718,26 @@ function NewThemeModal({
             {error}
           </div>
         ) : null}
-        <label className="block">
-          <span className={labelSpanCls}>Theme</span>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className={cn('mt-1', inputCls)}
-          />
-        </label>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
+          <label className="block">
+            <span className={labelSpanCls}>Theme</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+          <label className="block">
+            <span className={labelSpanCls}>Issue #</span>
+            <input
+              type="number"
+              min={1}
+              value={issueNumber}
+              onChange={(e) => setIssueNumber(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+        </div>
         <label className="block">
           <span className={labelSpanCls}>Brief</span>
           <input
@@ -743,85 +770,83 @@ function NewThemeModal({
 
 // ─── ThemeTableRow ────────────────────────────────────────────────────────────
 
-function ThemeTableRow({ theme, onSaved }: { theme: ThemeItem; onSaved: () => void }) {
-  const [modal, setModal] = useState<'fields' | 'featured' | 'submit_images' | null>(null);
+type ThemeModalType = 'fields' | 'featured' | 'submit_images';
 
+function ThemeTableRow({
+  theme,
+  onOpenModal,
+}: {
+  theme: ThemeItem;
+  onOpenModal: (theme: ThemeItem, modal: ThemeModalType) => void;
+}) {
   return (
-    <>
-      <tr className="border-b border-border last:border-0 hover:bg-muted/30">
-        {/* Theme title + brief */}
-        <td className="py-3 pr-4 align-top">
-          <div className="font-medium leading-5">{theme.title}</div>
-          {theme.brief ? (
-            <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{theme.brief}</div>
-          ) : null}
-        </td>
-        {/* Source */}
-        <td className="py-3 pr-4 align-top">
-          <span className="text-sm text-muted-foreground">{theme.sourceType || 'admin'}</span>
-        </td>
-        {/* Publish date */}
-        <td className="py-3 pr-4 align-top">
-          <span className="text-sm text-muted-foreground">
-            {theme.publishDate ? new Date(theme.publishDate).toLocaleDateString() : '—'}
-          </span>
-        </td>
-        {/* Readiness chips */}
-        <td className="py-3 pr-4 align-top">
-          <div className="flex flex-wrap gap-1">
-            <StatusBadge tone={theme.readiness?.contentOk ? 'good' : 'warn'}>
-              {theme.readiness?.contentOk ? 'Content' : 'No content'}
-            </StatusBadge>
-            <StatusBadge tone={theme.readiness?.seoOk ? 'good' : 'warn'}>
-              {theme.readiness?.seoOk ? 'SEO' : 'No SEO'}
-            </StatusBadge>
-            <StatusBadge tone={theme.readiness?.ideasOk ? 'good' : 'warn'}>
-              {theme.readiness?.ideasOk ? 'Ideas' : 'No ideas'}
-            </StatusBadge>
+    <tr className="border-b border-border last:border-0 hover:bg-muted/30">
+      {/* Theme title + brief */}
+      <td className="py-3 pr-4 align-top">
+        <div className="font-medium leading-5">{theme.title}</div>
+        {theme.issueNumber || theme.brief ? (
+          <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+            {theme.issueNumber ? `Issue #${theme.issueNumber}` : null}
+            {theme.issueNumber && theme.brief ? ' · ' : null}
+            {theme.brief}
           </div>
-        </td>
-        {/* Featured strip */}
-        <td className="py-3 pr-4 align-top">
-          <FeaturedImageStrip images={theme.featuredImages} />
-        </td>
-        {/* Actions */}
-        <td className="py-3 align-top">
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => setModal('fields')}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
-            >
-              <Pencil className="size-3" />Edit fields
-            </button>
-            <button
-              type="button"
-              onClick={() => setModal('featured')}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
-            >
-              <Star className="size-3" />Featured images
-            </button>
-            <button
-              type="button"
-              onClick={() => setModal('submit_images')}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
-            >
-              <ImagePlus className="size-3" />Submit images
-            </button>
-          </div>
-        </td>
-      </tr>
-
-      {modal === 'fields' ? (
-        <ThemeFieldsModal theme={theme} onClose={() => setModal(null)} onSaved={onSaved} />
-      ) : null}
-      {modal === 'featured' ? (
-        <FeaturedImagesModal theme={theme} onClose={() => setModal(null)} onSaved={onSaved} />
-      ) : null}
-      {modal === 'submit_images' ? (
-        <SubmitImagesModal theme={theme} onClose={() => setModal(null)} onSaved={onSaved} />
-      ) : null}
-    </>
+        ) : null}
+      </td>
+      {/* Source */}
+      <td className="py-3 pr-4 align-top">
+        <span className="text-sm text-muted-foreground">{theme.sourceType || 'admin'}</span>
+      </td>
+      {/* Publish date */}
+      <td className="py-3 pr-4 align-top">
+        <span className="text-sm text-muted-foreground">
+          {theme.publishDate ? new Date(theme.publishDate).toLocaleDateString() : '—'}
+        </span>
+      </td>
+      {/* Readiness chips */}
+      <td className="py-3 pr-4 align-top">
+        <div className="flex flex-wrap gap-1">
+          <StatusBadge tone={theme.readiness?.contentOk ? 'good' : 'warn'}>
+            {theme.readiness?.contentOk ? 'Content' : 'No content'}
+          </StatusBadge>
+          <StatusBadge tone={theme.readiness?.seoOk ? 'good' : 'warn'}>
+            {theme.readiness?.seoOk ? 'SEO' : 'No SEO'}
+          </StatusBadge>
+          <StatusBadge tone={theme.readiness?.ideasOk ? 'good' : 'warn'}>
+            {theme.readiness?.ideasOk ? 'Ideas' : 'No ideas'}
+          </StatusBadge>
+        </div>
+      </td>
+      {/* Featured strip */}
+      <td className="py-3 pr-4 align-top">
+        <FeaturedImageStrip images={theme.featuredImages} />
+      </td>
+      {/* Actions */}
+      <td className="py-3 align-top">
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => onOpenModal(theme, 'fields')}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
+          >
+            <Pencil className="size-3" />Edit fields
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenModal(theme, 'featured')}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
+          >
+            <Star className="size-3" />Featured images
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenModal(theme, 'submit_images')}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
+          >
+            <ImagePlus className="size-3" />Submit images
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -846,12 +871,22 @@ function EditAcceptPanel({
 }) {
   return (
     <div className="mt-4 grid gap-3 rounded-md border border-border bg-background/50 p-3">
-      <div className="grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_180px]">
+      <div className="grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_150px_180px]">
         <label className="block">
           <span className={labelSpanCls}>Theme title</span>
           <input
             value={draft.title}
             onChange={(e) => onChange({ title: e.target.value })}
+            className={cn('mt-1', inputCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Issue #</span>
+          <input
+            type="number"
+            min={1}
+            value={draft.issueNumber}
+            onChange={(e) => onChange({ issueNumber: e.target.value })}
             className={cn('mt-1', inputCls)}
           />
         </label>
@@ -1013,6 +1048,10 @@ export function AdminReviewClient({
     {},
   );
   const [newThemeOpen, setNewThemeOpen] = useState(false);
+  const [themeModal, setThemeModal] = useState<{
+    type: ThemeModalType;
+    theme: ThemeItem;
+  } | null>(null);
   const [imageRejectNoteById, setImageRejectNoteById] = useState<Record<string, string>>({});
 
   const themeSubmissions = useMonicaPagedList<Filters, ThemeSubmission>({
@@ -1068,6 +1107,7 @@ export function AdminReviewClient({
   function buildInitialEditAcceptDraft(item: ThemeSubmission): EditAcceptDraft {
     return {
       title: item.title,
+      issueNumber: '',
       brief: item.details,
       description: item.details,
       publishDate: '',
@@ -1093,6 +1133,7 @@ export function AdminReviewClient({
       [id]: {
         ...(current[id] ?? {
           title: '',
+          issueNumber: '',
           brief: '',
           description: '',
           publishDate: '',
@@ -1116,6 +1157,7 @@ export function AdminReviewClient({
           headers: { 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify({
             title: draft.title,
+            issueNumber: draft.issueNumber,
             brief: draft.brief,
             description: draft.description,
             promptTexts: splitLines(draft.promptTexts),
@@ -1372,11 +1414,34 @@ export function AdminReviewClient({
                               <ThemeTableRow
                                 key={theme.id}
                                 theme={theme}
-                                onSaved={themes.reload}
+                                onOpenModal={(selectedTheme, type) => {
+                                  setThemeModal({ theme: selectedTheme, type });
+                                }}
                               />
                             ))}
                           </tbody>
                         </table>
+                        {themeModal?.type === 'fields' ? (
+                          <ThemeFieldsModal
+                            theme={themeModal.theme}
+                            onClose={() => setThemeModal(null)}
+                            onSaved={themes.reload}
+                          />
+                        ) : null}
+                        {themeModal?.type === 'featured' ? (
+                          <FeaturedImagesModal
+                            theme={themeModal.theme}
+                            onClose={() => setThemeModal(null)}
+                            onSaved={themes.reload}
+                          />
+                        ) : null}
+                        {themeModal?.type === 'submit_images' ? (
+                          <SubmitImagesModal
+                            theme={themeModal.theme}
+                            onClose={() => setThemeModal(null)}
+                            onSaved={themes.reload}
+                          />
+                        ) : null}
                       </div>
                     )}
 

@@ -10,6 +10,20 @@ function readOptionalString(value: unknown) {
   return text || undefined;
 }
 
+function readOptionalPositiveInteger(value: unknown) {
+  if (value === null || value === undefined || value === '') return undefined;
+  const number = typeof value === 'number' ? value : Number(readString(value));
+  if (!Number.isInteger(number) || number <= 0) {
+    throw new Error('issueNumber must be a positive integer');
+  }
+  return number;
+}
+
+function readNullablePositiveInteger(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  return readOptionalPositiveInteger(value) ?? null;
+}
+
 function readStringArray(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map(readString).filter(Boolean).slice(0, 20);
@@ -35,14 +49,6 @@ export function parseThemeSubmissionDraftInput(body: Record<string, unknown>) {
     details: readOptionalString(body.rawDescription) ?? '',
     submitReason: readOptionalString(body.triggerType),
     submitNow: body.submitNow === true,
-  };
-}
-
-export function parseThemeSubmissionUpdateInput(body: Record<string, unknown>) {
-  return {
-    title: readOptionalString(body.rawTitle),
-    details: readOptionalString(body.rawDescription),
-    submitReason: readOptionalString(body.triggerType),
   };
 }
 
@@ -77,6 +83,7 @@ export function parsePublishThemeInput(body: Record<string, unknown>) {
 
   return {
     title,
+    issueNumber: readOptionalPositiveInteger(body.issueNumber),
     brief: readOptionalString(body.brief),
     description: readOptionalString(body.description),
     coverImageUrl: readOptionalString(body.coverImageUrl),
@@ -98,6 +105,7 @@ export function parseAdminThemeUpdateInput(body: Record<string, unknown>) {
 
   return {
     title,
+    issueNumber: 'issueNumber' in body ? readNullablePositiveInteger(body.issueNumber) : undefined,
     brief: 'brief' in body ? readNullableString(body.brief) : undefined,
     description: 'description' in body ? readNullableString(body.description) : undefined,
     coverImageUrl: 'coverImageUrl' in body ? readNullableString(body.coverImageUrl) : undefined,
@@ -124,6 +132,7 @@ export function parseAdminThemeCreateInput(body: Record<string, unknown>) {
 
   return {
     title,
+    issueNumber: readOptionalPositiveInteger(body.issueNumber),
     brief: readOptionalString(body.brief),
     description: readOptionalString(body.description),
     publishDate: readOptionalString(body.publishDate),

@@ -4,6 +4,12 @@
 ALTER TABLE monica_ai.generation_jobs
   ADD COLUMN IF NOT EXISTS source_page VARCHAR(50);
 
+ALTER TABLE monica_ai.themes
+  ADD COLUMN IF NOT EXISTS issue_number INTEGER;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_themes_issue_number
+  ON monica_ai.themes (issue_number);
+
 DO $$
 BEGIN
   IF EXISTS (

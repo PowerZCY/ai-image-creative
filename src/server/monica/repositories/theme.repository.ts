@@ -15,10 +15,9 @@ type ThemeSubmissionDraftInput = {
   submitNow?: boolean;
 };
 
-type ThemeSubmissionUpdateInput = Partial<ThemeSubmissionDraftInput>;
-
 type PublishThemeInput = {
   title: string;
+  issueNumber?: number;
   brief?: string;
   description?: string;
   coverImageUrl?: string;
@@ -31,6 +30,7 @@ type PublishThemeInput = {
 
 type AdminThemeUpdateInput = {
   title?: string;
+  issueNumber?: number | null;
   brief?: string | null;
   description?: string | null;
   coverImageUrl?: string | null;
@@ -46,17 +46,10 @@ type AdminThemeUpdateInput = {
 
 type AdminThemeCreateInput = {
   title: string;
+  issueNumber?: number;
   brief?: string;
   description?: string;
   publishDate?: string;
-};
-
-type ListThemeSubmissionsInput = {
-  userId?: string;
-  includeAll?: boolean;
-  status?: string;
-  page?: number;
-  pageSize?: number;
 };
 
 type ThemeSearchFilters = {
@@ -127,8 +120,10 @@ function publicThemeWhere(keyword?: string): Prisma.ThemeWhereInput {
 function normalizeTheme(theme: ThemeRecord) {
   const generatorIdeas = normalizeGeneratorIdeas(theme.generatorIdeas);
   const featuredCount = 0;
+  const issueNumber = (theme as { issueNumber?: number | null }).issueNumber ?? null;
   return {
     ...theme,
+    issueNumber,
     slug: slugifyThemeTitle(theme.title),
     description: theme.themeNote,
     generatorIdeas,
@@ -392,6 +387,7 @@ export class ThemeRepository {
 
     const data: Prisma.ThemeUpdateInput = {};
     if (input.title !== undefined) data.title = input.title;
+    if (input.issueNumber !== undefined) (data as { issueNumber?: number | null }).issueNumber = input.issueNumber;
     if (input.brief !== undefined) data.brief = input.brief;
     if (input.description !== undefined) data.themeNote = input.description;
     if (input.coverImageUrl !== undefined) data.coverImageUrl = input.coverImageUrl;
@@ -416,6 +412,7 @@ export class ThemeRepository {
     const theme = await prisma.theme.create({
       data: {
         title: input.title,
+        issueNumber: input.issueNumber,
         brief: input.brief,
         themeNote: input.description,
         publishDate: input.publishDate ? new Date(input.publishDate) : null,
@@ -426,74 +423,6 @@ export class ThemeRepository {
     });
 
     return normalizeTheme(theme);
-  }
-
-  async listSubmissions(input: ListThemeSubmissionsInput) {
-    const page = Math.max(1, input.page ?? 1);
-    const pageSize = Math.min(50, Math.max(5, input.pageSize ?? 12));
-    const userStatusFilter = !input.includeAll && input.status && input.status !== 'all'
-      ? USER_THEME_STATUS_TO_INTERNAL[input.status] ?? [input.status]
-      : null;
-    const where = {
-      deleted: 0,
-      ...(input.includeAll ? {} : { userId: input.userId }),
-      ...(input.status && input.status !== 'all'
-        ? userStatusFilter
-          ? { status: { in: userStatusFilter } }
-          : { status: input.status }
-        : {}),
-    };
-
-    const [items, total] = await prisma.$transaction([
-      prisma.themeSubmission.findMany({
-        where,
-        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      prisma.themeSubmission.count({ where }),
-    ]);
-
-    const submissionIds = items.map((item) => item.id);
-    const userIds = [...new Set(items.map((item) => item.userId))];
-    const [themes, users] = await Promise.all([
-      submissionIds.length
-        ? prisma.theme.findMany({
-            where: {
-              sourceSubmissionId: { in: submissionIds },
-              deleted: 0,
-            },
-          })
-        : [],
-      userIds.length
-        ? prisma.user.findMany({
-            where: { userId: { in: userIds } },
-            select: {
-              userId: true,
-              email: true,
-              userName: true,
-            },
-          })
-        : [],
-    ]);
-
-    const themeBySubmissionId = new Map(themes.map((theme) => [theme.sourceSubmissionId?.toString(), normalizeTheme(theme)]));
-    const userById = new Map(users.map((user) => [user.userId, user]));
-
-    return {
-      items: items.map((item) => (
-        input.includeAll
-          ? mapSubmissionForApi(item, themeBySubmissionId.get(item.id.toString()), userById.get(item.userId))
-          : mapSubmissionForUserApi(item, themeBySubmissionId.get(item.id.toString()))
-      )),
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / pageSize)),
-      },
-      canReview: Boolean(input.includeAll),
-    };
   }
 
   async searchSubmissions(input: MonicaPagedRequest<ThemeSubmissionSearchFilters> & { currentUserId?: string; includeAll?: boolean }) {
@@ -565,85 +494,38 @@ export class ThemeRepository {
     };
   }
 
-  listMySubmissions(userId: string) {
-    return this.listSubmissions({
-      userId,
-      includeAll: false,
-      page: 1,
-      pageSize: 100,
-    });
-  }
-
-  createSubmission(userId: string, input: ThemeSubmissionDraftInput) {
+  async createSubmission(userId: string, input: ThemeSubmissionDraftInput) {
     const status = input.submitNow ? THEME_SUBMISSION_STATUS.UNDER_REVIEW : THEME_SUBMISSION_STATUS.DRAFT;
-    return prisma.themeSubmission.create({
-      data: {
-        userId,
-        status,
-        title: input.title,
-        details: input.details,
-        submitReason: input.submitReason,
-        submittedAt: input.submitNow ? new Date() : undefined,
-        reviewFlow: appendReviewFlow(null, {
+    const [existingSubmittedCount, submission] = await prisma.$transaction([
+      prisma.themeSubmission.count({
+        where: {
+          userId,
+          deleted: 0,
+          status: { not: THEME_SUBMISSION_STATUS.DRAFT },
+        },
+      }),
+      prisma.themeSubmission.create({
+        data: {
+          userId,
           status,
-          actorUserId: userId,
-          actorType: 'user',
-          note: input.submitReason,
-        }),
-      },
-    }).then((submission) => mapSubmissionForApi(submission));
-  }
+          title: input.title,
+          details: input.details,
+          submitReason: input.submitReason,
+          submittedAt: input.submitNow ? new Date() : undefined,
+          reviewFlow: appendReviewFlow(null, {
+            status,
+            actorUserId: userId,
+            actorType: 'user',
+            note: input.submitReason,
+          }),
+        },
+      }),
+    ]);
 
-  async updateOwnedDraft(userId: string, themeSubmissionId: string, input: ThemeSubmissionUpdateInput) {
-    const id = toSubmissionId(themeSubmissionId);
-    const existing = await prisma.themeSubmission.findFirst({
-      where: {
-        id,
-        userId,
-        deleted: 0,
-      },
-    });
-    if (!existing) return null;
-    if (existing.status !== THEME_SUBMISSION_STATUS.DRAFT) {
-      throw new Error('Only draft theme submissions can be edited');
-    }
-
-    const submission = await prisma.themeSubmission.update({
-      where: { id: existing.id },
-      data: input,
-    });
-
-    return mapSubmissionForApi(submission);
-  }
-
-  async submitOwnedDraft(userId: string, themeSubmissionId: string) {
-    const id = toSubmissionId(themeSubmissionId);
-    const existing = await prisma.themeSubmission.findFirst({
-      where: {
-        id,
-        userId,
-        deleted: 0,
-      },
-    });
-    if (!existing) return null;
-    if (existing.status !== THEME_SUBMISSION_STATUS.DRAFT) {
-      throw new Error('Only draft theme submissions can be submitted');
-    }
-
-    const submission = await prisma.themeSubmission.update({
-      where: { id: existing.id },
-      data: {
-        status: THEME_SUBMISSION_STATUS.UNDER_REVIEW,
-        submittedAt: new Date(),
-        reviewFlow: appendReviewFlow(existing.reviewFlow, {
-          status: THEME_SUBMISSION_STATUS.UNDER_REVIEW,
-          actorUserId: userId,
-          actorType: 'user',
-        }),
-      },
-    });
-
-    return mapSubmissionForApi(submission);
+    return {
+      submission: mapSubmissionForApi(submission),
+      isFirstSubmission: input.submitNow && existingSubmittedCount === 0,
+    };
   }
 
   async reviewSubmission(reviewerUserId: string, themeSubmissionId: string, status: ThemeSubmissionStatus, reason?: string) {
@@ -698,6 +580,7 @@ export class ThemeRepository {
     return prisma.$transaction(async (tx) => {
       const themeData = {
         title: input.title,
+        issueNumber: input.issueNumber,
         brief: input.brief,
         themeNote: input.description,
         coverImageUrl: input.coverImageUrl,

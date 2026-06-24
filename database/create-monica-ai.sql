@@ -3,6 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS monica_ai.themes (
     id                BIGSERIAL PRIMARY KEY,
+    issue_number      INTEGER,
     title             VARCHAR(255) NOT NULL,
     brief             TEXT,
     theme_note        TEXT,
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.themes (
     CONSTRAINT themes_deleted_check CHECK (deleted = ANY (ARRAY[0, 1]))
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_themes_issue_number ON monica_ai.themes (issue_number);
 CREATE INDEX IF NOT EXISTS idx_themes_publish_date ON monica_ai.themes (publish_date);
 CREATE INDEX IF NOT EXISTS idx_themes_source_submission_id ON monica_ai.themes (source_submission_id);
 

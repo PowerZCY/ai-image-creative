@@ -203,6 +203,7 @@ model ThemeSubmission {
 
 model Theme {
   id                 BigInt    @id @default(autoincrement())
+  issueNumber        Int?      @unique(map: "uq_themes_issue_number") @map("issue_number")
   title              String    @db.VarChar(255)
   brief              String?   @db.Text
   themeNote          String?   @map("theme_note") @db.Text

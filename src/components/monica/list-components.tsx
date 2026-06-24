@@ -207,17 +207,18 @@ export function FilterPills<TValue extends string>({
   return (
     <div className="min-w-0">
       {label ? <div className="mb-2 text-xs font-semibold text-muted-foreground">{label}</div> : null}
-      <div className="flex flex-wrap gap-2">
+      <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-neutral-200 bg-neutral-100 p-1 text-neutral-500">
         {options.map((option) => (
           <button
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
+            aria-pressed={value === option.value}
             className={cn(
-              'h-10 rounded-md border px-4 text-sm font-semibold transition',
+              'inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50',
               value === option.value
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+                ? 'bg-white text-neutral-950 shadow-sm'
+                : 'text-neutral-500 hover:bg-white/60 hover:text-neutral-900',
             )}
           >
             {option.label}

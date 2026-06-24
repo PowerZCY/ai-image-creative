@@ -30,28 +30,12 @@ export class ThemeService {
     return themeRepository.createAdminTheme(input);
   }
 
-  listSubmissions(input: Parameters<typeof themeRepository.listSubmissions>[0]) {
-    return themeRepository.listSubmissions(input);
-  }
-
   searchSubmissions(input: Parameters<typeof themeRepository.searchSubmissions>[0]) {
     return themeRepository.searchSubmissions(input);
   }
 
-  listMySubmissions(userId: string) {
-    return themeRepository.listMySubmissions(userId);
-  }
-
   createSubmission(userId: string, input: Parameters<typeof themeRepository.createSubmission>[1]) {
     return themeRepository.createSubmission(userId, input);
-  }
-
-  updateOwnedDraft(userId: string, themeSubmissionId: string, input: Parameters<typeof themeRepository.updateOwnedDraft>[2]) {
-    return themeRepository.updateOwnedDraft(userId, themeSubmissionId, input);
-  }
-
-  submitOwnedDraft(userId: string, themeSubmissionId: string) {
-    return themeRepository.submitOwnedDraft(userId, themeSubmissionId);
   }
 
   reviewSubmission(reviewerUserId: string, themeSubmissionId: string, status: ThemeSubmissionStatus, reason?: string) {

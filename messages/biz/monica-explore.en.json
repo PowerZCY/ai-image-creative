@@ -2,7 +2,7 @@
   "monica": {
     "explore": {
       "title": "Explore",
-      "description": "Browse daily themes first, or switch to images for visual inspiration.",
+      "description": "Choose a daily theme, get inspired by the gallery, and create your own take.",
       "loading": "Loading",
       "empty": "No public images yet.",
       "emptyThemes": "No themes match this filter.",
