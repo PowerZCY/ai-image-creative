@@ -11,6 +11,11 @@ import {
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import { dispatchCreditOverviewRefresh } from '@windrun-huaiin/third-ui/main/credit';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
 import { createR2Client } from '@/lib/r2-explorer-sdk';
 import type { MonicaCreatorCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
@@ -61,7 +66,6 @@ type GenerationBatch = {
   prompt: string;
   negativePrompt?: string;
   model: string;
-  style?: string;
   ratio?: string;
   imageCount: number;
   referenceImage?: ReferenceImageView | null;
@@ -72,7 +76,6 @@ type GenerationSnapshot = {
   prompt: string;
   negativePrompt?: string;
   model: string;
-  style?: string;
   ratio?: string;
   imageCount: number;
   referenceImage?: ReferenceImageView | null;
@@ -266,12 +269,6 @@ export function MonicaCreator({
     { value: 'recraft', label: copy.modelOptions.recraft },
     { value: 'stable-diffusion', label: copy.modelOptions.stableDiffusion },
   ], [copy.modelOptions.fluxPro, copy.modelOptions.gptImage, copy.modelOptions.ideogram, copy.modelOptions.recraft, copy.modelOptions.stableDiffusion]);
-  const styleOptions = useMemo(() => [
-    { value: 'editorial', label: copy.styleOptions.editorial },
-    { value: 'cinematic', label: copy.styleOptions.cinematic },
-    { value: 'product', label: copy.styleOptions.product },
-    { value: 'illustration', label: copy.styleOptions.illustration },
-  ], [copy.styleOptions.cinematic, copy.styleOptions.editorial, copy.styleOptions.illustration, copy.styleOptions.product]);
   const starterIdeaPool = useMemo(() => {
     const normalized = normalizeStarterIdeas(starterIdeas);
     return normalized.length ? normalized : fallbackIdeas;
@@ -292,7 +289,6 @@ export function MonicaCreator({
   });
   const [negativePrompt, setNegativePrompt] = useState('');
   const [model, setModel] = useState(modelOptions[0].value);
-  const [style, setStyle] = useState(styleOptions[0].value);
   const [ratio, setRatio] = useState(ratioOptions[0].value);
   const [imageCount, setImageCount] = useState(1);
   const [referenceImage, setReferenceImage] = useState<ReferenceImageView | null>(null);
@@ -363,7 +359,6 @@ export function MonicaCreator({
         prompt,
         negativePrompt,
         model,
-        style,
         ratio,
         imageCount,
         referenceImage,
@@ -379,7 +374,7 @@ export function MonicaCreator({
         ...current,
       ];
     });
-  }, [imageCount, model, negativePrompt, prompt, ratio, referenceImage, style]);
+  }, [imageCount, model, negativePrompt, prompt, ratio, referenceImage]);
 
   const pollJob = useCallback(async (jobId: string) => {
     const response = await fetch(`/api/monica/generation/jobs/${jobId}`, {
@@ -523,7 +518,6 @@ export function MonicaCreator({
           prompt: promptForRequest,
           negativePrompt,
           model,
-          style,
           ratio,
           imageCount,
           referenceId: referenceImage?.referenceId,
@@ -541,7 +535,6 @@ export function MonicaCreator({
         prompt: promptForRequest,
         negativePrompt,
         model,
-        style,
         ratio,
         imageCount,
         referenceImage,
@@ -641,6 +634,36 @@ export function MonicaCreator({
     ]);
   }
 
+  function closeAssistant() {
+    setAssistantMode(null);
+    setAssistantIdeas([]);
+    setImprovedPrompt(null);
+    setAskMessages([]);
+    setAssistantMessage(null);
+  }
+
+  function handleUseIdea(idea: StarterIdea) {
+    setPrompt(promptFromIdea(idea, themeLabel));
+  }
+
+  function handleReplacePrompt(value: string) {
+    setPrompt(value);
+    setImprovedPrompt(null);
+    setAssistantMessage('Prompt replaced');
+  }
+
+  function handleAppendPrompt(value: string) {
+    setPrompt((current) => {
+      const trimmed = current.trim();
+      const details = value.startsWith(trimmed)
+        ? value.slice(trimmed.length).replace(/^,\s*/, '').trim()
+        : value.trim();
+      return `${trimmed}${details ? `, ${details}` : ''}`.trim();
+    });
+    setImprovedPrompt(null);
+    setAssistantMessage('Details appended');
+  }
+
   async function handleDownloadImage(image: GeneratedImageView) {
     if (!image.imageUrl) return;
     setDownloadingImageIds((current) => new Set(current).add(image.imageId));
@@ -711,6 +734,8 @@ export function MonicaCreator({
     ? 'grid gap-5'
     : cn(monicaContentWidthClass, 'grid gap-10');
   const creatorWidthClassName = 'mx-auto w-full max-w-[1000px]';
+  const assistantOpen = assistantMode !== null;
+  const assistantThemeLabel = themeLabel ?? (mode === 'home' ? "today's theme" : null);
 
   return (
     <section className={shellClassName}>
@@ -735,7 +760,11 @@ export function MonicaCreator({
           </div>
         ) : null}
 
-        <div className={cn(creatorWidthClassName, 'grid gap-3')}>
+        <div className={cn(
+          creatorWidthClassName,
+          'grid gap-3 transition-[max-width,transform] duration-200',
+          assistantOpen ? 'xl:max-w-[880px] xl:-translate-x-20 2xl:max-w-[960px] 2xl:-translate-x-24' : '',
+        )}>
           <div className="flex flex-wrap gap-2 px-3">
             <AssistantButton icon={<Lightbulb className="size-4" />} label={mode === 'theme_detail' ? copy.assistant.getIdeasTheme : mode === 'studio' ? copy.assistant.getIdeasFromTheme : copy.assistant.getIdeasToday} onClick={handleGetIdeas} />
             <AssistantButton icon={<Wand2 className="size-4" />} label={copy.assistant.improvePrompt} onClick={handleImprovePrompt} />
@@ -799,49 +828,6 @@ export function MonicaCreator({
                 </label>
               </div>
 
-            <AssistantPanel
-              mode={assistantMode}
-              title={assistantMessage}
-              ideas={assistantIdeas}
-              improvedPrompt={improvedPrompt}
-              askInput={askInput}
-              askMessages={askMessages}
-              themeLabel={themeLabel ?? (mode === 'home' ? "today's theme" : null)}
-              onAskInputChange={setAskInput}
-              onSendAsk={handleSendAsk}
-              onUseIdea={(idea) => {
-                setPrompt(promptFromIdea(idea, themeLabel));
-              }}
-              onMoreLikeThis={handleMoreLikeThis}
-              onAskMoreLikeThis={handleAskMoreLikeThis}
-              onMoreIdeas={handleMoreIdeas}
-              onReplacePrompt={(value) => {
-                setPrompt(value);
-                setImprovedPrompt(null);
-                setAssistantMessage('Prompt replaced');
-              }}
-              onAppendPrompt={(value) => {
-                setPrompt((current) => {
-                  const trimmed = current.trim();
-                  const details = value.startsWith(trimmed)
-                    ? value.slice(trimmed.length).replace(/^,\s*/, '').trim()
-                    : value.trim();
-                  return `${trimmed}${details ? `, ${details}` : ''}`.trim();
-                });
-                setImprovedPrompt(null);
-                setAssistantMessage('Details appended');
-              }}
-              onTryAnother={handleImprovePrompt}
-              onClose={() => {
-                setAssistantMode(null);
-                setAssistantIdeas([]);
-                setImprovedPrompt(null);
-                setAskMessages([]);
-                setAssistantMessage(null);
-              }}
-              copy={copy}
-            />
-
             <div className="flex flex-col gap-3 border-t border-border pt-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex flex-wrap gap-2">
                 <ControlDropdown
@@ -854,17 +840,6 @@ export function MonicaCreator({
                   onToggle={() => setOpenSelectKey((key) => key === 'model' ? null : 'model')}
                   onClose={() => setOpenSelectKey(null)}
                   onChange={setModel}
-                />
-                <ControlDropdown
-                  id="style"
-                  label={copy.styleLabel}
-                  icon={<Wand2 className="size-4" />}
-                  value={style}
-                  options={styleOptions.map((option) => ({ ...option, label: `Style: ${option.label}` }))}
-                  open={openSelectKey === 'style'}
-                  onToggle={() => setOpenSelectKey((key) => key === 'style' ? null : 'style')}
-                  onClose={() => setOpenSelectKey(null)}
-                  onChange={setStyle}
                 />
                 <ControlDropdown
                   id="images"
@@ -942,6 +917,31 @@ export function MonicaCreator({
         </div>
       </div>
       </div>
+
+      <AssistantDialog
+        open={assistantOpen}
+        mode={assistantMode}
+        title={assistantMessage}
+        ideas={assistantIdeas}
+        improvedPrompt={improvedPrompt}
+        askInput={askInput}
+        askMessages={askMessages}
+        themeLabel={assistantThemeLabel}
+        onOpenChange={(open) => {
+          if (!open) closeAssistant();
+        }}
+        onAskInputChange={setAskInput}
+        onSendAsk={handleSendAsk}
+        onUseIdea={handleUseIdea}
+        onMoreLikeThis={handleMoreLikeThis}
+        onAskMoreLikeThis={handleAskMoreLikeThis}
+        onMoreIdeas={handleMoreIdeas}
+        onReplacePrompt={handleReplacePrompt}
+        onAppendPrompt={handleAppendPrompt}
+        onTryAnother={handleImprovePrompt}
+        onClose={closeAssistant}
+        copy={copy}
+      />
 
       {mode !== 'studio' && batches.length > 0 ? (
         <div className={cn(monicaContentWidthClass, 'mt-10')}>
@@ -1074,26 +1074,54 @@ function AssistantButton({ icon, label, onClick }: { icon: ReactNode; label: str
   );
 }
 
-function AssistantPanel({
-  mode,
-  title,
-  ideas,
-  improvedPrompt,
-  askInput,
-  askMessages,
-  themeLabel,
-  onAskInputChange,
-  onSendAsk,
-  onUseIdea,
-  onMoreLikeThis,
-  onAskMoreLikeThis,
-  onMoreIdeas,
-  onReplacePrompt,
-  onAppendPrompt,
-  onTryAnother,
-  onClose,
-  copy,
+function AssistantDialog({
+  open,
+  onOpenChange,
+  ...contentProps
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+} & AssistantPanelContentProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange} modal={false} disablePointerDismissal>
+      <DialogContent
+        className={cn(
+          'fixed bottom-3 right-3 left-auto top-16 z-30 flex h-auto w-[calc(100vw-1.5rem)] max-w-none translate-x-0 translate-y-0 grid-rows-none flex-col gap-0 overflow-hidden rounded-lg border border-foreground/15 bg-linear-to-b from-white to-neutral-50 p-0 shadow-xl shadow-black/10 ring-0 duration-200 data-closed:slide-out-to-right data-open:slide-in-from-right',
+          'sm:w-[440px] lg:w-[460px]',
+        )}
+        showCloseButton={false}
+        showOverlay={false}
+      >
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <DialogTitle className="truncate text-lg font-semibold text-foreground">
+                {contentProps.title ?? contentProps.copy.assistant.output}
+              </DialogTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{contentProps.copy.assistant.output}</p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-9 shrink-0"
+              onClick={contentProps.onClose}
+              aria-label={contentProps.copy.assistant.close}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        </DialogHeader>
+
+        <ScrollArea className="flex-1 px-4 py-4 sm:px-5">
+          <AssistantPanelContent {...contentProps} />
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type AssistantPanelContentProps = {
   mode: AssistantMode | null;
   title: string | null;
   ideas: StarterIdea[];
@@ -1112,27 +1140,43 @@ function AssistantPanel({
   onTryAnother: () => void;
   onClose: () => void;
   copy: MonicaCreatorCopy;
-}) {
+};
+
+function AssistantPanelContent({
+  mode,
+  title,
+  ideas,
+  improvedPrompt,
+  askInput,
+  askMessages,
+  themeLabel,
+  onAskInputChange,
+  onSendAsk,
+  onUseIdea,
+  onMoreLikeThis,
+  onAskMoreLikeThis,
+  onMoreIdeas,
+  onReplacePrompt,
+  onAppendPrompt,
+  onTryAnother,
+  onClose,
+  copy,
+}: AssistantPanelContentProps) {
   if (!mode && !title && ideas.length === 0 && !improvedPrompt) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-background p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-base font-semibold text-foreground">{title ?? copy.assistant.output}</div>
-        <button type="button" onClick={onClose} className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={copy.assistant.close}>
-          <X className="size-4" />
-        </button>
-      </div>
-
+    <div className="grid gap-4">
       {mode === 'improve' && !improvedPrompt ? (
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">{copy.assistant.improveNeedsPrompt}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{copy.assistant.improveNeedsPrompt}</p>
       ) : null}
 
       {mode === 'improve' && improvedPrompt ? (
-        <div className="mt-3 grid gap-3">
-          <div className="rounded-md border border-border bg-card/60 p-4">
+        <div className="grid gap-3">
+          <Card>
+            <CardContent>
             <p className="text-sm leading-6 text-muted-foreground">{improvedPrompt}</p>
-          </div>
+            </CardContent>
+          </Card>
           <div className="flex flex-wrap gap-2">
             <SmallActionButton onClick={() => onReplacePrompt(improvedPrompt)}>{copy.assistant.use}</SmallActionButton>
             <SmallActionButton onClick={() => onAppendPrompt(improvedPrompt)}>{copy.assistant.appendDetails}</SmallActionButton>
@@ -1142,16 +1186,18 @@ function AssistantPanel({
       ) : null}
 
       {mode === 'ideas' && ideas.length > 0 ? (
-        <div className="mt-3 grid gap-2">
+        <div className="grid gap-3">
           {ideas.map((idea, index) => (
-            <div key={`${idea.idea}-${index}`} className="rounded-md border border-border bg-card/60 p-4">
-              <div className="text-base font-semibold text-foreground">{index + 1}. {idea.idea}</div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.ideaHint}</p>
-              <div className="mt-3 flex flex-nowrap gap-2">
-                <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
-                <SmallActionButton onClick={() => onMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
-              </div>
-            </div>
+            <Card key={`${idea.idea}-${index}`} className="bg-white">
+              <CardContent>
+                <div className="text-base font-semibold leading-6 text-foreground">{index + 1}. {idea.idea}</div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.ideaHint}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
+                  <SmallActionButton onClick={() => onMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
+                </div>
+              </CardContent>
+            </Card>
           ))}
           <div className="flex flex-wrap gap-2 pt-1">
             <SmallActionButton onClick={onMoreIdeas}>{copy.assistant.moreIdeas}</SmallActionButton>
@@ -1166,9 +1212,10 @@ function AssistantPanel({
       ) : null}
 
       {mode === 'ask' ? (
-        <div className="mt-3 grid gap-3">
+        <div className="grid gap-3">
           {askMessages.length > 0 ? (
-            <div className="grid gap-3 rounded-md border border-border bg-card/60 p-4">
+            <Card className="bg-muted/30">
+              <CardContent className="grid gap-3">
               {askMessages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
                   <div className={cn(
@@ -1184,29 +1231,32 @@ function AssistantPanel({
                   </div>
                 </div>
               ))}
-            </div>
+              </CardContent>
+            </Card>
           ) : null}
 
           {askMessages.flatMap((message) => message.ideas ?? []).length > 0 ? (
             <div className="grid gap-2">
               <div className="text-sm font-semibold text-foreground">{copy.assistant.chooseDirection}</div>
               {askMessages.flatMap((message) => message.ideas ?? []).slice(-3).map((idea, index) => (
-                <div key={`${idea.idea}-${index}`} className="rounded-md border border-border bg-card/60 p-4">
-                  <div className="text-base font-semibold text-foreground">{index + 1}. {idea.idea}</div>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.assistantDirectionHint}</p>
-                  <div className="mt-3 flex flex-nowrap gap-2">
-                    <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
-                    <SmallActionButton onClick={() => onAskMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
-                  </div>
-                </div>
+                <Card key={`${idea.idea}-${index}`} className="bg-white">
+                  <CardContent>
+                    <div className="text-base font-semibold leading-6 text-foreground">{index + 1}. {idea.idea}</div>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.assistant.assistantDirectionHint}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
+                      <SmallActionButton onClick={() => onAskMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : null}
 
-          <textarea
+          <Textarea
             value={askInput}
             onChange={(event) => onAskInputChange(event.target.value)}
-            className="min-h-24 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-foreground"
+            className="min-h-28"
             placeholder={copy.assistant.askPlaceholder}
           />
           <div className="flex flex-wrap gap-2">
@@ -1221,9 +1271,9 @@ function AssistantPanel({
 
 function SmallActionButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex h-8 shrink-0 items-center rounded-full border border-border bg-white px-3 text-[11px] font-medium text-muted-foreground transition hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft) hover:text-foreground">
+    <Button type="button" variant="outline" size="sm" onClick={onClick} className="rounded-full bg-white text-muted-foreground hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft) hover:text-foreground">
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -1285,7 +1335,6 @@ function ResultPanel({
                 <div className="mt-4 flex flex-wrap gap-2">
                   <ResultMetaItem value={batch.model} />
                   <ResultMetaItem value={batch.ratio} />
-                  {batch.style ? <ResultMetaItem value={batch.style} /> : null}
                   {batch.referenceImage ? <ResultMetaItem value="Reference image" /> : null}
                 </div>
               </div>
