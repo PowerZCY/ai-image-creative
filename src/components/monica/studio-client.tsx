@@ -76,12 +76,6 @@ function getRatioClassName(ratio?: string | null) {
   return 'aspect-square';
 }
 
-function formatCreatedAt(value?: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
 
 function getDateInfo(value?: string | null) {
   const date = value ? new Date(value) : new Date();
@@ -658,7 +652,7 @@ function StudioImageActionButton({
 function StudioImageSkeleton() {
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {Array.from({ length: 8 }, (_, index) => <div key={index} className="aspect-[3/4] animate-pulse rounded-lg bg-muted" />)}
+      {Array.from({ length: 8 }, (_, index) => <div key={index} className="aspect-3/4 animate-pulse rounded-lg bg-muted" />)}
     </div>
   );
 }
