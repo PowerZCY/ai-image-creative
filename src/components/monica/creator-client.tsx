@@ -759,7 +759,7 @@ export function MonicaCreator({
 
         <div className={cn(
           creatorWidthClassName,
-          'grid gap-3 transition-[max-width,transform] duration-200',
+          'grid gap-2 transition-[max-width,transform] duration-200',
           assistantOpen ? 'xl:max-w-[880px] xl:-translate-x-20 2xl:max-w-[960px] 2xl:-translate-x-24' : '',
         )}>
           <div className="flex flex-wrap gap-2 px-3">
@@ -768,7 +768,7 @@ export function MonicaCreator({
             <AssistantButton icon={<MessageCircle className="size-4" />} label={copy.assistant.askAssistant} onClick={handleAskAssistant} />
           </div>
 
-          <div className="monica-panel border-foreground/15 bg-linear-to-b from-white to-neutral-50 p-5 shadow-2xl shadow-black/10 md:p-7">
+          <div className="monica-panel bg-white/95 backdrop-blur-sm p-5 pb-2 shadow-[0_4px_30px_rgb(0,0,0,0.06)] md:p-7 md:pb-3">
             <div className="space-y-5">
               <div className="flex gap-4 md:gap-6">
                 <div className="hidden shrink-0 md:block">
@@ -804,7 +804,7 @@ export function MonicaCreator({
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploading}
-                      className="grid h-32 w-24 place-items-center rounded-md border-2 border-dashed border-border bg-muted/50 text-muted-foreground transition hover:-rotate-2 hover:border-(--monica-accent-line) hover:bg-background hover:text-foreground disabled:opacity-60"
+                      className="grid h-32 w-24 place-items-center rounded-lg border border-black/10 bg-neutral-50 text-neutral-400 transition hover:-rotate-2 hover:border-black/20 hover:bg-neutral-100 hover:text-neutral-600 disabled:opacity-60 shadow-sm"
                       aria-label={copy.uploadReference}
                       title={copy.uploadReference}
                     >
@@ -818,14 +818,14 @@ export function MonicaCreator({
                   <textarea
                     value={prompt}
                     onChange={(event) => setPrompt(event.target.value)}
-                    className="min-h-36 w-full resize-none border-0 bg-transparent p-0 text-xl font-medium leading-8 text-foreground outline-none placeholder:text-muted-foreground/55 focus:ring-0 md:text-[1.65rem] md:leading-10"
+                    className="min-h-36 w-full resize-none border-0 bg-transparent p-0 text-[1.1rem] leading-8 text-neutral-800 outline-none placeholder:text-neutral-400 focus:ring-0 md:text-2xl md:leading-9"
                     placeholder={copy.promptPlaceholder}
                     maxLength={4000}
                   />
                 </label>
               </div>
 
-            <div className="flex flex-col gap-3 border-t border-border pt-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-3 border-t border-border pt-2 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex flex-wrap gap-2">
                 <ControlDropdown
                   id="model"
@@ -864,8 +864,8 @@ export function MonicaCreator({
                   type="button"
                   onClick={() => setDetailsOpen((open) => !open)}
                   className={cn(
-                    'inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft)',
-                    detailsOpen ? 'border-(--monica-accent) bg-(--monica-accent-soft)' : '',
+                    'inline-flex h-10 items-center justify-center rounded-md bg-transparent px-3 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-100/80 hover:text-neutral-900',
+                    detailsOpen ? 'bg-(--monica-accent-soft) text-neutral-900' : '',
                   )}
                   aria-label={copy.promptDetails}
                   title={copy.promptDetails}
@@ -877,7 +877,7 @@ export function MonicaCreator({
                 type="button"
                 onClick={() => void handleGenerate()}
                 disabled={!canGenerate}
-                className="inline-flex h-[52px] min-h-[52px] items-center justify-center gap-2 rounded-full bg-(--monica-accent) px-8 text-base font-bold text-white shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:bg-(--monica-accent-hover) hover:shadow-xl hover:shadow-black/20 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-12 min-h-12 items-center justify-center gap-2 rounded-full bg-(--monica-accent) px-8 text-base font-bold text-white shadow-sm transition hover:bg-(--monica-accent-hover) disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {generating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                 <span>{generating ? copy.generating : copy.generate}</span>
@@ -1018,7 +1018,7 @@ function ControlDropdown({
       <button
         type="button"
         onClick={onToggle}
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft)"
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-transparent px-3 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-100/80 hover:text-neutral-900"
         aria-expanded={open}
         aria-controls={`creator-${id}-menu`}
         title={label}
@@ -1062,7 +1062,7 @@ function AssistantButton({ icon, label, onClick }: { icon: ReactNode; label: str
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-(--monica-accent-line) hover:bg-white"
+      className="flex min-h-10 items-center justify-center gap-2 rounded-full bg-neutral-100/50 px-4 py-2 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-200/60 hover:text-neutral-900"
     >
       {icon}
       <span>{label}</span>
@@ -1309,7 +1309,7 @@ function ResultPanel({
   defaultThemeId?: string | number | bigint | null;
 }) {
   return (
-    <div className="monica-panel max-h-[780px] overflow-y-auto p-5 md:p-7">
+    <div className="monica-panel max-h-[780px] overflow-y-auto p-5 md:p-7 bg-transparent border-0 shadow-none">
       <div className="mb-5 flex flex-col justify-between gap-3 border-b border-border pb-4 md:flex-row md:items-center">
         <div>
           <div className="text-lg font-semibold text-foreground">Your new images</div>
@@ -1326,18 +1326,24 @@ function ResultPanel({
           {actionMessage}
         </div>
       ) : null}
-      <div className="grid gap-5">
+      <div className="grid gap-10">
         {batches.map((batch) => {
           const visibleImages = (batch.job.images ?? []).filter((image) => !deletedImageIds.has(image.imageId));
           const failed = batch.job.status === 'failed' || batch.job.status === 'blocked' || batch.job.status === 'cancelled';
           return (
-            <article key={batch.batchId} className="grid gap-5 rounded-xl border border-border bg-background p-4 lg:grid-cols-[minmax(220px,0.62fr)_minmax(0,1.38fr)]">
+            <article key={batch.batchId} className="grid gap-5 lg:grid-cols-[minmax(220px,0.62fr)_minmax(0,1.38fr)]">
               <div className="min-w-0">
-                <p className="line-clamp-6 text-sm leading-6 text-foreground md:text-base md:leading-7">{batch.prompt}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <ResultMetaItem value={batch.model} />
-                  <ResultMetaItem value={batch.ratio} />
-                  {batch.referenceImage ? <ResultMetaItem value="Reference image" /> : null}
+                <p className="line-clamp-6 text-[15px] leading-6 text-foreground md:text-[15px] md:leading-7">{batch.prompt}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-neutral-400 font-medium tracking-wide">
+                  <span>{batch.model}</span>
+                  <span aria-hidden="true">&middot;</span>
+                  <span>{batch.ratio}</span>
+                  {batch.referenceImage ? (
+                    <>
+                      <span aria-hidden="true">&middot;</span>
+                      <span>Ref Image</span>
+                    </>
+                  ) : null}
                 </div>
               </div>
 
@@ -1348,7 +1354,7 @@ function ResultPanel({
               ) : visibleImages.length === 0 ? (
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   {Array.from({ length: Math.max(1, batch.imageCount) }).map((_, index) => (
-                    <div key={`${batch.batchId}-placeholder-${index}`} className={cn('grid place-items-center rounded-lg border border-border bg-card/60 text-muted-foreground', getRatioClassName(batch.ratio))}>
+                    <div key={`${batch.batchId}-placeholder-${index}`} className={cn('grid place-items-center rounded-lg bg-black/5 text-muted-foreground', getRatioClassName(batch.ratio))}>
                       <Loader2 className="size-5 animate-spin" />
                     </div>
                   ))}
@@ -1357,7 +1363,7 @@ function ResultPanel({
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   {visibleImages.map((image) => (
                     <figure key={image.imageId} className="group relative">
-                      <div className={cn('relative overflow-hidden rounded-lg bg-muted shadow-sm', getRatioClassName(batch.ratio))}>
+                      <div className={cn('relative overflow-hidden rounded-lg bg-black/5 shadow-sm', getRatioClassName(batch.ratio))}>
                         {image.imageUrl ? (
                           <Image
                             src={image.imageUrl}
@@ -1372,12 +1378,13 @@ function ResultPanel({
                             <ImagePlus className="size-8" />
                           </div>
                         )}
+                        <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-transparent opacity-0 transition group-hover:opacity-100 md:opacity-0" />
                         {favoriteImageIds.has(image.imageId) ? (
-                          <div className="absolute left-2 top-2 grid size-8 place-items-center rounded-full border border-rose-200 bg-white/92 text-rose-600 shadow-sm">
+                          <div className="absolute left-2 top-2 grid size-8 place-items-center rounded-full border border-rose-200 bg-white/92 text-rose-600 shadow-sm z-10">
                             <Heart className="size-4 fill-current" />
                           </div>
                         ) : null}
-                        <div className="absolute right-2 top-2 flex gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100">
+                        <div className="absolute right-2 top-2 flex gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100 z-10">
                           <ImageActionButton
                             label={submittedImageIds.has(image.imageId) ? 'Submitted' : copy.actions.submit}
                             disabled={submittedImageIds.has(image.imageId)}
@@ -1420,15 +1427,6 @@ function getRatioClassName(ratio?: string | null) {
   return 'aspect-square';
 }
 
-function ResultMetaItem({ value }: { value?: string | null }) {
-  if (!value) return null;
-
-  return (
-    <span className="inline-flex min-h-8 items-center rounded-full border border-border bg-card/70 px-3 text-xs font-medium text-muted-foreground">
-      <span>{value}</span>
-    </span>
-  );
-}
 
 function ImageActionButton({
   children,
