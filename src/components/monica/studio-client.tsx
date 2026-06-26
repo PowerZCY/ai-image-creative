@@ -8,10 +8,12 @@ import type { MonicaCreatorCopy, MonicaStudioCopy } from './copy';
 import { MonicaCreator } from './creator-client';
 import { monicaContentWidthClass } from './layout';
 import {
+  FilterPills,
   StatusBadge,
   getStatusTone,
   useMonicaPagedList,
 } from './list-components';
+import { UnderlineFilterTabs } from './explore-client';
 import { DialogShell, SubmitImageDialog } from './submit-image-dialog';
 
 type StudioImage = {
@@ -319,29 +321,23 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
         </section>
 
         <section className="mx-auto w-full max-w-[1000px] space-y-4">
-          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-            <div>
-              <h2 className="text-2xl font-semibold text-foreground">{copy.myImages}</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">Review your creations, favorites, and submission results in one place.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <StudioFilterPills
-                value={list.filters.tab}
-                options={tabOptions}
-                onChange={(tab) => list.updateFilters({
-                  tab,
-                  submissionStatus: tab === 'submitted' && submittedStatusValues.includes(list.filters.submissionStatus)
-                    ? list.filters.submissionStatus
-                    : tab === 'submitted'
-                      ? 'under_review'
-                      : 'all',
-                })}
-              />
-            </div>
+          <div className="flex justify-start">
+            <FilterPills
+              value={list.filters.tab}
+              options={tabOptions}
+              onChange={(tab) => list.updateFilters({
+                tab,
+                submissionStatus: tab === 'submitted' && submittedStatusValues.includes(list.filters.submissionStatus)
+                  ? list.filters.submissionStatus
+                  : tab === 'submitted'
+                    ? 'under_review'
+                    : 'all',
+              })}
+            />
           </div>
           {list.filters.tab === 'submitted' ? (
-            <div className="flex flex-wrap gap-2">
-              <StudioFilterPills
+            <div>
+              <UnderlineFilterTabs
                 value={list.filters.submissionStatus}
                 options={submissionStatusOptions}
                 onChange={(submissionStatus) => list.updateFilters({ submissionStatus })}
@@ -574,36 +570,6 @@ function StudioImageTile({
         </StudioImageActionButton>
       </div>
     </figure>
-  );
-}
-
-function StudioFilterPills<TValue extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: TValue;
-  options: Array<{ value: TValue; label: string }>;
-  onChange: (value: TValue) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={cn(
-            'h-9 rounded-full border px-4 text-sm font-semibold transition',
-            value === option.value
-              ? 'border-(--monica-accent-line) bg-(--monica-accent-soft) text-foreground shadow-sm'
-              : 'border-border bg-background/70 text-muted-foreground hover:border-(--monica-accent-line) hover:bg-(--monica-accent-soft) hover:text-foreground',
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
   );
 }
 

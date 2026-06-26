@@ -97,7 +97,7 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
   );
 }
 
-function UnderlineFilterTabs<TValue extends string>({
+export function UnderlineFilterTabs<TValue extends string>({
   value,
   options,
   onChange,
