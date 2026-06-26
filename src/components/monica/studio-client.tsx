@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, useCallback } from 'react';
 import Image from 'next/image';
-import { Download, Heart, ImagePlus, Loader2, Send, Trash2 } from 'lucide-react';
+import { Download, Heart, ImagePlus, Loader2, Send, Trash2, Copy, Check, ChevronDown } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaCreatorCopy, MonicaStudioCopy } from './copy';
 import { MonicaCreator } from './creator-client';
@@ -297,7 +297,7 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
           </div>
         ) : null}
 
-        <section className="mx-auto mb-12 grid w-full max-w-[1000px] gap-4">
+        <section className="mx-auto mb-12 grid w-full max-w-[1200px] gap-4">
           <div className="px-3">
             <div>
               <h2 className="monica-section-title">{copy.createTitle}</h2>
@@ -320,7 +320,7 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
           />
         </section>
 
-        <section className="mx-auto w-full max-w-[1000px] space-y-4">
+        <section className="mx-auto w-full max-w-[1200px] space-y-4">
           <div className="flex justify-start">
             <FilterPills
               value={list.filters.tab}
@@ -429,6 +429,67 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
   );
 }
 
+function StudioPromptArea({ prompt, emptyLabel }: { prompt?: string | null; emptyLabel: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopy = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!prompt) return;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy prompt:', err);
+    }
+  }, [prompt]);
+
+  const hasPrompt = Boolean(prompt);
+
+  return (
+    <div 
+      className={cn(
+        "group/prompt relative rounded-lg border border-transparent p-2 -mx-2 transition-colors",
+        hasPrompt && "hover:bg-muted/50"
+      )}
+    >
+      <div 
+        className={cn(
+          "text-sm leading-relaxed text-foreground transition-all duration-200",
+          !isExpanded && hasPrompt && "line-clamp-3 cursor-pointer"
+        )}
+        onClick={() => hasPrompt && setIsExpanded(!isExpanded)}
+        title={!isExpanded && hasPrompt ? "Click to expand" : undefined}
+      >
+        {prompt || emptyLabel}
+      </div>
+      
+      {hasPrompt && (
+        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover/prompt:opacity-100">
+           <button
+            onClick={handleCopy}
+            className="grid size-7 place-items-center rounded-md border border-border/50 bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition hover:bg-muted hover:text-foreground"
+            aria-label="Copy prompt"
+            title="Copy prompt"
+          >
+            {isCopied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+          </button>
+        </div>
+      )}
+
+      {hasPrompt && !isExpanded && (
+        <button 
+           onClick={() => setIsExpanded(true)}
+           className="mt-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground opacity-0 transition-opacity group-hover/prompt:opacity-100"
+        >
+          Read more <ChevronDown className="size-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function StudioImageBatchRow({
   batch,
   copy,
@@ -452,27 +513,28 @@ function StudioImageBatchRow({
   onDelete: (image: StudioImage) => void;
   onSubmit: (image: StudioImage) => void;
 }) {
+  const metaList = [batch.model, batch.ratio, batch.style].filter(Boolean);
+
   return (
-    <article className="grid gap-5 lg:grid-cols-[minmax(190px,0.48fr)_minmax(0,1.52fr)] lg:items-start">
-      <div className="min-w-0">
-        <div className="group/prompt relative max-w-[240px]">
-          <p className="line-clamp-3 text-sm leading-6 text-foreground">
-            {batch.prompt || copy.empty}
-          </p>
-          {batch.prompt ? (
-            <div className="pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 w-[min(520px,calc(100vw-48px))] rounded-md border border-border bg-white p-3 text-sm leading-6 text-foreground opacity-0 shadow-xl shadow-black/20 transition group-hover/prompt:opacity-100 dark:bg-neutral-950">
-              {batch.prompt}
-            </div>
-          ) : null}
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <StudioMetaItem value={batch.model} />
-          <StudioMetaItem value={batch.ratio} />
-          <StudioMetaItem value={batch.style} />
-        </div>
+    <article className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start">
+      <div className="min-w-0 pr-2">
+        <StudioPromptArea prompt={batch.prompt} emptyLabel={copy.empty} />
+        
+        {metaList.length > 0 ? (
+          <div className="mt-3.5 flex flex-wrap gap-1.5 px-0.5">
+            {metaList.map((meta, index) => (
+              <span 
+                key={index} 
+                className="inline-flex items-center rounded-md bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
+              >
+                {meta}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {batch.images.map((image) => (
           <StudioImageTile
             key={image.imageId}
@@ -570,16 +632,6 @@ function StudioImageTile({
         </StudioImageActionButton>
       </div>
     </figure>
-  );
-}
-
-function StudioMetaItem({ value }: { value?: string | null }) {
-  if (!value) return null;
-
-  return (
-    <span className="inline-flex min-h-8 items-center rounded-full border border-border bg-card/70 px-3 text-xs font-medium text-muted-foreground">
-      <span>{value}</span>
-    </span>
   );
 }
 
