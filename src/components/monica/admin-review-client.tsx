@@ -9,12 +9,12 @@ import {
   FilterPills,
   ListShell,
   ReviewFlowInline,
-  SearchInput,
   SpinnerLabel,
   StatusBadge,
   getStatusTone,
   useMonicaPagedList,
 } from './list-components';
+import { UnderlineFilterTabs } from './explore-client';
 import { DialogShell } from './submit-image-dialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -157,37 +157,10 @@ function SideNavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-10 w-full items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors',
+        'flex h-10 w-full items-center justify-start rounded-lg px-4 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 focus-visible:outline-none',
         selected
-          ? 'border-foreground bg-foreground text-background'
-          : 'border-transparent text-muted-foreground hover:bg-muted',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ─── Inner tab button (horizontal) ───────────────────────────────────────────
-
-function InnerTabButton({
-  selected,
-  onClick,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors',
-        selected
-          ? 'border-foreground bg-foreground text-background'
-          : 'border-transparent text-muted-foreground hover:bg-muted',
+          ? 'bg-white text-neutral-950 shadow-sm'
+          : 'text-neutral-500 hover:bg-white/60 hover:text-neutral-900',
       )}
     >
       {children}
@@ -1204,18 +1177,16 @@ export function AdminReviewClient({
   return (
     <section className="monica-surface min-h-screen py-20 md:py-24">
       <div className={cn(monicaContentWidthClass, 'space-y-6')}>
-        <h1 className="monica-page-title">Admin</h1>
-
         {actionError ? (
           <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-100">
             {actionError}
           </div>
         ) : null}
 
-        {/* Layout: left side-nav (220px) + right content panel */}
-        <div className="flex items-start gap-6">
+        {/* Layout: compact left side-nav + wide right content panel */}
+        <div className="flex items-start gap-4">
           {/* Left sticky nav */}
-          <nav className="sticky top-24 w-[220px] shrink-0 space-y-1">
+          <nav className="sticky top-24 inline-grid w-[168px] shrink-0 grid-cols-1 gap-1 rounded-xl border border-neutral-200 bg-neutral-100 p-1 text-neutral-500">
             {tabOptions.map((opt) => (
               <SideNavButton
                 key={opt.value}
@@ -1234,16 +1205,12 @@ export function AdminReviewClient({
             {tab === 'themes' ? (
               <div className="space-y-5">
                 {/* Inner horizontal sub-tabs */}
-                <div className="flex gap-2">
-                  {themeAdminTabOptions.map((opt) => (
-                    <InnerTabButton
-                      key={opt.value}
-                      selected={themeAdminTab === opt.value}
-                      onClick={() => setThemeAdminTab(opt.value)}
-                    >
-                      {opt.label}
-                    </InnerTabButton>
-                  ))}
+                <div className="flex justify-start">
+                  <FilterPills
+                    value={themeAdminTab}
+                    options={themeAdminTabOptions}
+                    onChange={setThemeAdminTab}
+                  />
                 </div>
 
                 {/* User submissions tab */}
@@ -1256,18 +1223,11 @@ export function AdminReviewClient({
                     pagination={themeSubmissions.pagination}
                     onPageChange={themeSubmissions.setPage}
                     filters={(
-                      <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
-                        <SearchInput
-                          value={themeSubmissions.filters.keyword}
-                          placeholder="Search submissions"
-                          onChange={(keyword) => themeSubmissions.updateFilters({ keyword })}
-                        />
-                        <FilterPills
-                          value={themeSubmissions.filters.status}
-                          options={statusOptions}
-                          onChange={(status) => themeSubmissions.updateFilters({ status })}
-                        />
-                      </div>
+                      <UnderlineFilterTabs
+                        value={themeSubmissions.filters.status}
+                        options={statusOptions}
+                        onChange={(status) => themeSubmissions.updateFilters({ status })}
+                      />
                     )}
                     renderItem={(item) => (
                       <article
@@ -1368,12 +1328,7 @@ export function AdminReviewClient({
                 {themeAdminTab === 'manage_themes' ? (
                   <div className="space-y-4">
                     {/* Toolbar */}
-                    <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
-                      <SearchInput
-                        value={themes.filters.keyword}
-                        placeholder="Search themes"
-                        onChange={(keyword) => themes.updateFilters({ keyword })}
-                      />
+                    <div className="flex justify-end">
                       <button
                         type="button"
                         onClick={() => setNewThemeOpen(true)}
@@ -1483,12 +1438,7 @@ export function AdminReviewClient({
                 pagination={imageSubmissions.pagination}
                 onPageChange={imageSubmissions.setPage}
                 filters={(
-                  <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
-                    <SearchInput
-                      value={imageSubmissions.filters.keyword}
-                      placeholder="Search image submissions"
-                      onChange={(keyword) => imageSubmissions.updateFilters({ keyword })}
-                    />
+                  <div className="flex justify-start">
                     <FilterPills
                       value={imageSubmissions.filters.status}
                       options={statusOptions}

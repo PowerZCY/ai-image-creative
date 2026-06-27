@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Filter, Loader2, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Search, X } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
 
 export type Pagination = {
@@ -266,15 +266,7 @@ export function ListShell<T>({
         </div>
       ) : null}
 
-      {filters ? (
-        <div className="rounded-lg border border-border bg-card/70 p-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-            <Filter className="size-3.5" />
-            <span>Filters</span>
-          </div>
-          {filters}
-        </div>
-      ) : null}
+      {filters}
 
       {error ? (
         <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-100">
