@@ -4,6 +4,7 @@ import {
   getOpenRouterPromptModelSlug,
   sendOpenRouterChatCompletion,
 } from '../ai/openrouter-client';
+import { isOpenRouterMockEnabled, readOpenRouterMockType } from '../ai/openrouter-mock';
 
 export type AssistantPromptMode = 'ideas' | 'improve' | 'ask';
 
@@ -47,7 +48,7 @@ const MAX_PREVIOUS_IMPROVED_PROMPTS = 5;
 const MAX_PREVIOUS_IMPROVED_PROMPT_LENGTH = 1000;
 
 function isMockAssistantEnabled() {
-  return Boolean(process.env.OPENROUTER_MOCK_TYPE?.trim());
+  return isOpenRouterMockEnabled();
 }
 
 function readMockTimeoutMs() {
@@ -62,7 +63,7 @@ async function delay(ms: number) {
 }
 
 async function applyAssistantMockMode() {
-  const mode = process.env.OPENROUTER_MOCK_TYPE?.trim() || '0';
+  const mode = readOpenRouterMockType() || '0';
   const timeoutMs = readMockTimeoutMs();
 
   if (mode === '0') {
@@ -370,7 +371,7 @@ export class AssistantService {
             messages: normalizedInput.messages,
             existingIdeas: normalizedInput.existingIdeas,
             previousImprovedPrompts: normalizedInput.previousImprovedPrompts,
-            mockType: process.env.OPENROUTER_MOCK_TYPE?.trim() || '0',
+            mockType: readOpenRouterMockType() || '0',
           } as Prisma.InputJsonValue,
           responsePayload: {
             mock: true,

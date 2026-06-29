@@ -3,6 +3,7 @@ import type {
   ImageGenerationProviderInput,
   ImageGenerationProviderResult,
 } from '../types/generation';
+import { readOpenRouterMockType } from './openrouter-mock';
 
 const MOCK_IMAGE_WIDTH = 1024;
 const MOCK_IMAGE_HEIGHT = 1024;
@@ -19,7 +20,7 @@ async function delay(ms: number) {
 }
 
 async function applyMockMode() {
-  const mode = process.env.OPENROUTER_MOCK_TYPE?.trim() || '0';
+  const mode = readOpenRouterMockType() || '0';
   const timeoutMs = readMockTimeoutMs();
 
   if (mode === '0') {

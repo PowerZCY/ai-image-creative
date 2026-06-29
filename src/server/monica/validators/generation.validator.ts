@@ -1,5 +1,6 @@
 import { GENERATION_TYPE, type GenerationType } from '../constants/generation';
 import type { CreateGenerationJobInput } from '../types/generation';
+import { isOpenRouterMockEnabled } from '../ai/openrouter-mock';
 
 const DEFAULT_MODEL = 'mock-image-model';
 const DEFAULT_IMAGE_COUNT = 1;
@@ -66,7 +67,7 @@ export function parseCreateGenerationJobInput(payload: unknown): CreateGeneratio
   const rawImageCount = typeof body.imageCount === 'number' ? body.imageCount : DEFAULT_IMAGE_COUNT;
   const imageCount = Math.min(Math.max(Math.trunc(rawImageCount), 1), MAX_IMAGE_COUNT);
   const model = readOptionalString(body.model);
-  if (!model && !process.env.OPENROUTER_MOCK_TYPE?.trim()) {
+  if (!model && !isOpenRouterMockEnabled()) {
     throw new Error('model is required');
   }
 

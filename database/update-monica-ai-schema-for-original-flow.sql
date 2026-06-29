@@ -129,7 +129,8 @@ END $$;
 ALTER TABLE monica_ai.themes
   DROP COLUMN IF EXISTS featured_image_ids;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON monica_ai.assistant_interactions TO monica_ai_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON monica_ai.theme_featured_images TO monica_ai_app;
-GRANT USAGE, SELECT, UPDATE ON SEQUENCE monica_ai.assistant_interactions_id_seq TO monica_ai_app;
-GRANT USAGE, SELECT, UPDATE ON SEQUENCE monica_ai.theme_featured_images_id_seq TO monica_ai_app;
+
+GRANT USAGE ON SCHEMA monica_ai TO monica_ai_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA monica_ai TO monica_ai_app;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA monica_ai TO monica_ai_app;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA monica_ai TO monica_ai_app;

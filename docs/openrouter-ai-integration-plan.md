@@ -137,13 +137,14 @@ OPENROUTER_MOCK_TIMEOUT_SECONDS=2
 `OPENROUTER_MOCK_TYPE` 是唯一 mock 开关：
 
 ```txt
-未设置或空值: 调用真实 OpenRouter
+未设置、空值或 99: 调用真实 OpenRouter
 设置为 0-5: 图片生成和 assistant 都走 mock
 ```
 
 `OPENROUTER_MOCK_TYPE` 使用现有枚举：
 
 ```txt
+99: Disabled / Real OpenRouter
 0: Normal
 1: Loading
 2: TimeOut
@@ -394,7 +395,7 @@ src/server/monica/repositories/assistant-interaction.repository.ts
 保留 mock，方便本地开发和测试。是否 mock 只由 `OPENROUTER_MOCK_TYPE` 决定。
 
 ```txt
-OPENROUTER_MOCK_TYPE unset / empty -> openrouter
+OPENROUTER_MOCK_TYPE unset / empty / 99 -> openrouter
 OPENROUTER_MOCK_TYPE=0..5 -> mock
 ```
 
