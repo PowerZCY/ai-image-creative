@@ -65,11 +65,14 @@ export function parseCreateGenerationJobInput(payload: unknown): CreateGeneratio
 
   const rawImageCount = typeof body.imageCount === 'number' ? body.imageCount : DEFAULT_IMAGE_COUNT;
   const imageCount = Math.min(Math.max(Math.trunc(rawImageCount), 1), MAX_IMAGE_COUNT);
+  const model = readOptionalString(body.model);
+  if (!model && !process.env.OPENROUTER_MOCK_TYPE?.trim()) {
+    throw new Error('model is required');
+  }
 
   return {
     prompt,
-    negativePrompt: readOptionalString(body.negativePrompt),
-    model: readOptionalString(body.model) ?? DEFAULT_MODEL,
+    model: model ?? DEFAULT_MODEL,
     style: readOptionalString(body.style),
     ratio: readOptionalString(body.ratio),
     imageCount,

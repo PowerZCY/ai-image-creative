@@ -17,12 +17,30 @@
       "dog with glasses"
     ],
     "generatorIdeas": [
-      "A person puts on glasses and finally recognizes a familiar face across a busy street.",
-      "A cat with glasses, imagined as a tiny scholar, studying a human living room like a research lab.",
-      "A dog with glasses, anthropomorphized as a detective, noticing clues its owner missed.",
-      "A city wearing giant transparent glasses, with only the view through the lenses becoming sharp and meaningful.",
-      "A student puts on symbolic glasses made of formulas, and the world turns into understandable patterns.",
-      "A person wearing invisible glasses made of experience, seeing the same old room with new clarity."
+      {
+        "idea": "Recognizing a familiar face in the crowd",
+        "prompt": "A cinematic street scene where a person has just put on glasses and finally recognizes a familiar face across a busy crosswalk, the world outside the lenses softly blurred, the view through the lenses sharp and emotional, natural city light, realistic details"
+      },
+      {
+        "idea": "A cat with glasses studying the human world",
+        "prompt": "A curious cat with round glasses sits on a desk like a tiny scholar, examining a human living room as if it were a research lab, scattered notebooks, magnifying glass, warm window light, whimsical but realistic detail, charming anthropomorphic mood"
+      },
+      {
+        "idea": "A dog detective noticing hidden clues",
+        "prompt": "A dog with glasses imagined as a serious detective, standing in a cozy home office and noticing tiny clues its owner missed, paw prints, misplaced keys, reflected evidence in the lenses, cinematic lighting, playful mystery atmosphere, high-detail AI image style"
+      },
+      {
+        "idea": "A city becomes clear through giant glasses",
+        "prompt": "A surreal cityscape wearing giant transparent glasses, with streets, signs, and people only becoming sharp and meaningful through the lenses while the rest of the city remains hazy, dramatic scale, clean composition, conceptual AI art, atmospheric depth"
+      },
+      {
+        "idea": "Learning turns confusion into patterns",
+        "prompt": "A student puts on symbolic glasses made of glowing formulas, diagrams, and language notes, and the chaotic classroom transforms into elegant readable patterns, books floating gently, focused expression, intelligent visual metaphor, polished cinematic lighting"
+      },
+      {
+        "idea": "Experience changes the same old room",
+        "prompt": "A quiet interior where an older person wears invisible glasses made of memory and experience, seeing the same old room with new clarity, ordinary objects glowing with meaning, layered reflections in the lenses, warm natural light, emotional realism"
+      }
     ],
     "imageSeoNotes": {
       "note": "For submitted or featured images, use image-level titles, alt text, and tags to carry specific long-tail searches such as cat with glasses and dog with glasses.",
@@ -66,14 +84,30 @@
       "life goals AI image prompt"
     ],
     "generatorIdeas": [
-      "A quiet countryside morning where someone lives the peaceful life they once only imagined.",
-      "A cozy sunlit kitchen filled with plants, coffee, books, and the feeling of having nowhere urgent to be.",
-      "A person standing between a busy city life and a small warm home in nature, choosing the life they long for.",
-      "An elderly version of someone sitting in a garden, showing their younger self what a fulfilled life could look like.",
-      "A floating house made of memories, dreams, and everyday comforts, representing an ideal life.",
-      "A simple dinner table under warm lights, where the dream life is not luxury but time, peace, and people you love.",
-      "A child's dream life shown as a backyard treehouse, endless summer light, and a room overflowing with imagination.",
-      "A student's dream life represented by open roads, books, new cities, and a future full of possibility."
+      {
+        "idea": "A peaceful countryside morning",
+        "prompt": "A quiet countryside morning where someone lives the peaceful life they once only imagined, small home beside wildflowers, coffee on the porch, soft sunrise, mist over distant fields, slow living atmosphere, realistic cinematic lighting"
+      },
+      {
+        "idea": "A sunlit kitchen with no urgent schedule",
+        "prompt": "A cozy sunlit kitchen filled with plants, coffee, books, handmade ceramics, and the feeling of having nowhere urgent to be, warm natural light, lived-in details, calm everyday beauty, refined interior photography style"
+      },
+      {
+        "idea": "Choosing nature over a rushed city life",
+        "prompt": "A person stands between a crowded fast-moving city and a small warm home in nature, choosing the life they long for, split-scene composition, city lights fading behind them, forest path ahead, emotional but restrained visual metaphor, cinematic depth"
+      },
+      {
+        "idea": "A fulfilled future self in the garden",
+        "prompt": "An elderly future version of someone sits in a peaceful garden and gently shows their younger self what a fulfilled life could look like, flowers, old photographs, soft afternoon light, tender intergenerational mood, realistic emotional scene"
+      },
+      {
+        "idea": "A floating house made of memories",
+        "prompt": "A surreal floating house made of memories, dreams, and everyday comforts, with rooms formed from childhood sunlight, travel postcards, family dinners, books, and quiet mornings, poetic conceptual AI art, balanced composition, luminous atmosphere"
+      },
+      {
+        "idea": "A simple dinner that feels like enough",
+        "prompt": "A simple dinner table under warm lights where the dream life is not luxury but time, peace, health, and people you love, hands reaching for shared food, modest home setting, intimate documentary realism, rich warm details"
+      }
     ],
     "imageSeoNotes": {
       "note": "For submitted or featured images, use image-level titles, alt text, and tags to cover concrete long-tail searches such as cozy home, countryside life, slow living, future self, and peaceful morning.",

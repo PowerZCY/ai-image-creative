@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronDown, Download, Heart, ImagePlus, Lightbulb, Loader2, MessageCircle, Settings2, Sparkles, Trash2, UploadCloud, Wand2, X } from 'lucide-react';
+import { ChevronDown, Download, Heart, ImagePlus, Lightbulb, Loader2, MessageCircle, Sparkles, Trash2, UploadCloud, Wand2, X } from 'lucide-react';
 import {
   themeBgColor,
   themeBorderColor,
@@ -59,11 +59,22 @@ type AskMessage = {
   ideas?: StarterIdea[];
 };
 
+type AssistantPromptMessage = {
+  role: 'user' | 'assistant';
+  text: string;
+};
+
+type AssistantPromptResponse = {
+  message?: string;
+  ideas?: StarterIdea[];
+  improvedPrompt?: string;
+  interactionId?: string;
+};
+
 type GenerationBatch = {
   batchId: string;
   job: GenerationJobView;
   prompt: string;
-  negativePrompt?: string;
   model: string;
   ratio?: string;
   imageCount: number;
@@ -73,7 +84,6 @@ type GenerationBatch = {
 
 type GenerationSnapshot = {
   prompt: string;
-  negativePrompt?: string;
   model: string;
   ratio?: string;
   imageCount: number;
@@ -104,33 +114,8 @@ const r2EnableMock = process.env.NEXT_PUBLIC_R2_ENABLE_MOCK === 'true';
 const r2MockImgUrl = process.env.NEXT_PUBLIC_R2_MOCK_IMG_URL ?? '';
 const r2MockTimeoutMs = Number(process.env.NEXT_PUBLIC_R2_MOCK_TIMEOUT ?? 2) * 1000;
 const r2UploadImageMaxSizeMB = Number(process.env.NEXT_PUBLIC_R2_UPLOAD_IMAGE_MAX_SIZE ?? 10);
-
-const fallbackIdeas: StarterIdea[] = [
-  {
-    idea: 'A quiet moment with one strong visual metaphor',
-    prompt: 'A quiet cinematic image built around one strong visual metaphor, restrained composition, natural light, expressive details, no text, no watermark',
-  },
-  {
-    idea: 'A poster-like scene with bold negative space',
-    prompt: 'A refined poster-like scene with bold negative space, one clear subject, elegant color contrast, editorial art direction, crisp details, no text',
-  },
-  {
-    idea: 'A surreal object that explains the feeling',
-    prompt: 'A surreal everyday object transformed into a visual metaphor for an emotional idea, realistic materials, cinematic lighting, polished AI art style',
-  },
-  {
-    idea: 'A close-up story told through hands and objects',
-    prompt: 'A close-up scene told through hands and meaningful objects, tactile details, shallow depth of field, warm natural light, emotionally clear composition',
-  },
-  {
-    idea: 'A minimal scene with dramatic scale',
-    prompt: 'A minimal scene with dramatic scale, tiny human figure against a large symbolic environment, clean composition, atmospheric depth, high-detail finish',
-  },
-  {
-    idea: 'A cinematic before-and-after contrast',
-    prompt: 'A cinematic image showing a subtle before-and-after contrast in one frame, balanced composition, realistic lighting, rich but restrained colors',
-  },
-];
+const assistantRetryMessage = 'Something went wrong. Please click again.';
+const maxImprovedPromptHistory = 5;
 
 function isAllowedImageFile(file: File) {
   return ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type);
@@ -192,43 +177,33 @@ function pickIdeas(ideas: StarterIdea[], count = 3) {
     .slice(0, count);
 }
 
-const improvementDetailOptions = [
-  'with a clearer subject, richer sensory details, coherent composition, cinematic lighting, precise visual metaphor, polished AI image style, no text, no watermark',
-  'with a stronger focal point, more specific environment details, balanced color contrast, natural depth, refined lighting, editorial image composition, no text, no watermark',
-  'with more tactile materials, intentional negative space, a readable emotional tone, cinematic framing, consistent visual style, high-detail finish, no text, no watermark',
-];
-
-function improvePromptText(prompt: string, details: string) {
-  const trimmed = prompt.trim();
-  if (!trimmed) return '';
-  return `${trimmed}, ${details}`;
+function promptFromIdea(idea: StarterIdea) {
+  if (idea.prompt.trim()) return idea.prompt;
+  return `${idea.idea}, clear subject, thoughtful composition, rich scene details, coherent lighting, balanced color palette, ready for high-quality AI image generation.`;
 }
 
-function promptFromIdea(idea: StarterIdea, themeLabel?: string | null) {
-  const themeLine = themeLabel ? `, connected to the theme "${themeLabel}" through visual metaphor` : '';
-  return `${idea.idea}, clear subject, thoughtful composition, rich scene details, coherent lighting, balanced color palette${themeLine}, ready for high-quality AI image generation.`;
+function formatAskMessageForAssistant(message: AskMessage): AssistantPromptMessage {
+  if (message.role === 'user' || !message.ideas?.length) {
+    return {
+      role: message.role,
+      text: message.text,
+    };
+  }
+
+  return {
+    role: 'assistant',
+    text: [
+      message.text,
+      ...message.ideas.map((idea) => `Idea: ${idea.idea}\nPrompt: ${idea.prompt}`),
+    ].join('\n'),
+  };
 }
 
-function createIdeaFromSeed(seed: StarterIdea, index: number): StarterIdea {
-  const directions = [
-    `Change the main subject while keeping the core feeling from ${seed.idea}`,
-    `Make a more symbolic version of ${seed.idea} with a clearer visual metaphor`,
-    `Shift ${seed.idea} into a wider environmental scene with an unexpected focal point`,
-  ];
-  const idea = directions[index % directions.length];
-  return { idea, prompt: idea };
-}
-
-function askDirections(ask: string, currentPrompt: string, themeLabel?: string | null): StarterIdea[] {
-  const themeHint = themeLabel ? `, with a subtle connection to ${themeLabel}` : '';
-  const base = currentPrompt.trim()
-    ? `a variation of "${currentPrompt.trim().slice(0, 72)}"`
-    : ask;
-  return [
-    `${base}, focused on one clear subject, ${ask}, cinematic composition${themeHint}`,
-    `${base}, more abstract and symbolic, ${ask}, restrained color palette${themeHint}`,
-    `${base}, wider environmental scene, ${ask}, strong mood and readable visual metaphor${themeHint}`,
-  ].map((idea) => ({ idea, prompt: idea }));
+function assistantTitle(mode: AssistantMode | null, copy: MonicaCreatorCopy) {
+  if (mode === 'ideas') return 'Ideas';
+  if (mode === 'improve') return copy.assistant.improvedPrompt;
+  if (mode === 'ask') return copy.assistant.assistantName;
+  return null;
 }
 
 async function readError(response: Response) {
@@ -247,6 +222,7 @@ export function MonicaCreator({
   starterIdeas = [],
   mode = 'home',
   themeLabel,
+  themeNote,
   initialAssistantOpen = false,
   onRequestThemeIdeas,
   onGenerationUpdated,
@@ -257,36 +233,22 @@ export function MonicaCreator({
   starterIdeas?: unknown[];
   mode?: 'home' | 'theme_detail' | 'studio';
   themeLabel?: string | null;
+  themeNote?: string | null;
   initialAssistantOpen?: boolean;
   onRequestThemeIdeas?: () => void;
   onGenerationUpdated?: () => void;
 }) {
   const modelOptions = useMemo(() => [
-    { value: 'gpt-image', label: copy.modelOptions.gptImage },
-    { value: 'flux-pro', label: copy.modelOptions.fluxPro },
-    { value: 'ideogram', label: copy.modelOptions.ideogram },
-    { value: 'recraft', label: copy.modelOptions.recraft },
-    { value: 'stable-diffusion', label: copy.modelOptions.stableDiffusion },
-  ], [copy.modelOptions.fluxPro, copy.modelOptions.gptImage, copy.modelOptions.ideogram, copy.modelOptions.recraft, copy.modelOptions.stableDiffusion]);
+    { value: 'gpt-image-2', label: copy.modelOptions.gptImage2 },
+    { value: 'nano-banana-2', label: copy.modelOptions.nanoBanana2 },
+    { value: 'nano-banana-pro', label: copy.modelOptions.nanoBananaPro },
+    { value: 'seedream-4.5', label: copy.modelOptions.seedream45 },
+  ], [copy.modelOptions.gptImage2, copy.modelOptions.nanoBanana2, copy.modelOptions.nanoBananaPro, copy.modelOptions.seedream45]);
   const starterIdeaPool = useMemo(() => {
-    const normalized = normalizeStarterIdeas(starterIdeas);
-    return normalized.length ? normalized : fallbackIdeas;
+    return normalizeStarterIdeas(starterIdeas);
   }, [starterIdeas]);
 
-  const [prompt, setPrompt] = useState(() => {
-    if (typeof window === 'undefined') {
-      return copy.initialPrompt;
-    }
-
-    const storedPrompt = window.localStorage.getItem('monica:creator-prompt');
-    if (!storedPrompt) {
-      return copy.initialPrompt;
-    }
-
-    window.localStorage.removeItem('monica:creator-prompt');
-    return storedPrompt;
-  });
-  const [negativePrompt, setNegativePrompt] = useState('');
+  const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState(modelOptions[0].value);
   const [ratio, setRatio] = useState(ratioOptions[0].value);
   const [imageCount, setImageCount] = useState(1);
@@ -305,16 +267,19 @@ export function MonicaCreator({
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [openSelectKey, setOpenSelectKey] = useState<string | null>(null);
   const [assistantMode, setAssistantMode] = useState<AssistantMode | null>(() => initialAssistantOpen ? 'ideas' : null);
   const [assistantIdeas, setAssistantIdeas] = useState<StarterIdea[]>(() => initialAssistantOpen ? pickIdeas(starterIdeaPool) : []);
-  const [assistantMessage, setAssistantMessage] = useState<string | null>(() => initialAssistantOpen ? copy.assistant.tryOne : null);
+  const [assistantMessage, setAssistantMessage] = useState<string | null>(() => initialAssistantOpen ? assistantTitle('ideas', copy) : null);
+  const [assistantLoading, setAssistantLoading] = useState(false);
   const [improvedPrompt, setImprovedPrompt] = useState<string | null>(null);
-  const [improvementVariantIndex, setImprovementVariantIndex] = useState(0);
+  const [improvedPromptHistory, setImprovedPromptHistory] = useState<string[]>([]);
   const [askInput, setAskInput] = useState('');
   const [askMessages, setAskMessages] = useState<AskMessage[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const assistantRequestIdRef = useRef(0);
+  const assistantInFlightRef = useRef(false);
+  const assistantAbortRef = useRef<AbortController | null>(null);
   const terminalCreditRefreshJobIdRef = useRef<string | null>(null);
   const jobSnapshotsRef = useRef(new Map<string, GenerationSnapshot>());
   const r2Client = useMemo(() => createR2Client({
@@ -345,6 +310,15 @@ export function MonicaCreator({
     return () => window.clearTimeout(timeout);
   }, [actionMessage]);
 
+  useEffect(() => {
+    return () => {
+      assistantAbortRef.current?.abort();
+      assistantAbortRef.current = null;
+      assistantInFlightRef.current = false;
+      invalidateAssistantRequest();
+    };
+  }, []);
+
   const upsertBatch = useCallback((nextJob: GenerationJobView) => {
     setBatches((current) => {
       const existingIndex = current.findIndex((batch) => batch.job.jobId === nextJob.jobId);
@@ -356,7 +330,6 @@ export function MonicaCreator({
 
       const snapshot = jobSnapshotsRef.current.get(nextJob.jobId) ?? {
         prompt,
-        negativePrompt,
         model,
         ratio,
         imageCount,
@@ -373,7 +346,7 @@ export function MonicaCreator({
         ...current,
       ];
     });
-  }, [imageCount, model, negativePrompt, prompt, ratio, referenceImage]);
+  }, [imageCount, model, prompt, ratio, referenceImage]);
 
   const pollJob = useCallback(async (jobId: string) => {
     const response = await fetch(`/api/monica/generation/jobs/${jobId}`, {
@@ -515,7 +488,6 @@ export function MonicaCreator({
         },
         body: JSON.stringify({
           prompt: promptForRequest,
-          negativePrompt,
           model,
           ratio,
           imageCount,
@@ -532,7 +504,6 @@ export function MonicaCreator({
       const dispatchMode = data.dispatchMode ?? 'queue';
       jobSnapshotsRef.current.set(data.job.jobId, {
         prompt: promptForRequest,
-        negativePrompt,
         model,
         ratio,
         imageCount,
@@ -559,7 +530,105 @@ export function MonicaCreator({
 
   const canGenerate = prompt.trim().length > 0 && !generating;
 
-  function handleGetIdeas() {
+  async function requestPromptAssistant(input: {
+    mode: AssistantMode;
+    userInput?: string;
+    promptOverride?: string;
+    includeThemeContext?: boolean;
+    messages?: AssistantPromptMessage[];
+    existingIdeas?: StarterIdea[];
+    previousImprovedPrompts?: string[];
+    signal?: AbortSignal;
+  }) {
+    const includeThemeContext = input.includeThemeContext ?? false;
+    const response = await fetch('/api/monica/assistant/prompt', {
+      method: 'POST',
+      signal: input.signal,
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        mode: input.mode,
+        prompt: input.promptOverride ?? prompt,
+        userInput: input.userInput,
+        messages: input.messages,
+        existingIdeas: input.existingIdeas,
+        previousImprovedPrompts: input.previousImprovedPrompts,
+        themeLabel: includeThemeContext ? themeLabel : undefined,
+        themeNote: includeThemeContext ? themeNote : undefined,
+        themeId: includeThemeContext ? themeId?.toString() : undefined,
+        sourcePage,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await readError(response));
+    }
+
+    return response.json() as Promise<AssistantPromptResponse>;
+  }
+
+  async function generateMoreIdeas(sourceIdeas: StarterIdea[], signal?: AbortSignal) {
+    const data = await requestPromptAssistant({
+      mode: 'ideas',
+      promptOverride: '',
+      includeThemeContext: true,
+      existingIdeas: sourceIdeas,
+      signal,
+    });
+    const ideas = normalizeStarterIdeas(data.ideas);
+    if (!ideas.length) {
+      throw new Error('No ideas returned');
+    }
+    return ideas;
+  }
+
+  function beginAssistantRequest() {
+    assistantRequestIdRef.current += 1;
+    return assistantRequestIdRef.current;
+  }
+
+  function invalidateAssistantRequest() {
+    assistantRequestIdRef.current += 1;
+  }
+
+  function isCurrentAssistantRequest(requestId: number) {
+    return requestId === assistantRequestIdRef.current;
+  }
+
+  function beginAssistantFetch() {
+    if (assistantInFlightRef.current) return null;
+    assistantInFlightRef.current = true;
+    const controller = new AbortController();
+    assistantAbortRef.current = controller;
+    const requestId = beginAssistantRequest();
+    setAssistantLoading(true);
+    return { requestId, signal: controller.signal };
+  }
+
+  function finishAssistantFetch(requestId: number) {
+    if (!isCurrentAssistantRequest(requestId)) return;
+    assistantInFlightRef.current = false;
+    assistantAbortRef.current = null;
+    setAssistantLoading(false);
+  }
+
+  function cancelAssistantFetch() {
+    assistantAbortRef.current?.abort();
+    assistantAbortRef.current = null;
+    assistantInFlightRef.current = false;
+    invalidateAssistantRequest();
+    setAssistantLoading(false);
+  }
+
+  function isAbortError(value: unknown) {
+    return value instanceof DOMException && value.name === 'AbortError';
+  }
+
+  async function handleGetIdeas() {
+    if (assistantLoading || assistantInFlightRef.current) return;
+
     if (mode === 'studio' && !themeId && onRequestThemeIdeas) {
       onRequestThemeIdeas();
       return;
@@ -568,98 +637,185 @@ export function MonicaCreator({
     setAssistantMode('ideas');
     setImprovedPrompt(null);
     setAskMessages([]);
-    setAssistantIdeas(pickIdeas(starterIdeaPool));
-    setAssistantMessage(copy.assistant.tryOne);
+    setAssistantMessage(assistantTitle('ideas', copy));
+
+    if (starterIdeaPool.length) {
+      invalidateAssistantRequest();
+      setAssistantLoading(false);
+      setAssistantIdeas(pickIdeas(starterIdeaPool, 3));
+      return;
+    }
+
+    const request = beginAssistantFetch();
+    if (!request) return;
+    try {
+      const ideas = await generateMoreIdeas([], request.signal);
+      if (!isCurrentAssistantRequest(request.requestId)) return;
+      setAssistantIdeas(ideas);
+      setAssistantMessage(assistantTitle('ideas', copy));
+    } catch (ideasError) {
+      if (isAbortError(ideasError)) return;
+      if (!isCurrentAssistantRequest(request.requestId)) return;
+      setAssistantMessage(assistantRetryMessage);
+    } finally {
+      finishAssistantFetch(request.requestId);
+    }
   }
 
-  function handleMoreIdeas() {
-    const sourceIdeas = assistantIdeas.length ? assistantIdeas : starterIdeaPool;
+  async function handleMoreIdeas() {
+    if (assistantLoading || assistantInFlightRef.current) return;
+
     setAssistantMode('ideas');
     setImprovedPrompt(null);
     setAskMessages([]);
-    setAssistantIdeas(pickIdeas([...sourceIdeas, ...fallbackIdeas], 3).map((idea, index) => ({
-      idea: `${idea.idea}${index === 0 ? '' : ' variation'}`,
-      prompt: `${idea.prompt}, fresh variation ${index + 1}, distinctive composition`,
-    })));
-    setAssistantMessage(copy.assistant.tryOne);
+    const request = beginAssistantFetch();
+    if (!request) return;
+    setAssistantMessage(assistantTitle('ideas', copy));
+
+    try {
+      const ideas = await generateMoreIdeas(assistantIdeas.length ? assistantIdeas : starterIdeaPool, request.signal);
+      if (!isCurrentAssistantRequest(request.requestId)) return;
+      setAssistantIdeas(ideas);
+      setAssistantMessage(assistantTitle('ideas', copy));
+    } catch (ideasError) {
+      if (isAbortError(ideasError)) return;
+      if (!isCurrentAssistantRequest(request.requestId)) return;
+      setAssistantMessage(assistantRetryMessage);
+    } finally {
+      finishAssistantFetch(request.requestId);
+    }
   }
 
-  function handleMoreLikeThis(idea: StarterIdea) {
-    setAssistantMode('ideas');
-    setImprovedPrompt(null);
-    setAskMessages([]);
-    setAssistantIdeas([0, 1, 2].map((index) => createIdeaFromSeed(idea, index)));
-    setAssistantMessage(copy.assistant.tryOne);
-  }
+  async function handleImprovePrompt() {
+    if (assistantLoading || assistantInFlightRef.current) return;
 
-  function handleImprovePrompt() {
-    const nextIndex = assistantMode === 'improve' && improvedPrompt
-      ? improvementVariantIndex + 1
-      : improvementVariantIndex;
-    const nextPrompt = improvePromptText(prompt, improvementDetailOptions[nextIndex % improvementDetailOptions.length]);
-    setImprovementVariantIndex(nextIndex);
+    const promptForImprovement = prompt.trim();
+    const isRetry = assistantMode === 'improve' && Boolean(improvedPrompt);
     setAssistantMode('improve');
     setAssistantIdeas([]);
     setAskMessages([]);
-    setImprovedPrompt(nextPrompt || null);
-    setAssistantMessage(nextPrompt ? copy.assistant.improvedPrompt : copy.assistant.addStartingIdea);
+
+    if (!promptForImprovement) {
+      invalidateAssistantRequest();
+      setImprovedPrompt(null);
+      setAssistantLoading(false);
+      setAssistantMessage(copy.assistant.improveNeedsPrompt);
+      return;
+    }
+
+    const request = beginAssistantFetch();
+    if (!request) return;
+    setAssistantMessage(assistantTitle('improve', copy));
+
+    try {
+      const data = await requestPromptAssistant({
+        mode: 'improve',
+        promptOverride: promptForImprovement,
+        userInput: isRetry ? 'Try another improved version.' : undefined,
+        previousImprovedPrompts: isRetry ? improvedPromptHistory : undefined,
+        includeThemeContext: false,
+        signal: request.signal,
+      });
+      if (!isCurrentAssistantRequest(request.requestId)) return;
+      const nextPrompt = data.improvedPrompt?.trim();
+      setImprovedPrompt(nextPrompt || null);
+      if (nextPrompt) {
+        setImprovedPromptHistory((current) => [...current, nextPrompt].slice(-maxImprovedPromptHistory));
+      }
+      setAssistantMessage(nextPrompt ? assistantTitle('improve', copy) : copy.assistant.improveNeedsPrompt);
+    } catch (improveError) {
+      if (isAbortError(improveError)) return;
+      if (!isCurrentAssistantRequest(request.requestId)) return;
+      setImprovedPrompt(null);
+      setAssistantMessage(assistantRetryMessage);
+    } finally {
+      finishAssistantFetch(request.requestId);
+    }
   }
 
   function handleAskAssistant() {
+    if (assistantLoading || assistantInFlightRef.current) return;
+
+    invalidateAssistantRequest();
     setAssistantMode('ask');
     setImprovedPrompt(null);
+    setImprovedPromptHistory([]);
     setAssistantIdeas([]);
-    setAssistantMessage(copy.assistant.askAssistant);
+    setAssistantMessage(assistantTitle('ask', copy));
   }
 
-  function handleSendAsk() {
+  async function handleSendAsk() {
+    if (assistantLoading || assistantInFlightRef.current) return;
+
     const ask = askInput.trim();
     if (!ask) return;
-    const ideas = askDirections(ask, prompt, themeLabel);
     setAskMessages((current) => [
       ...current,
       { role: 'user', text: ask },
-      { role: 'assistant', text: copy.assistant.chooseDirection, ideas },
     ]);
     setAskInput('');
-  }
+    const request = beginAssistantFetch();
+    if (!request) return;
+    setAssistantMessage(assistantTitle('ask', copy));
 
-  function handleAskMoreLikeThis(idea: StarterIdea) {
-    const ideas = askDirections(idea.idea, prompt, themeLabel);
-    setAskMessages((current) => [
-      ...current,
-      { role: 'assistant', text: copy.assistant.chooseDirection, ideas },
-    ]);
+    try {
+      const data = await requestPromptAssistant({
+        mode: 'ask',
+        userInput: ask,
+        messages: askMessages.map(formatAskMessageForAssistant),
+        includeThemeContext: false,
+        signal: request.signal,
+      });
+      const ideas = normalizeStarterIdeas(data.ideas);
+      if (!ideas.length) {
+        throw new Error('No directions returned');
+      }
+      if (!isCurrentAssistantRequest(request.requestId)) return;
+      setAskMessages((current) => [
+        ...current,
+        { role: 'assistant', text: copy.assistant.chooseDirection, ideas },
+      ]);
+      setAssistantMessage(assistantTitle('ask', copy));
+    } catch (askError) {
+      if (isAbortError(askError)) return;
+      if (!isCurrentAssistantRequest(request.requestId)) return;
+      setAskMessages((current) => [
+        ...current,
+        { role: 'assistant', text: assistantRetryMessage },
+      ]);
+      setAssistantMessage(assistantRetryMessage);
+    } finally {
+      finishAssistantFetch(request.requestId);
+    }
   }
 
   function closeAssistant() {
+    cancelAssistantFetch();
     setAssistantMode(null);
     setAssistantIdeas([]);
     setImprovedPrompt(null);
+    setImprovedPromptHistory([]);
     setAskMessages([]);
     setAssistantMessage(null);
+    setAssistantLoading(false);
   }
 
   function handleUseIdea(idea: StarterIdea) {
-    setPrompt(promptFromIdea(idea, themeLabel));
+    setPrompt(promptFromIdea(idea));
+    setImprovedPromptHistory([]);
+  }
+
+  function handlePromptChange(value: string) {
+    setPrompt(value);
+    setImprovedPrompt(null);
+    setImprovedPromptHistory([]);
   }
 
   function handleReplacePrompt(value: string) {
     setPrompt(value);
     setImprovedPrompt(null);
+    setImprovedPromptHistory([]);
     setAssistantMessage('Prompt replaced');
-  }
-
-  function handleAppendPrompt(value: string) {
-    setPrompt((current) => {
-      const trimmed = current.trim();
-      const details = value.startsWith(trimmed)
-        ? value.slice(trimmed.length).replace(/^,\s*/, '').trim()
-        : value.trim();
-      return `${trimmed}${details ? `, ${details}` : ''}`.trim();
-    });
-    setImprovedPrompt(null);
-    setAssistantMessage('Details appended');
   }
 
   async function handleDownloadImage(image: GeneratedImageView) {
@@ -763,9 +919,9 @@ export function MonicaCreator({
           assistantOpen ? 'xl:max-w-[880px] xl:-translate-x-20 2xl:max-w-[960px] 2xl:-translate-x-24' : '',
         )}>
           <div className="flex flex-wrap gap-2 px-3">
-            <AssistantButton icon={<Lightbulb className="size-4" />} label={mode === 'theme_detail' ? copy.assistant.getIdeasTheme : mode === 'studio' ? copy.assistant.getIdeasFromTheme : copy.assistant.getIdeasToday} onClick={handleGetIdeas} />
-            <AssistantButton icon={<Wand2 className="size-4" />} label={copy.assistant.improvePrompt} onClick={handleImprovePrompt} />
-            <AssistantButton icon={<MessageCircle className="size-4" />} label={copy.assistant.askAssistant} onClick={handleAskAssistant} />
+            <AssistantButton icon={<Lightbulb className="size-4" />} label={mode === 'theme_detail' ? copy.assistant.getIdeasTheme : mode === 'studio' ? copy.assistant.getIdeasFromTheme : copy.assistant.getIdeasToday} onClick={handleGetIdeas} disabled={assistantLoading} />
+            <AssistantButton icon={<Wand2 className="size-4" />} label={copy.assistant.improvePrompt} onClick={handleImprovePrompt} disabled={assistantLoading} />
+            <AssistantButton icon={<MessageCircle className="size-4" />} label={copy.assistant.askAssistant} onClick={handleAskAssistant} disabled={assistantLoading} />
           </div>
 
           <div className="monica-panel bg-white/95 backdrop-blur-sm p-5 pb-2 shadow-[0_4px_30px_rgb(0,0,0,0.06)] md:p-7 md:pb-3">
@@ -817,7 +973,7 @@ export function MonicaCreator({
                   <span className="sr-only">{copy.promptLabel}</span>
                   <textarea
                     value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
+                    onChange={(event) => handlePromptChange(event.target.value)}
                     className="min-h-36 w-full resize-none border-0 bg-transparent p-0 text-[1.1rem] leading-8 text-neutral-800 outline-none placeholder:text-neutral-400 focus:ring-0 md:text-2xl md:leading-9"
                     placeholder={copy.promptPlaceholder}
                     maxLength={4000}
@@ -860,18 +1016,6 @@ export function MonicaCreator({
                   onClose={() => setOpenSelectKey(null)}
                   onChange={setRatio}
                 />
-                <button
-                  type="button"
-                  onClick={() => setDetailsOpen((open) => !open)}
-                  className={cn(
-                    'inline-flex h-10 items-center justify-center rounded-md bg-transparent px-3 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-100/80 hover:text-neutral-900',
-                    detailsOpen ? 'bg-(--monica-accent-soft) text-neutral-900' : '',
-                  )}
-                  aria-label={copy.promptDetails}
-                  title={copy.promptDetails}
-                >
-                  <Settings2 className="size-4" />
-                </button>
               </div>
               <button
                 type="button"
@@ -884,25 +1028,6 @@ export function MonicaCreator({
                 <span className="text-white/75">{estimatedCredits} {copy.creditsUnit}</span>
               </button>
             </div>
-
-            {detailsOpen ? (
-              <div className="rounded-md border border-border bg-muted/20">
-                <div className="grid gap-3 p-3">
-                  <label className="block">
-                    <span className="text-sm font-medium text-foreground">{copy.negativePromptLabel}</span>
-                    <input
-                      value={negativePrompt}
-                      onChange={(event) => setNegativePrompt(event.target.value)}
-                      className={cn(
-                        'mt-2 h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70',
-                        'focus:border-(--monica-accent) focus:shadow-[0_0_0_4px_var(--monica-accent-soft)]',
-                      )}
-                      placeholder={copy.negativePromptPlaceholder}
-                    />
-                  </label>
-                </div>
-              </div>
-            ) : null}
 
             {error && (
               <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
@@ -919,6 +1044,7 @@ export function MonicaCreator({
         open={assistantOpen}
         mode={assistantMode}
         title={assistantMessage}
+        loading={assistantLoading}
         ideas={assistantIdeas}
         improvedPrompt={improvedPrompt}
         askInput={askInput}
@@ -929,11 +1055,8 @@ export function MonicaCreator({
         onAskInputChange={setAskInput}
         onSendAsk={handleSendAsk}
         onUseIdea={handleUseIdea}
-        onMoreLikeThis={handleMoreLikeThis}
-        onAskMoreLikeThis={handleAskMoreLikeThis}
         onMoreIdeas={handleMoreIdeas}
         onReplacePrompt={handleReplacePrompt}
-        onAppendPrompt={handleAppendPrompt}
         onTryAnother={handleImprovePrompt}
         onClose={closeAssistant}
         copy={copy}
@@ -1057,12 +1180,13 @@ function ControlDropdown({
   );
 }
 
-function AssistantButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+function AssistantButton({ icon, label, onClick, disabled = false }: { icon: ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-10 items-center justify-center gap-2 rounded-full bg-neutral-100/50 px-4 py-2 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-200/60 hover:text-neutral-900"
+      disabled={disabled}
+      className="flex min-h-10 items-center justify-center gap-2 rounded-full bg-neutral-100/50 px-4 py-2 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-200/60 hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-neutral-100/50 disabled:hover:text-neutral-600"
     >
       {icon}
       <span>{label}</span>
@@ -1078,6 +1202,8 @@ function AssistantDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 } & AssistantPanelContentProps) {
+  const dialogTitle = assistantTitle(contentProps.mode, contentProps.copy) ?? contentProps.copy.assistant.output;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={false} disablePointerDismissal>
       <DialogContent
@@ -1091,7 +1217,7 @@ function AssistantDialog({
         <DialogHeader className="border-b border-black/5 px-5 py-4 text-left">
           <div className="flex items-center justify-between gap-4">
             <DialogTitle className="truncate text-[15px] font-semibold text-neutral-900">
-              {contentProps.title ?? contentProps.copy.assistant.output}
+              {dialogTitle}
             </DialogTitle>
             <Button
               type="button"
@@ -1115,6 +1241,7 @@ function AssistantDialog({
 type AssistantPanelContentProps = {
   mode: AssistantMode | null;
   title: string | null;
+  loading: boolean;
   ideas: StarterIdea[];
   improvedPrompt: string | null;
   askInput: string;
@@ -1122,11 +1249,8 @@ type AssistantPanelContentProps = {
   onAskInputChange: (value: string) => void;
   onSendAsk: () => void;
   onUseIdea: (idea: StarterIdea) => void;
-  onMoreLikeThis: (idea: StarterIdea) => void;
-  onAskMoreLikeThis: (idea: StarterIdea) => void;
   onMoreIdeas: () => void;
   onReplacePrompt: (prompt: string) => void;
-  onAppendPrompt: (prompt: string) => void;
   onTryAnother: () => void;
   onClose: () => void;
   copy: MonicaCreatorCopy;
@@ -1135,6 +1259,7 @@ type AssistantPanelContentProps = {
 function AssistantPanelContent({
   mode,
   title,
+  loading,
   ideas,
   improvedPrompt,
   askInput,
@@ -1142,11 +1267,8 @@ function AssistantPanelContent({
   onAskInputChange,
   onSendAsk,
   onUseIdea,
-  onMoreLikeThis,
-  onAskMoreLikeThis,
   onMoreIdeas,
   onReplacePrompt,
-  onAppendPrompt,
   onTryAnother,
   copy,
 }: AssistantPanelContentProps) {
@@ -1154,21 +1276,37 @@ function AssistantPanelContent({
   const askIdeaGroups = askMessages
     .map((message) => message.ideas ?? [])
     .filter((messageIdeas) => messageIdeas.length > 0);
-  const askIdeasEndRef = useRef<HTMLDivElement | null>(null);
+  const askEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (mode !== 'ask' || askIdeaGroups.length === 0) return;
+    if (mode !== 'ask') return;
 
-    askIdeasEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-  }, [askIdeaGroups.length, mode]);
+    askEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  }, [askIdeaGroups.length, askMessages.length, loading, mode]);
 
-  if (!mode && !title && ideas.length === 0 && !improvedPrompt) return null;
+  if (!mode && !title && ideas.length === 0 && !improvedPrompt && !loading) return null;
+  const showRetryMessage = title === assistantRetryMessage;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScrollArea className="flex-1">
         <div className="grid gap-4 px-4 py-5 sm:px-5">
-          {mode === 'improve' && !improvedPrompt ? (
+          {loading && mode === 'improve' ? (
+            <div className="flex items-center gap-2 rounded-2xl bg-neutral-50 px-4 py-3 text-[13px] font-medium text-neutral-500">
+              <Loader2 className="size-4 animate-spin" />
+              <span>{title || copy.assistant.assistantName}</span>
+            </div>
+          ) : null}
+
+          {mode === 'ideas' && showRetryMessage && ideas.length === 0 && !loading ? (
+            <p className="text-sm leading-6 text-muted-foreground">{assistantRetryMessage}</p>
+          ) : null}
+
+          {mode === 'improve' && !improvedPrompt && showRetryMessage ? (
+            <p className="text-sm leading-6 text-muted-foreground">{assistantRetryMessage}</p>
+          ) : null}
+
+          {mode === 'improve' && !loading && !improvedPrompt && !showRetryMessage ? (
             <p className="text-sm leading-6 text-muted-foreground">{copy.assistant.improveNeedsPrompt}</p>
           ) : null}
 
@@ -1178,27 +1316,38 @@ function AssistantPanelContent({
                 <p className="text-[14px] leading-6 text-neutral-800">{improvedPrompt}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <SmallActionButton onClick={() => onReplacePrompt(improvedPrompt)}>{copy.assistant.use}</SmallActionButton>
-                <SmallActionButton onClick={() => onAppendPrompt(improvedPrompt)}>{copy.assistant.appendDetails}</SmallActionButton>
-                <SmallActionButton onClick={onTryAnother}>{copy.assistant.tryAnother}</SmallActionButton>
+                <SmallActionButton onClick={() => onReplacePrompt(improvedPrompt)} disabled={loading}>{copy.assistant.use}</SmallActionButton>
+                <SmallActionButton onClick={onTryAnother} disabled={loading}>{copy.assistant.tryAnother}</SmallActionButton>
               </div>
             </div>
           ) : null}
 
-          {mode === 'ideas' && ideas.length > 0 ? (
+          {mode === 'ideas' && (ideas.length > 0 || loading) ? (
             <div className="grid gap-3">
+              {loading && ideas.length === 0 ? (
+                <div className="flex items-center gap-2 rounded-2xl bg-neutral-50 px-4 py-3 text-[13px] font-medium text-neutral-500">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>{title || copy.assistant.output}</span>
+                </div>
+              ) : null}
               {ideas.map((idea, index) => (
                 <div key={`${idea.idea}-${index}`} className="group rounded-2xl bg-neutral-50/60 px-4 py-3.5 transition hover:bg-neutral-50">
                   <div className="text-[14.5px] font-medium leading-6 text-neutral-900">{index + 1}. {idea.idea}</div>
-                  <p className="mt-1 text-[13px] leading-5 text-neutral-500">{copy.assistant.ideaHint}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-[13px] leading-5 text-neutral-600">{idea.prompt}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
-                    <SmallActionButton onClick={() => onMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
+                    <SmallActionButton onClick={() => onUseIdea(idea)} disabled={loading}>{copy.assistant.use}</SmallActionButton>
                   </div>
                 </div>
               ))}
               <div className="flex flex-wrap gap-2 pt-1">
-                <SmallActionButton onClick={onMoreIdeas}>{copy.assistant.moreIdeas}</SmallActionButton>
+                <SmallActionButton onClick={onMoreIdeas} disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      <span>Generating...</span>
+                    </>
+                  ) : copy.assistant.moreIdeas}
+                </SmallActionButton>
               </div>
             </div>
           ) : null}
@@ -1233,18 +1382,28 @@ function AssistantPanelContent({
                       {ideaGroup.map((idea, index) => (
                         <div key={`${idea.idea}-${index}`} className="group rounded-2xl bg-neutral-50/60 px-4 py-3 transition hover:bg-neutral-50">
                           <div className="text-[14px] font-medium leading-6 text-neutral-900">{index + 1}. {idea.idea}</div>
-                          <p className="mt-1 text-[13px] leading-5 text-neutral-500">{copy.assistant.assistantDirectionHint}</p>
+                          <p className="mt-1 whitespace-pre-wrap text-[13px] leading-5 text-neutral-500">{idea.prompt}</p>
                           <div className="mt-2.5 flex flex-wrap gap-2">
-                            <SmallActionButton onClick={() => onUseIdea(idea)}>{copy.assistant.use}</SmallActionButton>
-                            <SmallActionButton onClick={() => onAskMoreLikeThis(idea)}>{copy.assistant.moreLikeThis}</SmallActionButton>
+                            <SmallActionButton onClick={() => onUseIdea(idea)} disabled={loading}>{copy.assistant.use}</SmallActionButton>
                           </div>
                         </div>
                       ))}
                     </div>
                   ))}
-                  <div ref={askIdeasEndRef} aria-hidden="true" />
                 </div>
               ) : null}
+
+              {loading ? (
+                <div className="flex flex-col items-start">
+                  <div className="mb-1 px-1 text-[11px] font-medium text-neutral-400">{copy.assistant.assistantName}</div>
+                  <div className="flex max-w-[85%] items-center gap-2 rounded-2xl rounded-bl-sm bg-neutral-50 px-4 py-2.5 text-[13px] font-medium text-neutral-500">
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>{title || copy.assistant.assistantName}</span>
+                  </div>
+                </div>
+              ) : null}
+
+              <div ref={askEndRef} aria-hidden="true" />
             </div>
           ) : null}
         </div>
@@ -1256,11 +1415,17 @@ function AssistantPanelContent({
             <Textarea
               value={askInput}
               onChange={(event) => onAskInputChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+
+                event.preventDefault();
+                onSendAsk();
+              }}
               className="min-h-[100px] resize-none rounded-xl border border-black/10 bg-white pb-12 pt-3 text-[14.5px] shadow-sm focus-visible:ring-1 focus-visible:ring-neutral-300"
               placeholder={copy.assistant.askPlaceholder}
             />
             <div className="absolute bottom-2 right-2 flex gap-2">
-              <Button type="button" size="sm" onClick={onSendAsk} className="h-8 rounded-lg bg-neutral-900 px-4 font-medium text-white shadow-sm hover:bg-neutral-800">
+              <Button type="button" size="sm" onClick={onSendAsk} disabled={loading || !askInput.trim()} className="h-8 rounded-lg bg-neutral-900 px-4 font-medium text-white shadow-sm hover:bg-neutral-800 disabled:opacity-60">
                 {copy.assistant.send}
               </Button>
             </div>
@@ -1271,9 +1436,14 @@ function AssistantPanelContent({
   );
 }
 
-function SmallActionButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+function SmallActionButton({ children, onClick, disabled = false }: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex h-7 items-center justify-center rounded-lg bg-neutral-100 px-3 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex h-7 items-center justify-center gap-1.5 rounded-lg bg-neutral-100 px-3 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-neutral-100 disabled:hover:text-neutral-600"
+    >
       {children}
     </button>
   );
@@ -1349,7 +1519,7 @@ function ResultPanel({
 
               {failed ? (
                 <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-800 dark:text-amber-100">
-                  {batch.job.failureMessage || copy.failedNoCharge}
+                  {copy.failedNoCharge}
                 </div>
               ) : visibleImages.length === 0 ? (
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

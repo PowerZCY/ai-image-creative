@@ -15,11 +15,12 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
     getMonicaThemeCopy(locale),
     themeService.listPublicThemes(),
   ]);
+  const currentTheme = publicThemes[0] ?? null;
 
   return (
     <>
       { (forceShow || isDev) && <FingerprintStatus />}
-      <HomeCreatorSection copy={creatorCopy} />
+      <HomeCreatorSection copy={creatorCopy} theme={currentTheme} />
       <HomeThemeSection copy={themeCopy} themes={publicThemes} />
       <section className="px-4 pb-20 md:px-8">
         <div className="mx-auto max-w-6xl">

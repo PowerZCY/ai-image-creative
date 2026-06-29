@@ -6,8 +6,6 @@ export type MonicaCreatorCopy = {
   description: string;
   promptLabel: string;
   promptPlaceholder: string;
-  negativePromptLabel: string;
-  negativePromptPlaceholder: string;
   modelLabel: string;
   styleLabel: string;
   ratioLabel: string;
@@ -30,16 +28,14 @@ export type MonicaCreatorCopy = {
   failedNoCharge: string;
   imageLabel: string;
   initialPrompt: string;
-  promptDetails: string;
   sessionResults: string;
   openStudio: string;
   noReference: string;
   modelOptions: {
-    gptImage: string;
-    fluxPro: string;
-    ideogram: string;
-    recraft: string;
-    stableDiffusion: string;
+    gptImage2: string;
+    nanoBanana2: string;
+    nanoBananaPro: string;
+    seedream45: string;
   };
   assistant: {
     getIdeasToday: string;
@@ -50,7 +46,6 @@ export type MonicaCreatorCopy = {
     output: string;
     tryOne: string;
     use: string;
-    moreLikeThis: string;
     ideaHint: string;
     ideasBasedOn: string;
     originalPrompt: string;
@@ -67,7 +62,6 @@ export type MonicaCreatorCopy = {
     close: string;
     improvedPrompt: string;
     replacePrompt: string;
-    appendDetails: string;
     tryAnother: string;
   };
   actions: {

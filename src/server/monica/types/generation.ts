@@ -2,7 +2,6 @@ import type { GenerationType } from '../constants/generation';
 
 export type CreateGenerationJobInput = {
   prompt: string;
-  negativePrompt?: string;
   model: string;
   style?: string;
   ratio?: string;
@@ -16,7 +15,6 @@ export type CreateGenerationJobInput = {
 export type ImageGenerationProviderInput = {
   jobId: string;
   prompt: string;
-  negativePrompt?: string | null;
   model: string;
   style?: string | null;
   ratio?: string | null;
@@ -29,6 +27,8 @@ export type ImageGenerationProviderImage = {
   storageKey?: string;
   cdnImagePrefix?: string;
   imageUrl?: string;
+  binaryData?: ArrayBuffer;
+  mimeType?: string;
   width?: number;
   height?: number;
   metadata?: Record<string, unknown>;

@@ -62,7 +62,15 @@ export default async function ThemeDetailPage({
         </div>
       </section>
 
-      <MonicaCreator copy={creatorCopy} themeId={dbTheme.id} sourcePage="theme_detail" mode="theme_detail" starterIdeas={starterIdeas} />
+      <MonicaCreator
+        copy={creatorCopy}
+        themeId={dbTheme.id}
+        themeLabel={dbTheme.title}
+        themeNote={dbTheme.description}
+        sourcePage="theme_detail"
+        mode="theme_detail"
+        starterIdeas={starterIdeas}
+      />
 
       <section className="px-4 pt-16 pb-24 md:px-8">
         <div className={monicaContentWidthClass}>

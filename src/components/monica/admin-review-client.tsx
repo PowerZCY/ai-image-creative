@@ -32,6 +32,11 @@ type ThemeSubmission = {
   user?: { email?: string | null; userName?: string | null } | null;
 };
 
+type ThemeGeneratorIdea = {
+  idea: string;
+  prompt: string;
+};
+
 type ThemeItem = {
   id: string;
   issueNumber?: number | null;
@@ -48,6 +53,7 @@ type ThemeItem = {
     imageUrl?: string | null;
     thumbnailUrl?: string | null;
   } | null>;
+  generatorIdeas?: ThemeGeneratorIdea[];
   promptTexts?: string[];
   tags?: string[];
   seoTitle?: string | null;
@@ -101,7 +107,7 @@ type EditAcceptDraft = {
   brief: string;
   description: string;
   publishDate: string;
-  promptTexts: string;
+  generatorIdeas: ThemeGeneratorIdea[];
   tags: string;
 };
 
@@ -187,7 +193,9 @@ function ThemeFieldsModal({
   const [publishDate, setPublishDate] = useState(
     theme.publishDate ? theme.publishDate.slice(0, 10) : '',
   );
-  const [promptTexts, setPromptTexts] = useState((theme.promptTexts ?? []).join('\n'));
+  const [generatorIdeas, setGeneratorIdeas] = useState<ThemeGeneratorIdea[]>(
+    () => theme.generatorIdeas?.map(({ idea, prompt }) => ({ idea, prompt })) ?? [],
+  );
   const [tags, setTags] = useState((theme.tags ?? []).join('\n'));
   const [seoTitle, setSeoTitle] = useState(theme.seoTitle ?? '');
   const [seoMetaDescription, setSeoMetaDescription] = useState(theme.seoMetaDescription ?? '');
@@ -199,6 +207,20 @@ function ThemeFieldsModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function updateGeneratorIdea(index: number, patch: Partial<ThemeGeneratorIdea>) {
+    setGeneratorIdeas((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
+    );
+  }
+
+  function addGeneratorIdea() {
+    setGeneratorIdeas((current) => [...current, { idea: '', prompt: '' }]);
+  }
+
+  function removeGeneratorIdea(index: number) {
+    setGeneratorIdeas((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -214,7 +236,9 @@ function ThemeFieldsModal({
           description,
           coverImageUrl,
           publishDate,
-          promptTexts: splitLines(promptTexts),
+          generatorIdeas: generatorIdeas
+            .map((item) => ({ idea: item.idea.trim(), prompt: item.prompt.trim() }))
+            .filter((item) => item.idea || item.prompt),
           tags: splitLines(tags),
           seoTitle,
           seoMetaDescription,
@@ -313,15 +337,65 @@ function ThemeFieldsModal({
             />
           </label>
         </div>
-        <label className="block">
-          <span className={labelSpanCls}>Generator ideas (one per line)</span>
-          <textarea
-            value={promptTexts}
-            onChange={(e) => setPromptTexts(e.target.value)}
-            rows={4}
-            className={cn('mt-1', textareaCls)}
-          />
-        </label>
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className={labelSpanCls}>Generator ideas</span>
+            <button
+              type="button"
+              onClick={addGeneratorIdea}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium hover:bg-muted"
+            >
+              <Plus className="size-3.5" />
+              Add idea
+            </button>
+          </div>
+          <div className="grid gap-2">
+            {generatorIdeas.length ? (
+              generatorIdeas.map((item, index) => (
+                <div
+                  key={index}
+                  className="grid gap-2 rounded-md border border-border bg-background/70 p-2 md:grid-cols-[2rem_minmax(160px,0.45fr)_minmax(220px,1fr)_2.25rem]"
+                >
+                  <div className="flex h-10 items-center justify-center text-xs font-medium text-muted-foreground">
+                    {index + 1}.
+                  </div>
+                  <label className="block">
+                    <span className="sr-only">Idea {index + 1}</span>
+                    <input
+                      value={item.idea}
+                      onChange={(e) => updateGeneratorIdea(index, { idea: e.target.value })}
+                      placeholder="Idea"
+                      className={inputCls}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="sr-only">Prompt {index + 1}</span>
+                    <textarea
+                      value={item.prompt}
+                      onChange={(e) => updateGeneratorIdea(index, { prompt: e.target.value })}
+                      placeholder="Prompt"
+                      rows={2}
+                      className={textareaCls}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeGeneratorIdea(index)}
+                    aria-label={`Remove generator idea ${index + 1}`}
+                    title="Remove"
+                    className="inline-flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+                No generator ideas.
+              </div>
+            )}
+          </div>
+        </div>
         <label className="block">
           <span className={labelSpanCls}>Tags (one per line)</span>
           <textarea
@@ -842,6 +916,22 @@ function EditAcceptPanel({
   onCancel: () => void;
   onSave: (draft: EditAcceptDraft) => void;
 }) {
+  function updateGeneratorIdea(index: number, patch: Partial<ThemeGeneratorIdea>) {
+    onChange({
+      generatorIdeas: draft.generatorIdeas.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    });
+  }
+
+  function addGeneratorIdea() {
+    onChange({ generatorIdeas: [...draft.generatorIdeas, { idea: '', prompt: '' }] });
+  }
+
+  function removeGeneratorIdea(index: number) {
+    onChange({ generatorIdeas: draft.generatorIdeas.filter((_, itemIndex) => itemIndex !== index) });
+  }
+
   return (
     <div className="mt-4 grid gap-3 rounded-md border border-border bg-background/50 p-3">
       <div className="grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_150px_180px]">
@@ -897,15 +987,65 @@ function EditAcceptPanel({
         </div>
       ) : null}
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="block">
-          <span className={labelSpanCls}>Generator ideas, one per line</span>
-          <textarea
-            value={draft.promptTexts}
-            onChange={(e) => onChange({ promptTexts: e.target.value })}
-            rows={4}
-            className={cn('mt-1', textareaCls)}
-          />
-        </label>
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className={labelSpanCls}>Generator ideas</span>
+            <button
+              type="button"
+              onClick={addGeneratorIdea}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium hover:bg-muted"
+            >
+              <Plus className="size-3.5" />
+              Add idea
+            </button>
+          </div>
+          <div className="grid gap-2">
+            {draft.generatorIdeas.length ? (
+              draft.generatorIdeas.map((item, index) => (
+                <div
+                  key={index}
+                  className="grid gap-2 rounded-md border border-border bg-background/70 p-2 md:grid-cols-[1.75rem_minmax(120px,0.45fr)_minmax(150px,1fr)_2.25rem]"
+                >
+                  <div className="flex h-10 items-center justify-center text-xs font-medium text-muted-foreground">
+                    {index + 1}.
+                  </div>
+                  <label className="block">
+                    <span className="sr-only">Idea {index + 1}</span>
+                    <input
+                      value={item.idea}
+                      onChange={(e) => updateGeneratorIdea(index, { idea: e.target.value })}
+                      placeholder="Idea"
+                      className={inputCls}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="sr-only">Prompt {index + 1}</span>
+                    <textarea
+                      value={item.prompt}
+                      onChange={(e) => updateGeneratorIdea(index, { prompt: e.target.value })}
+                      placeholder="Prompt"
+                      rows={2}
+                      className={textareaCls}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeGeneratorIdea(index)}
+                    aria-label={`Remove generator idea ${index + 1}`}
+                    title="Remove"
+                    className="inline-flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+                No generator ideas.
+              </div>
+            )}
+          </div>
+        </div>
         <label className="block">
           <span className={labelSpanCls}>Tags, one per line</span>
           <textarea
@@ -1084,7 +1224,7 @@ export function AdminReviewClient({
       brief: item.details,
       description: item.details,
       publishDate: '',
-      promptTexts: '',
+      generatorIdeas: [],
       tags: '',
     };
   }
@@ -1110,7 +1250,7 @@ export function AdminReviewClient({
           brief: '',
           description: '',
           publishDate: '',
-          promptTexts: '',
+          generatorIdeas: [],
           tags: '',
         }),
         ...patch,
@@ -1133,7 +1273,9 @@ export function AdminReviewClient({
             issueNumber: draft.issueNumber,
             brief: draft.brief,
             description: draft.description,
-            promptTexts: splitLines(draft.promptTexts),
+            generatorIdeas: draft.generatorIdeas
+              .map((idea) => ({ idea: idea.idea.trim(), prompt: idea.prompt.trim() }))
+              .filter((idea) => idea.idea || idea.prompt),
             tags: splitLines(draft.tags),
             publishDate: draft.publishDate,
             status,

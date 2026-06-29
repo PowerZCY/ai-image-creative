@@ -63,6 +63,7 @@ type StudioThemeOption = {
   id: string;
   title: string;
   brief?: string | null;
+  description?: string | null;
   generatorIdeas?: unknown[];
 };
 
@@ -313,6 +314,7 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
             mode="studio"
             themeId={selectedIdeaTheme?.id}
             themeLabel={selectedIdeaTheme?.title}
+            themeNote={selectedIdeaTheme?.description}
             initialAssistantOpen={Boolean(selectedIdeaTheme)}
             onRequestThemeIdeas={() => void openThemePicker()}
             onGenerationUpdated={handleGenerationUpdated}

@@ -1,6 +1,7 @@
 packages: [ '.' ]
 allowBuilds:
   '@clerk/shared': true
+  '@openrouter/sdk': true
   '@parcel/watcher': true
   '@prisma/engines': true
   '@swc/core': true

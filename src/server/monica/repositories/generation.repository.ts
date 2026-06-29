@@ -27,7 +27,6 @@ export class GenerationRepository {
         status: GENERATION_STATUS.QUEUED,
         generationType: input.generationType,
         prompt: input.prompt,
-        negativePrompt: input.negativePrompt,
         model: input.model,
         style: input.style,
         ratio: input.ratio,

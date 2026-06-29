@@ -95,7 +95,6 @@ export function PublicImageGallery({
   function handleUseImagePrompt() {
     const sourcePrompt = activeImage?.promptUsed || activeImage?.creationNote || activeImage?.title || '';
     if (!sourcePrompt) return;
-    window.localStorage.setItem('monica:creator-prompt', sourcePrompt);
     window.location.href = '/';
   }
 
