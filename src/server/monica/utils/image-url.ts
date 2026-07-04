@@ -28,10 +28,7 @@ export function buildStoredImageUrl(input: ImageLocation) {
     return null;
   }
 
-  const explicitBase = process.env.IMAGE_CDN_BASE_URL
-    ?? process.env.NEXT_PUBLIC_IMAGE_CDN_BASE_URL
-    ?? process.env.CDN_ACCESS_DOMAIN
-    ?? process.env.NEXT_PUBLIC_CDN_ACCESS_DOMAIN;
+  const explicitBase = process.env.NEXT_PUBLIC_CDN_ACCESS_DOMAIN;
   if (explicitBase) {
     return buildCdnUrl(explicitBase, input);
   }
@@ -51,7 +48,7 @@ export function buildStoredImageUrl(input: ImageLocation) {
 }
 
 export function buildProviderReferenceImageUrl(input: Pick<ImageLocation, 'cdnImagePrefix' | 'storageKey'>) {
-  const cdnAccessDomain = process.env.CDN_ACCESS_DOMAIN ?? process.env.NEXT_PUBLIC_CDN_ACCESS_DOMAIN;
+  const cdnAccessDomain = process.env.NEXT_PUBLIC_CDN_ACCESS_DOMAIN;
   if (!cdnAccessDomain) {
     throw new Error('NEXT_PUBLIC_CDN_ACCESS_DOMAIN is required to build reference image URL');
   }

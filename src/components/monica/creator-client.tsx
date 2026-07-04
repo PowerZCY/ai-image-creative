@@ -146,7 +146,7 @@ function createReferenceImageStorageKey(file: File) {
   const mimeType = file.type || 'application/octet-stream';
   const ext = getExtension(file.name, mimeType);
   const safeName = sanitizeFilenamePart(file.name.replace(/\.[^.]+$/, '')) || 'reference';
-  return `monica/reference-images/${Date.now()}-${crypto.randomUUID()}-${safeName}.${ext}`;
+  return `user/${Date.now()}-${safeName}.${ext}`;
 }
 
 
@@ -429,7 +429,7 @@ export function MonicaCreator({
           throw new Error('NEXT_PUBLIC_R2_MOCK_IMG_URL is required when R2 mock mode is enabled');
         }
         await new Promise((resolve) => window.setTimeout(resolve, r2MockTimeoutMs));
-        storageKey = `monica/reference-images/mock/${Date.now()}-${crypto.randomUUID()}`;
+        storageKey = `mock/${Date.now()}`;
         url = r2MockImgUrl;
       } else {
         if (!r2BaseUrl || !r2BucketName || !r2ApiToken) {

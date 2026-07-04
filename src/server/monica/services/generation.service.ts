@@ -38,7 +38,7 @@ function createGeneratedImageStorageKey(input: {
   mimeType?: string;
 }) {
   const extension = extensionFromMimeType(input.mimeType);
-  return `monica/generated-images/${input.jobId}/${input.index}.${extension}`;
+  return `ai/${input.jobId}/${input.index}.${extension}`;
 }
 
 function safeJsonStringify(value: unknown) {

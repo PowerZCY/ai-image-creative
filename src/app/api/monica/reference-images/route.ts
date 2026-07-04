@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { referenceImageService } from '@/server/monica/services/reference-image.service';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
+import { buildStoredImageUrl } from '@/server/monica/utils/image-url';
 
 installBigIntJsonSerialization();
 
@@ -59,7 +60,14 @@ export async function POST(request: NextRequest) {
       height: readOptionalJsonNumber(body.height),
     });
 
-    return NextResponse.json({ referenceImage });
+    return NextResponse.json({
+      referenceImage: {
+        referenceId: referenceImage.referenceId,
+        url: buildStoredImageUrl(referenceImage),
+        mimeType: referenceImage.mimeType,
+        safetyStatus: referenceImage.safetyStatus,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[monica/reference-images] upload failed', error);
