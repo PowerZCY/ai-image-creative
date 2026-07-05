@@ -249,13 +249,27 @@ model ReferenceImage {
   @@schema("monica_ai")
 }
 
+model GenerationJobReferenceImage {
+  id          BigInt    @id @default(autoincrement())
+  jobId       String    @map("job_id") @db.Uuid
+  referenceId String    @map("reference_id") @db.Uuid
+  position    Int
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([jobId, position], map: "generation_job_reference_images_job_position_key")
+  @@unique([jobId, referenceId], map: "generation_job_reference_images_job_reference_key")
+  @@index([jobId, position], map: "idx_generation_job_reference_images_job_position")
+  @@index([referenceId], map: "idx_generation_job_reference_images_reference_id")
+  @@map("generation_job_reference_images")
+  @@schema("monica_ai")
+}
+
 model GenerationJob {
   id               BigInt    @id @default(autoincrement())
   jobId            String    @unique @default(dbgenerated("gen_random_uuid()")) @map("job_id") @db.Uuid
   userId           String    @map("user_id") @db.Uuid
   themeId          BigInt?   @map("theme_id")
   sourcePage       String?   @map("source_page") @db.VarChar(50)
-  referenceId      String?   @map("reference_id") @db.Uuid
   status           String    @default("pending") @db.VarChar(50)
   generationType   String    @default("text_to_image") @map("generation_type") @db.VarChar(50)
   prompt           String    @db.Text

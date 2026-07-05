@@ -5,6 +5,7 @@ import { isOpenRouterMockEnabled } from '../ai/openrouter-mock';
 const DEFAULT_MODEL = 'mock-image-model';
 const DEFAULT_IMAGE_COUNT = 1;
 const MAX_IMAGE_COUNT = 4;
+const MAX_REFERENCE_IMAGE_COUNT = 4;
 const MAX_PROMPT_LENGTH = 4000;
 const SOURCE_PAGES = new Set([
   'home',
@@ -50,6 +51,30 @@ function readSourcePage(value: unknown): string | undefined {
   return sourcePage;
 }
 
+function readReferenceIds(value: unknown): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('referenceIds must be an array');
+  }
+
+  const referenceIds = value.map((item) => {
+    const referenceId = readOptionalString(item);
+    if (!referenceId) {
+      throw new Error('referenceIds must contain non-empty strings');
+    }
+    return referenceId;
+  });
+
+  const uniqueReferenceIds = [...new Set(referenceIds)];
+  if (uniqueReferenceIds.length > MAX_REFERENCE_IMAGE_COUNT) {
+    throw new Error(`referenceIds can contain at most ${MAX_REFERENCE_IMAGE_COUNT} images`);
+  }
+
+  return uniqueReferenceIds;
+}
+
 export function parseCreateGenerationJobInput(payload: unknown): CreateGenerationJobInput {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Request body must be an object');
@@ -80,6 +105,6 @@ export function parseCreateGenerationJobInput(payload: unknown): CreateGeneratio
     generationType: readGenerationType(body.generationType),
     themeId: readOptionalBigInt(body.themeId),
     sourcePage: readSourcePage(body.sourcePage),
-    referenceId: readOptionalString(body.referenceId),
+    referenceIds: readReferenceIds(body.referenceIds),
   };
 }

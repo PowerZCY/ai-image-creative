@@ -159,11 +159,11 @@ function buildUserContent(input: ImageGenerationProviderInput, imageOrdinal: num
     },
   ];
 
-  if (input.referenceImageUrl) {
+  for (const referenceImageUrl of input.referenceImageUrls ?? []) {
     content.push({
       type: 'image_url',
       imageUrl: {
-        url: input.referenceImageUrl,
+        url: referenceImageUrl,
         detail: 'high',
       },
     });

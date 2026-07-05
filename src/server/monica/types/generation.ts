@@ -9,7 +9,7 @@ export type CreateGenerationJobInput = {
   generationType?: GenerationType;
   themeId?: bigint;
   sourcePage?: string;
-  referenceId?: string;
+  referenceIds?: string[];
 };
 
 export type ImageGenerationProviderInput = {
@@ -19,7 +19,7 @@ export type ImageGenerationProviderInput = {
   style?: string | null;
   ratio?: string | null;
   imageCount: number;
-  referenceImageUrl?: string;
+  referenceImageUrls?: string[];
 };
 
 export type ImageGenerationProviderImage = {

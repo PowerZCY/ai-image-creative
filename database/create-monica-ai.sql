@@ -72,7 +72,6 @@ CREATE TABLE IF NOT EXISTS monica_ai.generation_jobs (
     job_id             UUID         NOT NULL DEFAULT gen_random_uuid(),
     user_id            UUID         NOT NULL,
     theme_id           BIGINT,
-    reference_id       UUID,
     status             VARCHAR(50)  NOT NULL DEFAULT 'pending',
     generation_type    VARCHAR(50)  NOT NULL DEFAULT 'text_to_image',
     prompt             TEXT         NOT NULL,
@@ -97,6 +96,20 @@ CREATE TABLE IF NOT EXISTS monica_ai.generation_jobs (
 CREATE INDEX IF NOT EXISTS idx_generation_jobs_user_created_at ON monica_ai.generation_jobs (user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_generation_jobs_status_created_at ON monica_ai.generation_jobs (status, created_at);
 CREATE INDEX IF NOT EXISTS idx_generation_jobs_theme_id ON monica_ai.generation_jobs (theme_id);
+
+CREATE TABLE IF NOT EXISTS monica_ai.generation_job_reference_images (
+    id            BIGSERIAL PRIMARY KEY,
+    job_id        UUID        NOT NULL,
+    reference_id  UUID        NOT NULL,
+    position      INTEGER     NOT NULL,
+    created_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT generation_job_reference_images_job_position_key UNIQUE (job_id, position),
+    CONSTRAINT generation_job_reference_images_job_reference_key UNIQUE (job_id, reference_id),
+    CONSTRAINT generation_job_reference_images_position_check CHECK (position >= 0 AND position < 4)
+);
+
+CREATE INDEX IF NOT EXISTS idx_generation_job_reference_images_job_position ON monica_ai.generation_job_reference_images (job_id, position);
+CREATE INDEX IF NOT EXISTS idx_generation_job_reference_images_reference_id ON monica_ai.generation_job_reference_images (reference_id);
 
 CREATE TABLE IF NOT EXISTS monica_ai.generated_images (
     id                    BIGSERIAL PRIMARY KEY,

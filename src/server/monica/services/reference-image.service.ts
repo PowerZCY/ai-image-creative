@@ -30,29 +30,41 @@ export class ReferenceImageService {
     });
   }
 
-  async assertOwnedReferenceImage(userId: string, referenceId?: string) {
-    if (!referenceId) {
-      return null;
+  async assertOwnedReferenceImages(userId: string, referenceIds: string[] = []) {
+    if (referenceIds.length === 0) {
+      return [];
     }
 
-    const referenceImage = await referenceImageRepository.findOwned(referenceId, userId);
-    if (!referenceImage) {
-      throw new Error('Reference image not found');
-    }
-    if (referenceImage.safetyStatus === 'failed') {
-      throw new Error('Reference image is blocked');
-    }
+    const referenceImages = await referenceImageRepository.findOwnedMany(referenceIds, userId);
+    const referenceImagesById = new Map(referenceImages.map((image) => [image.referenceId, image]));
 
-    return referenceImage;
+    return referenceIds.map((referenceId) => {
+      const referenceImage = referenceImagesById.get(referenceId);
+      if (!referenceImage) {
+        throw new Error('Reference image not found');
+      }
+      if (referenceImage.safetyStatus === 'failed') {
+        throw new Error('Reference image is blocked');
+      }
+      return referenceImage;
+    });
   }
 
-  async createProviderAccessibleImageUrl(referenceId: string) {
-    const referenceImage = await referenceImageRepository.findById(referenceId);
-    if (!referenceImage) {
-      throw new Error('Reference image not found');
+  async createProviderAccessibleImageUrls(referenceIds: string[]) {
+    if (referenceIds.length === 0) {
+      return [];
     }
 
-    return buildProviderReferenceImageUrl(referenceImage);
+    const referenceImages = await referenceImageRepository.findByIds(referenceIds);
+    const referenceImagesById = new Map(referenceImages.map((image) => [image.referenceId, image]));
+
+    return referenceIds.map((referenceId) => {
+      const referenceImage = referenceImagesById.get(referenceId);
+      if (!referenceImage) {
+        throw new Error('Reference image not found');
+      }
+      return buildProviderReferenceImageUrl(referenceImage);
+    });
   }
 }
 

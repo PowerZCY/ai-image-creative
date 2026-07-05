@@ -32,7 +32,7 @@ export class SafetyService {
     };
   }
 
-  async checkReferenceImages(_input: { referenceId?: string; mimeType?: string | null }): Promise<SafetyResult> {
+  async checkReferenceImages(_input: { referenceIds?: string[]; mimeType?: string | null }): Promise<SafetyResult> {
     return {
       status: SAFETY_STATUS.SKIPPED,
       source: 'basic_rule',

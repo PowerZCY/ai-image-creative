@@ -122,8 +122,8 @@ export class GenerationService {
       model: job.model,
       ratio: job.ratio,
       imageCount: job.imageCount,
-      referenceId: job.referenceId,
-      hasReferenceImage: Boolean(job.referenceId),
+      referenceIds: job.referenceIds,
+      referenceImageCount: job.referenceIds.length,
       provider: 'openrouter',
     };
 
@@ -193,7 +193,8 @@ export class GenerationService {
   }
 
   private async createQueuedGenerationJobWithCredits(userId: string, input: CreateGenerationJobInput) {
-    await referenceImageService.assertOwnedReferenceImage(userId, input.referenceId);
+    const referenceIds = input.referenceIds ?? [];
+    await referenceImageService.assertOwnedReferenceImages(userId, referenceIds);
 
     const generationType = input.generationType ?? GENERATION_TYPE.TEXT_TO_IMAGE;
     const estimatedCredits = generationCreditService.estimateCredits({
@@ -208,6 +209,7 @@ export class GenerationService {
         { ...input, generationType },
         estimatedCredits,
       );
+      await generationRepository.createJobReferenceImages(tx, created.jobId, referenceIds);
 
       await generationCreditService.consumeForJob(
         userId,
@@ -379,9 +381,7 @@ export class GenerationService {
           style: job.style,
           ratio: job.ratio,
           imageCount: job.imageCount,
-          referenceImageUrl: job.referenceId
-            ? await referenceImageService.createProviderAccessibleImageUrl(job.referenceId)
-            : undefined,
+          referenceImageUrls: await referenceImageService.createProviderAccessibleImageUrls(job.referenceIds),
         });
       } catch (error) {
         throw new GenerationPipelineError(
@@ -392,7 +392,7 @@ export class GenerationService {
             model: job.model,
             ratio: job.ratio,
             imageCount: job.imageCount,
-            hasReferenceImage: Boolean(job.referenceId),
+            referenceImageCount: job.referenceIds.length,
           },
           { cause: error },
         );

@@ -32,20 +32,28 @@ export class ReferenceImageRepository {
     });
   }
 
-  findOwned(referenceId: string, userId: string) {
-    return prisma.referenceImage.findFirst({
+  findOwnedMany(referenceIds: string[], userId: string) {
+    if (referenceIds.length === 0) {
+      return Promise.resolve([]);
+    }
+
+    return prisma.referenceImage.findMany({
       where: {
-        referenceId,
+        referenceId: { in: referenceIds },
         userId,
         deleted: 0,
       },
     });
   }
 
-  findById(referenceId: string) {
-    return prisma.referenceImage.findFirst({
+  findByIds(referenceIds: string[]) {
+    if (referenceIds.length === 0) {
+      return Promise.resolve([]);
+    }
+
+    return prisma.referenceImage.findMany({
       where: {
-        referenceId,
+        referenceId: { in: referenceIds },
         deleted: 0,
       },
     });

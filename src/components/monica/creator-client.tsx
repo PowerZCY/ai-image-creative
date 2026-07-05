@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronDown, Download, Heart, ImagePlus, Lightbulb, Loader2, MessageCircle, Sparkles, Trash2, UploadCloud, Wand2, X } from 'lucide-react';
+import { ChevronDown, Download, Heart, ImagePlus, Images, Lightbulb, Loader2, MessageCircle, Sparkles, Trash2, UploadCloud, Wand2, X } from 'lucide-react';
 import {
   themeBgColor,
   themeBorderColor,
@@ -42,6 +42,7 @@ type GenerationJobView = {
   failureCode?: string | null;
   failureMessage?: string | null;
   images?: GeneratedImageView[];
+  referenceImages?: ReferenceImageView[];
 };
 
 type SourcePage = 'home' | 'theme_detail' | 'studio' | 'explore_image_detail' | 'theme_gallery';
@@ -78,7 +79,7 @@ type GenerationBatch = {
   model: string;
   ratio?: string;
   imageCount: number;
-  referenceImage?: ReferenceImageView | null;
+  referenceImages?: ReferenceImageView[];
   createdAt: string;
 };
 
@@ -87,7 +88,7 @@ type GenerationSnapshot = {
   model: string;
   ratio?: string;
   imageCount: number;
-  referenceImage?: ReferenceImageView | null;
+  referenceImages?: ReferenceImageView[];
 };
 
 type CreateGenerationJobResponse = {
@@ -100,12 +101,14 @@ type GenerationDispatchMode = NonNullable<CreateGenerationJobResponse['dispatchM
 
 const ratioOptions = [
   { value: '1:1', label: '1:1' },
-  { value: '4:5', label: '4:5' },
   { value: '9:16', label: '9:16' },
   { value: '16:9', label: '16:9' },
+  { value: '4:3', label: '4:3' },
+  { value: '3:4', label: '3:4' },
 ];
 
-const countOptions = [1, 2, 4];
+const countOptions = [1, 2, 3, 4];
+const maxReferenceImages = 4;
 const terminalStatuses = new Set(['succeeded', 'failed', 'blocked', 'cancelled']);
 const r2BaseUrl = process.env.NEXT_PUBLIC_R2_BASE_URL ?? '';
 const r2BucketName = process.env.NEXT_PUBLIC_R2_BUCKET_NAME ?? '';
@@ -252,7 +255,7 @@ export function MonicaCreator({
   const [model, setModel] = useState(modelOptions[0].value);
   const [ratio, setRatio] = useState(ratioOptions[0].value);
   const [imageCount, setImageCount] = useState(1);
-  const [referenceImage, setReferenceImage] = useState<ReferenceImageView | null>(null);
+  const [referenceImages, setReferenceImages] = useState<ReferenceImageView[]>([]);
   const [job, setJob] = useState<GenerationJobView | null>(null);
   const [batches, setBatches] = useState<GenerationBatch[]>([]);
   const [deletedImageIds, setDeletedImageIds] = useState<Set<string>>(() => new Set());
@@ -333,7 +336,7 @@ export function MonicaCreator({
         model,
         ratio,
         imageCount,
-        referenceImage,
+        referenceImages: nextJob.referenceImages ?? referenceImages,
       };
 
       return [
@@ -346,7 +349,7 @@ export function MonicaCreator({
         ...current,
       ];
     });
-  }, [imageCount, model, prompt, ratio, referenceImage]);
+  }, [imageCount, model, prompt, ratio, referenceImages]);
 
   const pollJob = useCallback(async (jobId: string) => {
     const response = await fetch(`/api/monica/generation/jobs/${jobId}`, {
@@ -407,62 +410,79 @@ export function MonicaCreator({
     return () => window.clearInterval(interval);
   }, [activeDispatchMode, job?.jobId, job?.status, pollJob]);
 
-  async function handleUpload(file: File) {
+  async function uploadReferenceFile(file: File) {
+    if (!isAllowedImageFile(file)) {
+      throw new Error('Please upload a JPG, PNG, WEBP, or GIF image.');
+    }
+
+    if (file.size > r2UploadImageMaxSizeMB * 1024 * 1024) {
+      throw new Error(`Please select an image file less than ${r2UploadImageMaxSizeMB}MB.`);
+    }
+
+    const mimeType = file.type || 'application/octet-stream';
+    let storageKey = createReferenceImageStorageKey(file);
+    let url: string | undefined;
+
+    if (r2EnableMock) {
+      if (!r2MockImgUrl) {
+        throw new Error('NEXT_PUBLIC_R2_MOCK_IMG_URL is required when R2 mock mode is enabled');
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, r2MockTimeoutMs));
+      storageKey = `mock/${Date.now()}`;
+      url = r2MockImgUrl;
+    } else {
+      if (!r2BaseUrl || !r2BucketName || !r2ApiToken) {
+        throw new Error('NEXT_PUBLIC_R2_BASE_URL, NEXT_PUBLIC_R2_BUCKET_NAME, and NEXT_PUBLIC_R2_API_TOKEN are required');
+      }
+
+      const uploadResult = await r2Client.upload(storageKey, file, mimeType);
+      storageKey = uploadResult.file.storedFilename || storageKey;
+      url = uploadResult.share_urls?.public?.view || uploadResult.share_urls?.protected?.view;
+      if (!uploadResult.success || !url) {
+        throw new Error('Upload failed: No public URL received');
+      }
+    }
+
+    const response = await fetch('/api/monica/reference-images', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        storageKey,
+        url,
+        mimeType,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await readError(response));
+    }
+
+    const data = await response.json() as { referenceImage: ReferenceImageView };
+    return data.referenceImage;
+  }
+
+  async function handleUpload(files: FileList | File[]) {
+    const selectedFiles = Array.from(files);
+    if (selectedFiles.length === 0) return;
+
     setUploading(true);
     setError(null);
 
     try {
-      if (!isAllowedImageFile(file)) {
-        throw new Error('Please upload a JPG, PNG, WEBP, or GIF image.');
+      const availableSlots = maxReferenceImages - referenceImages.length;
+      if (availableSlots <= 0 || selectedFiles.length > availableSlots) {
+        throw new Error(`You can upload up to ${maxReferenceImages} reference images.`);
       }
 
-      if (file.size > r2UploadImageMaxSizeMB * 1024 * 1024) {
-        throw new Error(`Please select an image file less than ${r2UploadImageMaxSizeMB}MB.`);
+      const uploadedImages: ReferenceImageView[] = [];
+      for (const file of selectedFiles) {
+        uploadedImages.push(await uploadReferenceFile(file));
       }
 
-      const mimeType = file.type || 'application/octet-stream';
-      let storageKey = createReferenceImageStorageKey(file);
-      let url: string | undefined;
-
-      if (r2EnableMock) {
-        if (!r2MockImgUrl) {
-          throw new Error('NEXT_PUBLIC_R2_MOCK_IMG_URL is required when R2 mock mode is enabled');
-        }
-        await new Promise((resolve) => window.setTimeout(resolve, r2MockTimeoutMs));
-        storageKey = `mock/${Date.now()}`;
-        url = r2MockImgUrl;
-      } else {
-        if (!r2BaseUrl || !r2BucketName || !r2ApiToken) {
-          throw new Error('NEXT_PUBLIC_R2_BASE_URL, NEXT_PUBLIC_R2_BUCKET_NAME, and NEXT_PUBLIC_R2_API_TOKEN are required');
-        }
-
-        const uploadResult = await r2Client.upload(storageKey, file, mimeType);
-        storageKey = uploadResult.file.storedFilename || storageKey;
-        url = uploadResult.share_urls?.public?.view || uploadResult.share_urls?.protected?.view;
-        if (!uploadResult.success || !url) {
-          throw new Error('Upload failed: No public URL received');
-        }
-      }
-
-      const response = await fetch('/api/monica/reference-images', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json',
-        },
-        body: JSON.stringify({
-          storageKey,
-          url,
-          mimeType,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
-
-      const data = await response.json() as { referenceImage: ReferenceImageView };
-      setReferenceImage(data.referenceImage);
+      setReferenceImages((current) => [...current, ...uploadedImages].slice(0, maxReferenceImages));
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : String(uploadError));
     } finally {
@@ -491,7 +511,7 @@ export function MonicaCreator({
           model,
           ratio,
           imageCount,
-          referenceId: referenceImage?.referenceId,
+          referenceIds: referenceImages.map((image) => image.referenceId),
           sourcePage,
         }),
       });
@@ -507,7 +527,7 @@ export function MonicaCreator({
         model,
         ratio,
         imageCount,
-        referenceImage,
+        referenceImages,
       });
       terminalCreditRefreshJobIdRef.current = null;
       setActiveDispatchMode(dispatchMode);
@@ -926,50 +946,45 @@ export function MonicaCreator({
 
           <div className="monica-panel bg-white/95 backdrop-blur-sm p-5 pb-2 shadow-[0_4px_30px_rgb(0,0,0,0.06)] md:p-7 md:pb-3">
             <div className="space-y-5">
-              <div className="flex gap-4 md:gap-6">
-                <div className="hidden shrink-0 md:block">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void handleUpload(file);
-                    }}
-                  />
-                  {referenceImage ? (
-                    <div className="relative h-32 w-24 overflow-hidden rounded-md border border-border bg-muted">
-                      {referenceImage.url ? (
-                        <Image src={referenceImage.url} alt="" width={96} height={128} unoptimized className="size-full object-cover" />
-                      ) : (
-                        <ImagePlus className="m-8 size-8 text-muted-foreground" />
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setReferenceImage(null)}
-                        className="absolute right-1 top-1 grid size-7 place-items-center rounded bg-black/55 text-white"
-                        aria-label={copy.removeReference}
-                        title={copy.removeReference}
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                      className="grid h-32 w-24 place-items-center rounded-lg border border-black/10 bg-neutral-50 text-neutral-400 transition hover:-rotate-2 hover:border-black/20 hover:bg-neutral-100 hover:text-neutral-600 disabled:opacity-60 shadow-sm"
-                      aria-label={copy.uploadReference}
-                      title={copy.uploadReference}
-                    >
-                      {uploading ? <Loader2 className="size-5 animate-spin" /> : <UploadCloud className="size-6" />}
-                    </button>
-                  )}
-                </div>
+              <div className="grid gap-4">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    const files = event.target.files;
+                    if (files) void handleUpload(files);
+                  }}
+                />
+                {referenceImages.length > 0 ? (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {referenceImages.map((referenceImage, index) => (
+                      <div key={referenceImage.referenceId} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-border bg-muted shadow-sm">
+                        {referenceImage.url ? (
+                          <Image src={referenceImage.url} alt="" width={80} height={80} unoptimized className="size-full object-cover" />
+                        ) : (
+                          <ImagePlus className="m-6 size-8 text-muted-foreground" />
+                        )}
+                        <div className="absolute left-1.5 top-1.5 rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                          {index + 1}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReferenceImages((current) => current.filter((image) => image.referenceId !== referenceImage.referenceId))}
+                          className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded bg-black/60 text-white opacity-100 transition hover:bg-black/75 md:opacity-0 md:group-hover:opacity-100"
+                          aria-label={copy.removeReference}
+                          title={copy.removeReference}
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
-                <label className="min-w-0 flex-1">
+                <label className="min-w-0">
                   <span className="sr-only">{copy.promptLabel}</span>
                   <textarea
                     value={prompt}
@@ -983,6 +998,16 @@ export function MonicaCreator({
 
             <div className="flex flex-col gap-3 border-t border-border pt-2 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || referenceImages.length >= maxReferenceImages}
+                  className="inline-flex size-10 items-center justify-center rounded-md bg-transparent text-neutral-600 transition hover:bg-neutral-100/80 hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-neutral-600"
+                  aria-label={copy.uploadReference}
+                  title={copy.uploadReference}
+                >
+                  {uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+                </button>
                 <ControlDropdown
                   id="model"
                   label={copy.modelLabel}
@@ -994,27 +1019,15 @@ export function MonicaCreator({
                   onClose={() => setOpenSelectKey(null)}
                   onChange={setModel}
                 />
-                <ControlDropdown
-                  id="images"
-                  label={copy.imagesLabel}
-                  icon={<ImagePlus className="size-4" />}
-                  value={imageCount.toString()}
-                  options={countOptions.map((count) => ({ value: count.toString(), label: `${count} img` }))}
-                  open={openSelectKey === 'images'}
-                  onToggle={() => setOpenSelectKey((key) => key === 'images' ? null : 'images')}
-                  onClose={() => setOpenSelectKey(null)}
-                  onChange={(value) => setImageCount(Number(value))}
-                />
-                <ControlDropdown
-                  id="ratio"
-                  label={copy.ratioLabel}
-                  icon={<span className="block size-4 rounded-[2px] border-2 border-current" aria-hidden="true" />}
-                  value={ratio}
-                  options={ratioOptions}
-                  open={openSelectKey === 'ratio'}
-                  onToggle={() => setOpenSelectKey((key) => key === 'ratio' ? null : 'ratio')}
-                  onClose={() => setOpenSelectKey(null)}
-                  onChange={setRatio}
+                <ImageSettingsDropdown
+                  ratioLabel={copy.ratioLabel}
+                  imagesLabel={copy.imagesLabel}
+                  ratio={ratio}
+                  imageCount={imageCount}
+                  open={openSelectKey === 'image-settings'}
+                  onToggle={() => setOpenSelectKey((key) => key === 'image-settings' ? null : 'image-settings')}
+                  onRatioChange={setRatio}
+                  onImageCountChange={setImageCount}
                 />
               </div>
               <button
@@ -1110,6 +1123,110 @@ export function MonicaCreator({
         />
       ) : null}
     </section>
+  );
+}
+
+function AspectRatioIcon({ ratio, className }: { ratio: string; className?: string }) {
+  const [width = 1, height = 1] = ratio.split(':').map((part) => Number(part));
+  const wide = width >= height;
+  const iconClassName = wide ? 'h-3 w-5' : 'h-5 w-3';
+
+  return (
+    <span
+      className={cn('block rounded-[2px] border-2 border-current', iconClassName, className)}
+      aria-hidden="true"
+    />
+  );
+}
+
+function ImageSettingsDropdown({
+  ratioLabel,
+  imagesLabel,
+  ratio,
+  imageCount,
+  open,
+  onToggle,
+  onRatioChange,
+  onImageCountChange,
+}: {
+  ratioLabel: string;
+  imagesLabel: string;
+  ratio: string;
+  imageCount: number;
+  open: boolean;
+  onToggle: () => void;
+  onRatioChange: (value: string) => void;
+  onImageCountChange: (value: number) => void;
+}) {
+  return (
+    <div className="relative" data-creator-dropdown>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-transparent px-3 text-[13px] font-medium text-neutral-600 transition hover:bg-neutral-100/80 hover:text-neutral-900"
+        aria-expanded={open}
+        aria-controls="creator-image-settings-menu"
+        title={`${ratioLabel} / ${imagesLabel}`}
+      >
+        <AspectRatioIcon ratio={ratio} />
+        <span>{ratio}</span>
+        <span className="h-4 w-px bg-border" aria-hidden="true" />
+        <Images className="size-4" />
+        <span>{imageCount}</span>
+        <ChevronDown className={cn('size-3.5 text-muted-foreground transition', open ? 'rotate-180' : '')} />
+      </button>
+      {open ? (
+        <div
+          id="creator-image-settings-menu"
+          className="absolute left-0 top-[calc(100%+6px)] z-20 w-[260px] max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-white p-1.5 shadow-xl shadow-black/15"
+        >
+          <div className="grid gap-1.5">
+            <div className="rounded-md bg-neutral-50 p-2">
+              <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">{ratioLabel}</div>
+              <div className="grid grid-cols-3 gap-1">
+                {ratioOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onRatioChange(option.value)}
+                    className={cn(
+                      'grid h-11 place-items-center gap-0.5 rounded text-xs font-medium transition',
+                      ratio === option.value
+                        ? 'bg-white text-foreground shadow-sm ring-1 ring-border'
+                        : 'text-neutral-500 hover:bg-white/80 hover:text-neutral-900',
+                    )}
+                  >
+                    <AspectRatioIcon ratio={option.value} />
+                    <span>{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-md bg-neutral-50 p-2">
+              <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">{imagesLabel}</div>
+              <div className="grid grid-cols-4 gap-1">
+                {countOptions.map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => onImageCountChange(count)}
+                    className={cn(
+                      'h-8 rounded text-sm font-semibold transition',
+                      imageCount === count
+                        ? 'bg-white text-foreground shadow-sm ring-1 ring-border'
+                        : 'text-neutral-500 hover:bg-white/80 hover:text-neutral-900',
+                    )}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1508,10 +1625,10 @@ function ResultPanel({
                   <span>{batch.model}</span>
                   <span aria-hidden="true">&middot;</span>
                   <span>{batch.ratio}</span>
-                  {batch.referenceImage ? (
+                  {batch.referenceImages?.length ? (
                     <>
                       <span aria-hidden="true">&middot;</span>
-                      <span>Ref Image</span>
+                      <span>{batch.referenceImages.length} Ref {batch.referenceImages.length === 1 ? 'Image' : 'Images'}</span>
                     </>
                   ) : null}
                 </div>
@@ -1594,6 +1711,8 @@ function getRatioClassName(ratio?: string | null) {
   if (ratio === '4:5') return 'aspect-[4/5]';
   if (ratio === '9:16') return 'aspect-[9/16]';
   if (ratio === '16:9') return 'aspect-[16/9]';
+  if (ratio === '4:3') return 'aspect-[4/3]';
+  if (ratio === '3:4') return 'aspect-[3/4]';
   return 'aspect-square';
 }
 
