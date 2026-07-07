@@ -4,7 +4,7 @@
     "banner": "Ship Faster | Charge Smarter | Scale Fearlessly",
     "webTitle": "Monica – The Ultimate AI SaaS Starter Kit with Stripe, Credits & Docs",
     "webDescription": "Next.js 14 + Prisma + PostgreSQL + Stripe + Clerk + Fumadocs. Production-ready pricing tiers, credit system, anonymous-to-auth onboarding, and beautiful docs — everything you need to launch and monetize your AI product in days, not months.",
-    "keywords": "AI SaaS template, Next.js boilerplate, Stripe billing, credit-based pricing, anonymous onboarding, Fumadocs, Prisma PostgreSQL, Clerk authentication",
+    "keywords": "",
     "openGraph": {
         "image": "/share-og.png"
       },

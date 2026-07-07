@@ -125,7 +125,7 @@ function PublicImageCard({
             width={publicImage.image?.width ?? 1024}
             height={publicImage.image?.height ?? 1280}
             unoptimized
-            className="aspect-4/5 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+            className="h-auto w-full transition duration-300 group-hover:scale-[1.03]"
           />
         ) : (
           <div className="grid aspect-4/5 place-items-center text-muted-foreground"><ImagePlus className="size-8" /></div>

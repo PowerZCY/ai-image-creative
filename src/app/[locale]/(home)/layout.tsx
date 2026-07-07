@@ -22,9 +22,11 @@ async function homeOptions(locale: string): Promise<SiteHomeLayoutConfig> {
 export default async function Layout({
   params,
   children,
+  modal,
 }: {
   params: Promise<{ locale: string }>;
   children: ReactNode;
+  modal: ReactNode;
 }) {
   const { locale } = await params;
   const customeOptions = await homeOptions(locale);
@@ -55,6 +57,7 @@ export default async function Layout({
         }}
       >
         {children}
+        {modal}
       </SiteHomeLayout>
     </FingerprintProvider>
   );

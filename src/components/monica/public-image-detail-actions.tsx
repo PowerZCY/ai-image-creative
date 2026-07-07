@@ -13,14 +13,14 @@ async function readError(response: Response) {
   }
 }
 
-export function PublicImageCloseButton() {
+export function PublicImageCloseButton({ mode = 'explore' }: { mode?: 'back' | 'explore' }) {
   const router = useRouter();
 
   return (
     <button
       type="button"
       onClick={() => {
-        if (window.history.length > 1) {
+        if (mode === 'back') {
           router.back();
         } else {
           router.push('/explore');
@@ -36,29 +36,15 @@ export function PublicImageCloseButton() {
 
 export function PublicImageDetailActions({
   publicImageId,
-  promptText,
-  copyPromptLabel = 'Copy',
-  copiedLabel = 'Copied',
   usePromptLabel = 'Use prompt',
   saveLabel = 'Save',
 }: {
   publicImageId: string;
-  promptText: string;
-  copyPromptLabel?: string;
-  copiedLabel?: string;
   usePromptLabel?: string;
   saveLabel?: string;
 }) {
-  const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function copyPrompt() {
-    if (!promptText) return;
-    await navigator.clipboard?.writeText(promptText);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
-  }
 
   async function saveImage() {
     setSaving(true);
@@ -97,16 +83,38 @@ export function PublicImageDetailActions({
           <Heart className="size-4" />
         </button>
       </div>
-      {promptText ? (
-        <button
-          type="button"
-          onClick={() => void copyPrompt()}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
-          {copied ? copiedLabel : copyPromptLabel}
-        </button>
-      ) : null}
     </div>
+  );
+}
+
+export function PublicImagePromptCopyButton({
+  promptText,
+  copyPromptLabel = 'Copy',
+  copiedLabel = 'Copied',
+}: {
+  promptText: string;
+  copyPromptLabel?: string;
+  copiedLabel?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyPrompt() {
+    if (!promptText) return;
+    await navigator.clipboard?.writeText(promptText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }
+
+  if (!promptText) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copyPrompt()}
+      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium normal-case tracking-normal text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+      {copied ? copiedLabel : copyPromptLabel}
+    </button>
   );
 }
