@@ -1,13 +1,79 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { createLocalizedPageMetadata, createLocalizedSiteMetadata } from '@windrun-huaiin/third-ui/lib/seo-metadata';
 import { MonicaCreator } from '@/components/monica/creator-client';
 import { getMonicaCreatorCopy, getMonicaExploreCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
 import { monicaContentWidthClass } from '@/components/monica/layout';
 import { ThemeGalleryClient } from '@/components/monica/theme-gallery-client';
+import { appConfig } from '@/lib/appConfig';
 import { themeService } from '@/server/monica/services/theme.service';
 import { ArrowLeft } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; slug: string }>;
+}): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const [site, theme] = await Promise.all([
+    createLocalizedSiteMetadata({
+      locale,
+      baseUrl: appConfig.baseUrl,
+      locales: appConfig.i18n.locales,
+      defaultLocale: appConfig.i18n.defaultLocale,
+      localePrefixAsNeeded: appConfig.i18n.localePrefixAsNeeded,
+    }),
+    themeService.findPublicThemeBySlug(slug),
+  ]);
+
+  if (!theme) {
+    return createLocalizedPageMetadata({
+      url: {
+        locale,
+        pathname: `/themes/${slug}`,
+        baseUrl: appConfig.baseUrl,
+        locales: appConfig.i18n.locales,
+        defaultLocale: appConfig.i18n.defaultLocale,
+        localePrefixAsNeeded: appConfig.i18n.localePrefixAsNeeded,
+      },
+      site,
+    });
+  }
+
+  const title = theme.seoTitle ?? theme.title;
+  const description = theme.seoMetaDescription ?? theme.description ?? theme.brief ?? undefined;
+  const imageUrl = theme.seoOgImageUrl ?? theme.coverImageUrl ?? undefined;
+
+  return createLocalizedPageMetadata({
+    url: {
+      locale,
+      pathname: `/themes/${theme.slug}`,
+      baseUrl: appConfig.baseUrl,
+      locales: appConfig.i18n.locales,
+      defaultLocale: appConfig.i18n.defaultLocale,
+      localePrefixAsNeeded: appConfig.i18n.localePrefixAsNeeded,
+    },
+    site,
+    page: {
+      title,
+      description,
+      keywords: theme.seoKeywords,
+      openGraph: {
+        title,
+        description,
+        images: imageUrl ? [{ url: imageUrl }] : undefined,
+      },
+      twitter: {
+        title,
+        description,
+        images: imageUrl ? [{ url: imageUrl }] : undefined,
+      },
+    },
+  });
+}
 
 export default async function ThemeDetailPage({
   params,
@@ -36,9 +102,9 @@ export default async function ThemeDetailPage({
       <section className="px-4 pb-8 pt-20 md:px-8 md:pt-24">
         <div className="mx-auto max-w-4xl text-center">
           <div className="mb-6">
-            <Link href="/themes" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground">
+            <Link href="/explore" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground">
               <ArrowLeft className="size-4" />
-              Back to themes
+              Back to explore
             </Link>
           </div>
           <h1 className="text-4xl font-medium leading-tight text-foreground md:text-5xl">

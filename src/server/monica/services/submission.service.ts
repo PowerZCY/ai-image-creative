@@ -11,7 +11,7 @@ export class SubmissionService {
     return imageRepository.searchGeneratedImagesForAdmin(input);
   }
 
-  async addGeneratedImageToTheme(adminUserId: string, input: { imageId: string; themeId: string; title?: string; creationNote?: string }) {
+  async addGeneratedImageToTheme(adminUserId: string, input: { imageId: string; themeId: string; title?: string; altText?: string; creationNote?: string }) {
     if (!/^\d+$/.test(input.themeId)) {
       throw new Error('themeId is required');
     }
@@ -30,6 +30,7 @@ export class SubmissionService {
       userId: image.userId,
       themeId,
       title: input.title?.trim().slice(0, 255) || 'Admin selected image',
+      altText: normalizePublicImageAltText(input.altText),
       creationNote: input.creationNote ?? job?.prompt ?? null,
       createdBy: adminUserId,
     });
@@ -75,9 +76,14 @@ export class SubmissionService {
     });
   }
 
-  reviewImageSubmission(reviewerUserId: string, submissionId: string, action: 'approved' | 'rejected', note?: string) {
-    return submissionRepository.reviewImageSubmission(reviewerUserId, submissionId, action, note);
+  reviewImageSubmission(reviewerUserId: string, submissionId: string, action: 'approved' | 'rejected', note?: string, altText?: string) {
+    return submissionRepository.reviewImageSubmission(reviewerUserId, submissionId, action, note, normalizePublicImageAltText(altText));
   }
 }
 
 export const submissionService = new SubmissionService();
+
+function normalizePublicImageAltText(value?: string) {
+  const normalized = value?.trim().slice(0, 255);
+  return normalized || null;
+}

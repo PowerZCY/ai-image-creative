@@ -10,6 +10,10 @@ export class ExploreService {
     return exploreRepository.searchPublicImages(input);
   }
 
+  findPublicImageDetail(publicImageId: string) {
+    return exploreRepository.findPublicImageDetail(publicImageId);
+  }
+
   toggleLike(userId: string, publicImageId: string) {
     return exploreRepository.toggleLike(userId, publicImageId);
   }

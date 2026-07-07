@@ -40,6 +40,7 @@ type ThemeGeneratorIdea = {
 type ThemeItem = {
   id: string;
   issueNumber?: number | null;
+  slug: string;
   title: string;
   brief?: string | null;
   description?: string | null;
@@ -58,6 +59,7 @@ type ThemeItem = {
   tags?: string[];
   seoTitle?: string | null;
   seoMetaDescription?: string | null;
+  seoOgImageUrl?: string | null;
   seoKeywords?: string[];
   imageSeoNotes?: unknown;
   readiness?: {
@@ -96,6 +98,12 @@ type AdminGeneratedImage = {
   publicImage?: { publicImageId: string } | null;
 };
 
+type SubmitImageDraft = {
+  title: string;
+  altText: string;
+  creationNote: string;
+};
+
 type Filters = {
   keyword: string;
   status: string;
@@ -103,6 +111,7 @@ type Filters = {
 
 type EditAcceptDraft = {
   title: string;
+  slug: string;
   issueNumber: string;
   brief: string;
   description: string;
@@ -118,6 +127,15 @@ function splitLines(value: string) {
     .split('\n')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizeSlugInput(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function parseJsonOrNull(value: string) {
@@ -185,7 +203,8 @@ function ThemeFieldsModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [title, setTitle] = useState(theme.title);
+  const [title, setTitle] = useState(theme.title ?? '');
+  const [slug, setSlug] = useState(theme.slug ?? '');
   const [issueNumber, setIssueNumber] = useState(theme.issueNumber?.toString() ?? '');
   const [brief, setBrief] = useState(theme.brief ?? '');
   const [description, setDescription] = useState(theme.description ?? '');
@@ -199,6 +218,7 @@ function ThemeFieldsModal({
   const [tags, setTags] = useState((theme.tags ?? []).join('\n'));
   const [seoTitle, setSeoTitle] = useState(theme.seoTitle ?? '');
   const [seoMetaDescription, setSeoMetaDescription] = useState(theme.seoMetaDescription ?? '');
+  const [seoOgImageUrl, setSeoOgImageUrl] = useState(theme.seoOgImageUrl ?? '');
   const [seoKeywords, setSeoKeywords] = useState((theme.seoKeywords ?? []).join('\n'));
   const [imageSeoNotes, setImageSeoNotes] = useState(
     theme.imageSeoNotes && typeof theme.imageSeoNotes === 'object'
@@ -231,6 +251,7 @@ function ThemeFieldsModal({
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({
           title,
+          slug,
           issueNumber,
           brief,
           description,
@@ -242,6 +263,7 @@ function ThemeFieldsModal({
           tags: splitLines(tags),
           seoTitle,
           seoMetaDescription,
+          seoOgImageUrl,
           seoKeywords: splitLines(seoKeywords),
           imageSeoNotes: parseJsonOrNull(imageSeoNotes),
         }),
@@ -264,12 +286,20 @@ function ThemeFieldsModal({
             {error}
           </div>
         ) : null}
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_180px]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)_160px_180px]">
           <label className="block">
             <span className={labelSpanCls}>Title</span>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+          <label className="block">
+            <span className={labelSpanCls}>Slug</span>
+            <input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
               className={cn('mt-1', inputCls)}
             />
           </label>
@@ -328,6 +358,16 @@ function ThemeFieldsModal({
               className={cn('mt-1', inputCls)}
             />
           </label>
+          <label className="block">
+            <span className={labelSpanCls}>SEO OG image URL</span>
+            <input
+              value={seoOgImageUrl}
+              onChange={(e) => setSeoOgImageUrl(e.target.value)}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+        </div>
+        <div className="grid gap-3">
           <label className="block">
             <span className={labelSpanCls}>Meta description</span>
             <input
@@ -426,7 +466,7 @@ function ThemeFieldsModal({
         <div className="flex gap-2 pt-1">
           <button
             type="button"
-            disabled={saving || !title.trim()}
+            disabled={saving || !title.trim() || !slug.trim()}
             onClick={() => void handleSave()}
             className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
           >
@@ -459,7 +499,7 @@ function FeaturedImagesModal({
   const [featuredPool, setFeaturedPool] = useState<FeaturedPoolImage[]>([]);
   const [selectedFeaturedIds, setSelectedFeaturedIds] = useState<string[]>(
     theme.featuredImages
-      ?.map((img) => img?.id)
+      ?.map((img) => img?.publicImageId ?? img?.id)
       .filter((id): id is string => Boolean(id)) ?? [],
   );
   const [loading, setLoading] = useState(true);
@@ -476,12 +516,12 @@ function FeaturedImagesModal({
         });
         if (!response.ok) throw new Error(await readError(response));
         const data = (await response.json()) as {
-          selected?: Array<{ publicImageId: string | number }>;
+          selected?: Array<{ publicImageId: string }>;
           pool?: FeaturedPoolImage[];
         };
         setFeaturedPool(data.pool ?? []);
         if (data.selected?.length) {
-          setSelectedFeaturedIds(data.selected.map((item) => item.publicImageId.toString()));
+          setSelectedFeaturedIds(data.selected.map((item) => item.publicImageId));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -537,12 +577,13 @@ function FeaturedImagesModal({
           <div className="grid grid-cols-3 gap-3">
             {featuredPool.map((image) => {
               const imageUrl = image.image?.thumbnailUrl || image.image?.imageUrl;
-              const selected = selectedFeaturedIds.includes(image.id);
+              const publicImageId = image.publicImageId;
+              const selected = selectedFeaturedIds.includes(publicImageId);
               return (
                 <button
-                  key={image.id}
+                  key={publicImageId}
                   type="button"
-                  onClick={() => toggleFeatured(image.id)}
+                  onClick={() => toggleFeatured(publicImageId)}
                   className={cn(
                     'overflow-hidden rounded-lg border bg-card text-left',
                     selected
@@ -606,6 +647,7 @@ function SubmitImagesModal({
   onSaved: () => void;
 }) {
   const [generatedPool, setGeneratedPool] = useState<AdminGeneratedImage[]>([]);
+  const [draftsByImageId, setDraftsByImageId] = useState<Record<string, SubmitImageDraft>>({});
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -631,7 +673,27 @@ function SubmitImagesModal({
     })();
   }, []);
 
+  function buildSubmitImageDraft(image: AdminGeneratedImage): SubmitImageDraft {
+    const prompt = image.promptUsed ?? '';
+    return {
+      title: prompt.slice(0, 80) || 'Admin selected image',
+      altText: prompt.slice(0, 255) || 'Admin selected image',
+      creationNote: prompt,
+    };
+  }
+
+  function updateSubmitImageDraft(image: AdminGeneratedImage, patch: Partial<SubmitImageDraft>) {
+    setDraftsByImageId((current) => ({
+      ...current,
+      [image.imageId]: {
+        ...(current[image.imageId] ?? buildSubmitImageDraft(image)),
+        ...patch,
+      },
+    }));
+  }
+
   async function submitImage(image: AdminGeneratedImage) {
+    const draft = draftsByImageId[image.imageId] ?? buildSubmitImageDraft(image);
     setSubmittingId(image.imageId);
     setError(null);
     try {
@@ -640,8 +702,9 @@ function SubmitImagesModal({
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({
           imageId: image.imageId,
-          title: image.promptUsed?.slice(0, 80) || 'Admin selected image',
-          creationNote: image.promptUsed,
+          title: draft.title,
+          altText: draft.altText,
+          creationNote: draft.creationNote,
         }),
       });
       if (!response.ok) throw new Error(await readError(response));
@@ -675,6 +738,7 @@ function SubmitImagesModal({
               const imageUrl = image.thumbnailUrl || image.imageUrl;
               const alreadyPublic = Boolean(image.publicImage);
               const isSubmitting = submittingId === image.imageId;
+              const draft = draftsByImageId[image.imageId] ?? buildSubmitImageDraft(image);
               return (
                 <article key={image.imageId} className="overflow-hidden rounded-lg border border-border bg-card">
                   {imageUrl ? (
@@ -695,9 +759,38 @@ function SubmitImagesModal({
                     <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
                       {image.promptUsed || image.imageId}
                     </p>
+                    <label className="block">
+                      <span className={labelSpanCls}>Title</span>
+                      <input
+                        value={draft.title}
+                        onChange={(e) => updateSubmitImageDraft(image, { title: e.target.value })}
+                        disabled={alreadyPublic}
+                        className={cn('mt-1', inputCls)}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelSpanCls}>Alt text</span>
+                      <textarea
+                        value={draft.altText}
+                        onChange={(e) => updateSubmitImageDraft(image, { altText: e.target.value })}
+                        disabled={alreadyPublic}
+                        rows={2}
+                        className={cn('mt-1', textareaCls)}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelSpanCls}>Creation note</span>
+                      <textarea
+                        value={draft.creationNote}
+                        onChange={(e) => updateSubmitImageDraft(image, { creationNote: e.target.value })}
+                        disabled={alreadyPublic}
+                        rows={2}
+                        className={cn('mt-1', textareaCls)}
+                      />
+                    </label>
                     <button
                       type="button"
-                      disabled={Boolean(submittingId) || alreadyPublic}
+                      disabled={Boolean(submittingId) || alreadyPublic || !draft.title.trim()}
                       onClick={() => void submitImage(image)}
                       className="monica-button-primary min-h-9 px-3 text-xs disabled:opacity-50"
                     >
@@ -733,6 +826,8 @@ function NewThemeModal({
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugEdited, setSlugEdited] = useState(false);
   const [issueNumber, setIssueNumber] = useState('');
   const [brief, setBrief] = useState('');
   const [saving, setSaving] = useState(false);
@@ -745,7 +840,7 @@ function NewThemeModal({
       const response = await fetch('/api/monica/admin/themes', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ title, issueNumber, brief, description: brief }),
+        body: JSON.stringify({ title, slug, issueNumber, brief, description: brief }),
       });
       if (!response.ok) throw new Error(await readError(response));
       onCreated();
@@ -765,12 +860,27 @@ function NewThemeModal({
             {error}
           </div>
         ) : null}
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)_160px]">
           <label className="block">
             <span className={labelSpanCls}>Theme</span>
             <input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                const nextTitle = e.target.value;
+                setTitle(nextTitle);
+                if (!slugEdited) setSlug(normalizeSlugInput(nextTitle));
+              }}
+              className={cn('mt-1', inputCls)}
+            />
+          </label>
+          <label className="block">
+            <span className={labelSpanCls}>Slug</span>
+            <input
+              value={slug}
+              onChange={(e) => {
+                setSlugEdited(true);
+                setSlug(e.target.value);
+              }}
               className={cn('mt-1', inputCls)}
             />
           </label>
@@ -796,7 +906,7 @@ function NewThemeModal({
         <div className="flex gap-2 pt-1">
           <button
             type="button"
-            disabled={saving || !title.trim()}
+            disabled={saving || !title.trim() || !slug.trim()}
             onClick={() => void handleCreate()}
             className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
           >
@@ -934,12 +1044,20 @@ function EditAcceptPanel({
 
   return (
     <div className="mt-4 grid gap-3 rounded-md border border-border bg-background/50 p-3">
-      <div className="grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_150px_180px]">
+      <div className="grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_minmax(180px,0.6fr)_150px_180px]">
         <label className="block">
           <span className={labelSpanCls}>Theme title</span>
           <input
             value={draft.title}
             onChange={(e) => onChange({ title: e.target.value })}
+            className={cn('mt-1', inputCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Slug</span>
+          <input
+            value={draft.slug}
+            onChange={(e) => onChange({ slug: e.target.value })}
             className={cn('mt-1', inputCls)}
           />
         </label>
@@ -1059,7 +1177,7 @@ function EditAcceptPanel({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          disabled={disabled || !draft.title.trim()}
+          disabled={disabled || !draft.title.trim() || !draft.slug.trim()}
           onClick={() => onSave(draft)}
           className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
         >
@@ -1166,6 +1284,7 @@ export function AdminReviewClient({
     theme: ThemeItem;
   } | null>(null);
   const [imageRejectNoteById, setImageRejectNoteById] = useState<Record<string, string>>({});
+  const [imageAltTextById, setImageAltTextById] = useState<Record<string, string>>({});
 
   const themeSubmissions = useMonicaPagedList<Filters, ThemeSubmission>({
     endpoint: '/api/monica/admin/theme-submissions/search',
@@ -1220,6 +1339,7 @@ export function AdminReviewClient({
   function buildInitialEditAcceptDraft(item: ThemeSubmission): EditAcceptDraft {
     return {
       title: item.title,
+      slug: normalizeSlugInput(item.title),
       issueNumber: '',
       brief: item.details,
       description: item.details,
@@ -1246,6 +1366,7 @@ export function AdminReviewClient({
       [id]: {
         ...(current[id] ?? {
           title: '',
+          slug: '',
           issueNumber: '',
           brief: '',
           description: '',
@@ -1270,6 +1391,7 @@ export function AdminReviewClient({
           headers: { 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify({
             title: draft.title,
+            slug: draft.slug,
             issueNumber: draft.issueNumber,
             brief: draft.brief,
             description: draft.description,
@@ -1304,11 +1426,16 @@ export function AdminReviewClient({
       const response = await fetch(`/api/monica/admin/image-submissions/${id}/review`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ action, note: imageRejectNoteById[id] }),
+        body: JSON.stringify({
+          action,
+          note: imageRejectNoteById[id],
+          altText: imageAltTextById[id],
+        }),
       });
       if (!response.ok) throw new Error(await readError(response));
       imageSubmissions.reload();
       setImageRejectNoteById((current) => ({ ...current, [id]: '' }));
+      setImageAltTextById((current) => ({ ...current, [id]: '' }));
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1624,6 +1751,21 @@ export function AdminReviewClient({
                         {item.creationNote || item.promptSnapshot || 'No note.'}
                       </p>
                       <ReviewFlowInline flow={item.reviewFlow} />
+                      <label className="mt-2 block">
+                        <span className={labelSpanCls}>Alt text</span>
+                        <textarea
+                          value={imageAltTextById[item.id] ?? ''}
+                          onChange={(e) =>
+                            setImageAltTextById((current) => ({
+                              ...current,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                          rows={2}
+                          placeholder="Describe the visible image content for SEO and accessibility"
+                          className={cn('mt-1', textareaCls)}
+                        />
+                      </label>
                       <label className="mt-2 block">
                         <span className={labelSpanCls}>Reject note</span>
                         <textarea

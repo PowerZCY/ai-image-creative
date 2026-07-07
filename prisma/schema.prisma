@@ -204,6 +204,7 @@ model ThemeSubmission {
 model Theme {
   id                 BigInt    @id @default(autoincrement())
   issueNumber        Int?      @unique(map: "uq_themes_issue_number") @map("issue_number")
+  slug               String    @unique(map: "uq_themes_slug") @db.VarChar(255)
   title              String    @db.VarChar(255)
   brief              String?   @db.Text
   themeNote          String?   @map("theme_note") @db.Text
@@ -214,6 +215,7 @@ model Theme {
   tags               Json?
   seoTitle           String?   @map("seo_title") @db.VarChar(255)
   seoMetaDescription String?   @map("seo_meta_description") @db.Text
+  seoOgImageUrl      String?   @map("seo_og_image_url") @db.Text
   seoKeywords        String[]  @default([]) @map("seo_keywords")
   imageSeoNotes      Json?     @map("image_seo_notes")
   stats              Json?
@@ -415,7 +417,7 @@ model AssistantInteraction {
 model ThemeFeaturedImage {
   id            BigInt    @id @default(autoincrement())
   themeId       BigInt    @map("theme_id")
-  publicImageId BigInt    @map("public_image_id")
+  publicImageId String    @map("public_image_id") @db.Uuid
   position      Int       @default(0)
   createdBy     String?   @map("created_by") @db.Uuid
   createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)

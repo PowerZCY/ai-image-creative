@@ -4,16 +4,18 @@
 CREATE TABLE IF NOT EXISTS monica_ai.themes (
     id                BIGSERIAL PRIMARY KEY,
     issue_number      INTEGER,
+    slug              VARCHAR(255) NOT NULL,
     title             VARCHAR(255) NOT NULL,
     brief             TEXT,
     theme_note        TEXT,
     publish_date      DATE,
     cover_image_url   TEXT,
-    generator_ideas   TEXT[]       NOT NULL DEFAULT ARRAY[]::TEXT[],
+    generator_ideas   JSONB        NOT NULL DEFAULT '[]'::JSONB,
     avoid_cliches     TEXT[]       NOT NULL DEFAULT ARRAY[]::TEXT[],
     tags              JSONB,
     seo_title         VARCHAR(255),
     seo_meta_description TEXT,
+    seo_og_image_url  TEXT,
     seo_keywords      TEXT[]       NOT NULL DEFAULT ARRAY[]::TEXT[],
     image_seo_notes   JSONB,
     stats             JSONB,
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.themes (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_themes_issue_number ON monica_ai.themes (issue_number);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_themes_slug ON monica_ai.themes (slug);
 CREATE INDEX IF NOT EXISTS idx_themes_publish_date ON monica_ai.themes (publish_date);
 CREATE INDEX IF NOT EXISTS idx_themes_source_submission_id ON monica_ai.themes (source_submission_id);
 
@@ -72,6 +75,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.generation_jobs (
     job_id             UUID         NOT NULL DEFAULT gen_random_uuid(),
     user_id            UUID         NOT NULL,
     theme_id           BIGINT,
+    source_page        VARCHAR(50),
     status             VARCHAR(50)  NOT NULL DEFAULT 'pending',
     generation_type    VARCHAR(50)  NOT NULL DEFAULT 'text_to_image',
     prompt             TEXT         NOT NULL,
@@ -165,6 +169,8 @@ CREATE TABLE IF NOT EXISTS monica_ai.public_images (
     public_image_id  UUID        NOT NULL DEFAULT gen_random_uuid(),
     image_id         UUID        NOT NULL,
     source_submission_id BIGINT,
+    source_type      VARCHAR(50) NOT NULL DEFAULT 'user_submission',
+    created_by       UUID,
     user_id          UUID        NOT NULL,
     theme_id         BIGINT,
     title            VARCHAR(255) NOT NULL,
@@ -190,6 +196,56 @@ CREATE TABLE IF NOT EXISTS monica_ai.public_images (
 CREATE INDEX IF NOT EXISTS idx_public_images_published_at ON monica_ai.public_images (published_at);
 CREATE INDEX IF NOT EXISTS idx_public_images_theme_featured_score ON monica_ai.public_images (theme_id, featured_score);
 CREATE INDEX IF NOT EXISTS idx_public_images_like_count ON monica_ai.public_images (like_count);
+
+CREATE TABLE IF NOT EXISTS monica_ai.assistant_interactions (
+    id                    BIGSERIAL PRIMARY KEY,
+    interaction_id        UUID        NOT NULL DEFAULT gen_random_uuid(),
+    session_id            UUID        NOT NULL DEFAULT gen_random_uuid(),
+    user_id               UUID,
+    root_action_type      VARCHAR(50) NOT NULL,
+    action_type           VARCHAR(50) NOT NULL,
+    parent_interaction_id UUID,
+    source_page           VARCHAR(50),
+    theme_id              BIGINT,
+    image_id              UUID,
+    public_image_id       UUID,
+    generation_job_id     UUID,
+    user_input            TEXT,
+    input_prompt          TEXT,
+    output_prompt         TEXT,
+    ideas                 JSONB,
+    selected_idea_index   INTEGER,
+    selected_idea         JSONB,
+    request_payload       JSONB,
+    response_payload      JSONB,
+    provider              VARCHAR(100),
+    model                 VARCHAR(100),
+    status                VARCHAR(50) NOT NULL DEFAULT 'succeeded',
+    error_message         TEXT,
+    used_for_generation   BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at            TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT assistant_interactions_interaction_id_key UNIQUE (interaction_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_assistant_interactions_session_created_at ON monica_ai.assistant_interactions (session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_assistant_interactions_user_created_at ON monica_ai.assistant_interactions (user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_assistant_interactions_theme_created_at ON monica_ai.assistant_interactions (theme_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_assistant_interactions_action_created_at ON monica_ai.assistant_interactions (root_action_type, action_type, created_at);
+
+CREATE TABLE IF NOT EXISTS monica_ai.theme_featured_images (
+    id              BIGSERIAL PRIMARY KEY,
+    theme_id        BIGINT      NOT NULL,
+    public_image_id UUID        NOT NULL,
+    position        INTEGER     NOT NULL DEFAULT 0,
+    created_by      UUID,
+    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    deleted         INTEGER     NOT NULL DEFAULT 0,
+    CONSTRAINT theme_featured_images_deleted_check CHECK (deleted = ANY (ARRAY[0, 1])),
+    CONSTRAINT theme_featured_images_theme_position_key UNIQUE (theme_id, position),
+    CONSTRAINT theme_featured_images_theme_public_key UNIQUE (theme_id, public_image_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_theme_featured_images_theme_position ON monica_ai.theme_featured_images (theme_id, position);
 
 CREATE TABLE IF NOT EXISTS monica_ai.image_likes (
     id               BIGSERIAL PRIMARY KEY,

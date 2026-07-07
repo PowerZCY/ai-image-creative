@@ -60,6 +60,7 @@ export class SubmissionRepository {
     userId: string;
     themeId: bigint;
     title: string;
+    altText?: string | null;
     creationNote?: string | null;
     createdBy: string;
   }) {
@@ -69,6 +70,7 @@ export class SubmissionRepository {
         userId: input.userId,
         themeId: input.themeId,
         title: input.title,
+        altText: input.altText,
         creationNote: input.creationNote,
         sourceType: 'admin_direct',
         createdBy: input.createdBy,
@@ -80,6 +82,7 @@ export class SubmissionRepository {
         userId: input.userId,
         themeId: input.themeId,
         title: input.title,
+        altText: input.altText,
         creationNote: input.creationNote,
         sourceType: 'admin_direct',
         createdBy: input.createdBy,
@@ -120,7 +123,7 @@ export class SubmissionRepository {
     });
   }
 
-  reviewImageSubmission(reviewerUserId: string, submissionId: string, action: 'approved' | 'rejected', note?: string) {
+  reviewImageSubmission(reviewerUserId: string, submissionId: string, action: 'approved' | 'rejected', note?: string, altText?: string | null) {
     if (!/^\d+$/.test(submissionId)) return null;
 
     return prisma.$transaction(async (tx) => {
@@ -160,6 +163,7 @@ export class SubmissionRepository {
             userId: existing.userId,
             themeId: existing.themeId,
             title: existing.title,
+            altText,
             creationNote: existing.creationNote,
             publishedAt: new Date(),
             deleted: 0,
@@ -171,6 +175,7 @@ export class SubmissionRepository {
             userId: existing.userId,
             themeId: existing.themeId,
             title: existing.title,
+            altText,
             creationNote: existing.creationNote,
             promptPublic: true,
           },

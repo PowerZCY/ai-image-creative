@@ -14,7 +14,7 @@ export async function POST(
     const authUtils = new ApiAuthUtils(request);
     const { user } = await authUtils.requireAuthWithUser();
     const { submissionId } = await params;
-    const body = await request.json() as { action?: string; note?: string };
+    const body = await request.json() as { action?: string; note?: string; altText?: string };
     if (body.action !== 'approved' && body.action !== 'rejected') {
       return NextResponse.json({ error: 'Invalid review action' }, { status: 400 });
     }
@@ -24,6 +24,7 @@ export async function POST(
       submissionId,
       body.action,
       typeof body.note === 'string' ? body.note : undefined,
+      typeof body.altText === 'string' ? body.altText : undefined,
     );
 
     if (!submission) {

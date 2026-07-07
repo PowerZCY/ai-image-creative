@@ -15,7 +15,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const authUtils = new ApiAuthUtils(request);
     const { user } = await authUtils.requireAuthWithUser();
     const { themeId } = await context.params;
-    const body = await request.json() as { imageId?: string; title?: string; creationNote?: string };
+    const body = await request.json() as { imageId?: string; title?: string; altText?: string; creationNote?: string };
     if (!body.imageId) {
       return NextResponse.json({ error: 'imageId is required' }, { status: 400 });
     }
@@ -23,6 +23,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       imageId: body.imageId,
       themeId,
       title: body.title,
+      altText: body.altText,
       creationNote: body.creationNote,
     });
     return NextResponse.json({ publicImage });

@@ -11,6 +11,8 @@ type RouteContext = {
   params: Promise<{ themeId: string }>;
 };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const authUtils = new ApiAuthUtils(_request);
@@ -48,11 +50,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const body = await request.json() as { publicImageIds?: unknown };
     const publicImageIds = Array.isArray(body.publicImageIds)
       ? body.publicImageIds
-        .map((value) => typeof value === 'string' || typeof value === 'number' ? String(value) : '')
-        .filter((value) => /^\d+$/.test(value))
+        .map((value) => typeof value === 'string' ? value : '')
+        .filter(Boolean)
         .slice(0, 3)
-        .map((value) => BigInt(value))
       : [];
+    if (publicImageIds.some((publicImageId) => !UUID_PATTERN.test(publicImageId))) {
+      return NextResponse.json({ error: 'publicImageIds must be UUID strings' }, { status: 400 });
+    }
 
     const selected = await themeFeaturedImageRepository.setForTheme({
       themeId: BigInt(themeId),

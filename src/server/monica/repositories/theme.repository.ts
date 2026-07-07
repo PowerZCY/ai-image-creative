@@ -3,7 +3,6 @@ import { Prisma } from '@app-prisma';
 import { THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
 import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
 import { buildStoredImageUrl } from '../utils/image-url';
-import { slugifyThemeTitle } from '../utils/theme-slug';
 import { generatorIdeasToJson, normalizeGeneratorIdeas, type ThemeGeneratorIdea } from '../types/theme';
 
 type ThemeRecord = NonNullable<Awaited<ReturnType<typeof prisma.theme.findFirst>>>;
@@ -17,6 +16,7 @@ type ThemeSubmissionDraftInput = {
 
 type PublishThemeInput = {
   title: string;
+  slug: string;
   issueNumber?: number;
   brief?: string;
   description?: string;
@@ -30,12 +30,14 @@ type PublishThemeInput = {
 
 type AdminThemeUpdateInput = {
   title?: string;
+  slug?: string;
   issueNumber?: number | null;
   brief?: string | null;
   description?: string | null;
   coverImageUrl?: string | null;
   seoTitle?: string | null;
   seoMetaDescription?: string | null;
+  seoOgImageUrl?: string | null;
   seoKeywords?: string[];
   imageSeoNotes?: unknown;
   generatorIdeas?: ThemeGeneratorIdea[];
@@ -46,6 +48,7 @@ type AdminThemeUpdateInput = {
 
 type AdminThemeCreateInput = {
   title: string;
+  slug: string;
   issueNumber?: number;
   brief?: string;
   description?: string;
@@ -124,7 +127,7 @@ function normalizeTheme(theme: ThemeRecord) {
   return {
     ...theme,
     issueNumber,
-    slug: slugifyThemeTitle(theme.title),
+    slug: theme.slug,
     description: theme.themeNote,
     generatorIdeas,
     promptTexts: generatorIdeas.map((idea) => idea.prompt),
@@ -162,10 +165,10 @@ async function attachFeaturedImages(themes: NormalizedTheme[]) {
     ...new Set(
       themes.flatMap((theme) => {
         const rows = rowsByThemeId.get(theme.id.toString());
-        return rows?.slice(0, 3).map((row) => row.publicImageId.toString()) ?? [];
+        return rows?.slice(0, 3).map((row) => row.publicImageId) ?? [];
       }),
     ),
-  ].map((id) => BigInt(id));
+  ];
 
   if (featuredIds.length === 0) {
     return themes.map((theme) => ({ ...theme, featuredImages: [] }));
@@ -173,7 +176,7 @@ async function attachFeaturedImages(themes: NormalizedTheme[]) {
 
   const publicImages = await prisma.publicImage.findMany({
     where: {
-      id: { in: featuredIds },
+      publicImageId: { in: featuredIds },
       deleted: 0,
     },
   });
@@ -190,7 +193,7 @@ async function attachFeaturedImages(themes: NormalizedTheme[]) {
     const image = generatedByImageId.get(publicImage.imageId);
     const imageUrl = image ? buildStoredImageUrl(image) : null;
     return [
-      publicImage.id.toString(),
+      publicImage.publicImageId,
       {
         id: publicImage.id.toString(),
         publicImageId: publicImage.publicImageId,
@@ -209,7 +212,7 @@ async function attachFeaturedImages(themes: NormalizedTheme[]) {
     },
     featuredImages: (rowsByThemeId.get(theme.id.toString()) ?? [])
       .slice(0, 3)
-      .map((row) => publicImageById.get(row.publicImageId.toString()) ?? null),
+      .map((row) => publicImageById.get(row.publicImageId) ?? null),
   }));
 }
 
@@ -358,19 +361,14 @@ export class ThemeRepository {
   }
 
   async findPublicThemeBySlug(slug: string) {
-    if (/^\d+$/.test(slug)) {
-      const theme = await prisma.theme.findFirst({
-        where: {
-          ...publicThemeWhere(),
-          id: BigInt(slug),
-        },
-      });
+    const theme = await prisma.theme.findFirst({
+      where: {
+        ...publicThemeWhere(),
+        slug,
+      },
+    });
 
-      return theme ? normalizeTheme(theme) : null;
-    }
-
-    const themes = await this.listPublicThemes();
-    return themes.find((theme) => theme?.slug === slug) ?? null;
+    return theme ? normalizeTheme(theme) : null;
   }
 
   async findPublicThemeById(themeId: bigint) {
@@ -387,12 +385,14 @@ export class ThemeRepository {
 
     const data: Prisma.ThemeUpdateInput = {};
     if (input.title !== undefined) data.title = input.title;
+    if (input.slug !== undefined) data.slug = input.slug;
     if (input.issueNumber !== undefined) (data as { issueNumber?: number | null }).issueNumber = input.issueNumber;
     if (input.brief !== undefined) data.brief = input.brief;
     if (input.description !== undefined) data.themeNote = input.description;
     if (input.coverImageUrl !== undefined) data.coverImageUrl = input.coverImageUrl;
     if (input.seoTitle !== undefined) data.seoTitle = input.seoTitle;
     if (input.seoMetaDescription !== undefined) data.seoMetaDescription = input.seoMetaDescription;
+    if (input.seoOgImageUrl !== undefined) data.seoOgImageUrl = input.seoOgImageUrl;
     if (input.seoKeywords !== undefined) data.seoKeywords = input.seoKeywords;
     if (input.imageSeoNotes !== undefined) data.imageSeoNotes = input.imageSeoNotes as Prisma.InputJsonValue;
     if (input.generatorIdeas !== undefined) data.generatorIdeas = generatorIdeasToJson(input.generatorIdeas);
@@ -412,6 +412,7 @@ export class ThemeRepository {
     const theme = await prisma.theme.create({
       data: {
         title: input.title,
+        slug: input.slug,
         issueNumber: input.issueNumber,
         brief: input.brief,
         themeNote: input.description,
@@ -580,6 +581,7 @@ export class ThemeRepository {
     return prisma.$transaction(async (tx) => {
       const themeData = {
         title: input.title,
+        slug: input.slug,
         issueNumber: input.issueNumber,
         brief: input.brief,
         themeNote: input.description,

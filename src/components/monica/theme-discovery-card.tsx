@@ -1,7 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, ImagePlus } from 'lucide-react';
-import { slugifyThemeTitle } from './theme-routes';
 
 export type SharedThemeItem = {
   id?: string | number | bigint | null;
@@ -16,7 +15,7 @@ export type SharedThemeItem = {
     thumbnailUrl?: string | null;
     title?: string | null;
   } | null>;
-  slug?: string;
+  slug: string;
   publishDate?: Date | string | null;
 };
 
@@ -49,8 +48,7 @@ export function formatThemeDate(value?: Date | string | null) {
 }
 
 function getThemeHref(theme: SharedThemeItem) {
-  if (theme.id) return `/themes/${theme.id.toString()}`;
-  return `/themes/${theme.slug ?? slugifyThemeTitle(theme.title)}`;
+  return `/themes/${theme.slug}`;
 }
 
 function getThemePreviewImages(theme: SharedThemeItem) {

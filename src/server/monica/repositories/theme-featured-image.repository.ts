@@ -2,7 +2,7 @@ import { prisma } from '@/server/prisma';
 
 export type SetThemeFeaturedImagesInput = {
   themeId: bigint;
-  publicImageIds: bigint[];
+  publicImageIds: string[];
   createdBy?: string | null;
 };
 
@@ -20,14 +20,14 @@ export class ThemeFeaturedImageRepository {
   async setForTheme(input: SetThemeFeaturedImagesInput) {
     const publicImages = await prisma.publicImage.findMany({
       where: {
-        id: { in: input.publicImageIds },
+        publicImageId: { in: input.publicImageIds },
         themeId: input.themeId,
         deleted: 0,
       },
-      select: { id: true },
+      select: { publicImageId: true },
     });
-    const allowedIds = new Set(publicImages.map((image) => image.id.toString()));
-    const invalidIds = input.publicImageIds.filter((id) => !allowedIds.has(id.toString()));
+    const allowedIds = new Set(publicImages.map((image) => image.publicImageId));
+    const invalidIds = input.publicImageIds.filter((id) => !allowedIds.has(id));
     if (invalidIds.length > 0) {
       throw new Error('Featured images must belong to the selected theme');
     }

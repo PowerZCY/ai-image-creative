@@ -38,6 +38,32 @@ function readNullableString(value: unknown) {
   return text || null;
 }
 
+function normalizeThemeSlug(value: unknown) {
+  const slug = readString(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (!slug) {
+    throw new Error('slug is required');
+  }
+  if (/^\d+$/.test(slug)) {
+    throw new Error('slug cannot be numeric');
+  }
+
+  return slug;
+}
+
+function readNullableUrlPath(value: unknown, fieldName: string) {
+  const text = readString(value);
+  if (!text) return null;
+  if (!/^https?:\/\//i.test(text) && !text.startsWith('/')) {
+    throw new Error(`${fieldName} must be an absolute URL or a site path`);
+  }
+  return text;
+}
+
 export function parseThemeSubmissionDraftInput(body: Record<string, unknown>) {
   const rawTitle = readString(body.rawTitle);
   if (!rawTitle) {
@@ -83,6 +109,7 @@ export function parsePublishThemeInput(body: Record<string, unknown>) {
 
   return {
     title,
+    slug: normalizeThemeSlug(body.slug),
     issueNumber: readOptionalPositiveInteger(body.issueNumber),
     brief: readOptionalString(body.brief),
     description: readOptionalString(body.description),
@@ -105,12 +132,14 @@ export function parseAdminThemeUpdateInput(body: Record<string, unknown>) {
 
   return {
     title,
+    slug: 'slug' in body ? normalizeThemeSlug(body.slug) : undefined,
     issueNumber: 'issueNumber' in body ? readNullablePositiveInteger(body.issueNumber) : undefined,
     brief: 'brief' in body ? readNullableString(body.brief) : undefined,
     description: 'description' in body ? readNullableString(body.description) : undefined,
     coverImageUrl: 'coverImageUrl' in body ? readNullableString(body.coverImageUrl) : undefined,
     seoTitle: 'seoTitle' in body ? readNullableString(body.seoTitle) : undefined,
     seoMetaDescription: 'seoMetaDescription' in body ? readNullableString(body.seoMetaDescription) : undefined,
+    seoOgImageUrl: 'seoOgImageUrl' in body ? readNullableUrlPath(body.seoOgImageUrl, 'seoOgImageUrl') : undefined,
     seoKeywords: 'seoKeywords' in body ? readStringArray(body.seoKeywords) : undefined,
     imageSeoNotes: 'imageSeoNotes' in body ? readJson(body.imageSeoNotes) : undefined,
     generatorIdeas: 'generatorIdeas' in body
@@ -132,6 +161,7 @@ export function parseAdminThemeCreateInput(body: Record<string, unknown>) {
 
   return {
     title,
+    slug: normalizeThemeSlug(body.slug),
     issueNumber: readOptionalPositiveInteger(body.issueNumber),
     brief: readOptionalString(body.brief),
     description: readOptionalString(body.description),
