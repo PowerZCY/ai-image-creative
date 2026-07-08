@@ -24,14 +24,13 @@ export class SubmissionService {
     if (!theme) {
       throw new Error('Theme is not available');
     }
-    const job = image.jobId ? await imageRepository.findGenerationJob(image.jobId) : null;
     return submissionRepository.createPublicImageDirect({
       imageId: image.imageId,
       userId: image.userId,
       themeId,
       title: input.title?.trim().slice(0, 255) || 'Admin selected image',
       altText: normalizePublicImageAltText(input.altText),
-      creationNote: input.creationNote ?? job?.prompt ?? null,
+      creationNote: normalizePublicImageCreationNote(input.creationNote),
       createdBy: adminUserId,
     });
   }
@@ -85,5 +84,10 @@ export const submissionService = new SubmissionService();
 
 function normalizePublicImageAltText(value?: string) {
   const normalized = value?.trim().slice(0, 255);
+  return normalized || null;
+}
+
+function normalizePublicImageCreationNote(value?: string) {
+  const normalized = value?.trim();
   return normalized || null;
 }

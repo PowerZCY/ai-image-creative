@@ -180,17 +180,36 @@ async function attachFeaturedImages(themes: NormalizedTheme[]) {
       deleted: 0,
     },
   });
-  const generatedImages = publicImages.length
-    ? await prisma.generatedImage.findMany({
-        where: {
-          imageId: { in: publicImages.map((image) => image.imageId) },
-          deleted: 0,
-        },
-      })
-    : [];
+  const generatedImageIds = publicImages
+    .filter((image) => image.imageSource !== 'admin_upload')
+    .map((image) => image.imageId);
+  const adminUploadImageIds = publicImages
+    .filter((image) => image.imageSource === 'admin_upload')
+    .map((image) => image.imageId);
+  const [generatedImages, adminUploads] = await Promise.all([
+    generatedImageIds.length
+      ? prisma.generatedImage.findMany({
+          where: {
+            imageId: { in: generatedImageIds },
+            deleted: 0,
+          },
+        })
+      : [],
+    adminUploadImageIds.length
+      ? prisma.adminImageUpload.findMany({
+          where: {
+            imageId: { in: adminUploadImageIds },
+            deleted: 0,
+          },
+        })
+      : [],
+  ]);
   const generatedByImageId = new Map(generatedImages.map((image) => [image.imageId, image]));
+  const adminUploadByImageId = new Map(adminUploads.map((image) => [image.imageId, image]));
   const publicImageById = new Map(publicImages.map((publicImage) => {
-    const image = generatedByImageId.get(publicImage.imageId);
+    const image = publicImage.imageSource === 'admin_upload'
+      ? adminUploadByImageId.get(publicImage.imageId)
+      : generatedByImageId.get(publicImage.imageId);
     const imageUrl = image ? buildStoredImageUrl(image) : null;
     return [
       publicImage.publicImageId,

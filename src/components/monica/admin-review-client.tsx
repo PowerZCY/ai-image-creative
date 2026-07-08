@@ -104,6 +104,15 @@ type SubmitImageDraft = {
   creationNote: string;
 };
 
+type UploadImageDraft = {
+  title: string;
+  altText: string;
+  prompt: string;
+  creationNote: string;
+  tags: string;
+  setFeatured: boolean;
+};
+
 type Filters = {
   keyword: string;
   status: string;
@@ -816,6 +825,186 @@ function SubmitImagesModal({
   );
 }
 
+// ─── UploadImageModal ─────────────────────────────────────────────────────────
+
+function UploadImageModal({
+  theme,
+  onClose,
+  onSaved,
+}: {
+  theme: ThemeItem;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [draft, setDraft] = useState<UploadImageDraft>({
+    title: '',
+    altText: '',
+    prompt: '',
+    creationNote: '',
+    tags: '',
+    setFeatured: false,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  function updateDraft(patch: Partial<UploadImageDraft>) {
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  async function handleUpload() {
+    if (!file) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.set('file', file);
+      formData.set('title', draft.title);
+      formData.set('altText', draft.altText);
+      formData.set('prompt', draft.prompt);
+      formData.set('creationNote', draft.creationNote);
+      formData.set('tags', JSON.stringify(splitLines(draft.tags)));
+      formData.set('setFeatured', draft.setFeatured ? 'true' : 'false');
+
+      const response = await fetch(`/api/monica/admin/themes/${theme.id}/uploaded-images`, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+        body: formData,
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <DialogShell title={`Upload image: ${theme.title}`} closeLabel="Close" onClose={onClose}>
+      <div className="grid gap-3">
+        {error ? (
+          <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
+            {error}
+          </div>
+        ) : null}
+        <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+          <label className="grid min-h-[220px] cursor-pointer place-items-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/30 text-center text-sm text-muted-foreground hover:bg-muted/50">
+            {previewUrl ? (
+              <Image
+                src={previewUrl}
+                alt=""
+                width={512}
+                height={512}
+                unoptimized
+                className="max-h-[360px] w-full object-contain"
+              />
+            ) : (
+              <span className="grid justify-items-center gap-2 px-4">
+                <ImagePlus className="size-7" />
+                Select image
+              </span>
+            )}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="sr-only"
+              onChange={(event) => {
+                const nextFile = event.target.files?.[0] ?? null;
+                setFile(nextFile);
+                setPreviewUrl(nextFile ? URL.createObjectURL(nextFile) : null);
+                if (nextFile && !draft.title.trim()) {
+                  updateDraft({ title: nextFile.name.replace(/\.[^.]+$/, '').slice(0, 80) });
+                }
+              }}
+            />
+          </label>
+          <div className="grid gap-3">
+            <label className="block">
+              <span className={labelSpanCls}>Title</span>
+              <input
+                value={draft.title}
+                onChange={(e) => updateDraft({ title: e.target.value })}
+                className={cn('mt-1', inputCls)}
+              />
+            </label>
+            <label className="block">
+              <span className={labelSpanCls}>Alt text</span>
+              <textarea
+                value={draft.altText}
+                onChange={(e) => updateDraft({ altText: e.target.value })}
+                rows={2}
+                className={cn('mt-1', textareaCls)}
+              />
+            </label>
+            <label className="block">
+              <span className={labelSpanCls}>Prompt</span>
+              <textarea
+                value={draft.prompt}
+                onChange={(e) => updateDraft({ prompt: e.target.value })}
+                rows={3}
+                className={cn('mt-1', textareaCls)}
+              />
+            </label>
+          </div>
+        </div>
+        <label className="block">
+          <span className={labelSpanCls}>Creation note</span>
+          <textarea
+            value={draft.creationNote}
+            onChange={(e) => updateDraft({ creationNote: e.target.value })}
+            rows={2}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <label className="block">
+          <span className={labelSpanCls}>Tags</span>
+          <textarea
+            value={draft.tags}
+            onChange={(e) => updateDraft({ tags: e.target.value })}
+            rows={2}
+            className={cn('mt-1', textareaCls)}
+          />
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={draft.setFeatured}
+            onChange={(e) => updateDraft({ setFeatured: e.target.checked })}
+            className="size-4 rounded border-border"
+          />
+          Set as featured image
+        </label>
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            disabled={saving || !file || !draft.title.trim()}
+            onClick={() => void handleUpload()}
+            className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
+          >
+            {saving ? <SpinnerLabel>Upload</SpinnerLabel> : 'Upload image'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-md border border-border px-4 text-sm hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
 // ─── NewThemeModal ────────────────────────────────────────────────────────────
 
 function NewThemeModal({
@@ -927,7 +1116,7 @@ function NewThemeModal({
 
 // ─── ThemeTableRow ────────────────────────────────────────────────────────────
 
-type ThemeModalType = 'fields' | 'featured' | 'submit_images';
+type ThemeModalType = 'fields' | 'featured' | 'submit_images' | 'upload_image';
 
 function ThemeTableRow({
   theme,
@@ -1000,6 +1189,13 @@ function ThemeTableRow({
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
           >
             <ImagePlus className="size-3" />Submit images
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenModal(theme, 'upload_image')}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted"
+          >
+            <ImagePlus className="size-3" />Upload image
           </button>
         </div>
       </td>
@@ -1661,6 +1857,13 @@ export function AdminReviewClient({
                         ) : null}
                         {themeModal?.type === 'submit_images' ? (
                           <SubmitImagesModal
+                            theme={themeModal.theme}
+                            onClose={() => setThemeModal(null)}
+                            onSaved={themes.reload}
+                          />
+                        ) : null}
+                        {themeModal?.type === 'upload_image' ? (
+                          <UploadImageModal
                             theme={themeModal.theme}
                             onClose={() => setThemeModal(null)}
                             onSaved={themes.reload}

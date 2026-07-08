@@ -33,25 +33,13 @@ export class ThemeFeaturedImageRepository {
     }
 
     return prisma.$transaction(async (tx) => {
-      await tx.themeFeaturedImage.updateMany({
-        where: { themeId: input.themeId, deleted: 0 },
-        data: { deleted: 1 },
+      await tx.themeFeaturedImage.deleteMany({
+        where: { themeId: input.themeId },
       });
 
       for (const [index, publicImageId] of input.publicImageIds.slice(0, 3).entries()) {
-        await tx.themeFeaturedImage.upsert({
-          where: {
-            themeId_publicImageId: {
-              themeId: input.themeId,
-              publicImageId,
-            },
-          },
-          update: {
-            position: index + 1,
-            createdBy: input.createdBy,
-            deleted: 0,
-          },
-          create: {
+        await tx.themeFeaturedImage.create({
+          data: {
             themeId: input.themeId,
             publicImageId,
             position: index + 1,

@@ -85,13 +85,25 @@ export class ExploreRepository {
   }
 
   private async enrichPublicImages(publicImages: Awaited<ReturnType<typeof prisma.publicImage.findMany>>) {
-    const imageIds = publicImages.map((publicImage) => publicImage.imageId);
+    const generatedImageIds = publicImages
+      .filter((publicImage) => publicImage.imageSource !== 'admin_upload')
+      .map((publicImage) => publicImage.imageId);
+    const adminUploadImageIds = publicImages
+      .filter((publicImage) => publicImage.imageSource === 'admin_upload')
+      .map((publicImage) => publicImage.imageId);
     const themeIds = [...new Set(publicImages.map((publicImage) => publicImage.themeId).filter((themeId): themeId is bigint => Boolean(themeId)))];
-    const images = imageIds.length
-      ? await prisma.generatedImage.findMany({
-          where: { imageId: { in: imageIds }, deleted: 0 },
-        })
-      : [];
+    const [images, adminUploads] = await Promise.all([
+      generatedImageIds.length
+        ? prisma.generatedImage.findMany({
+            where: { imageId: { in: generatedImageIds }, deleted: 0 },
+          })
+        : [],
+      adminUploadImageIds.length
+        ? prisma.adminImageUpload.findMany({
+            where: { imageId: { in: adminUploadImageIds }, deleted: 0 },
+          })
+        : [],
+    ]);
     const jobIds = [...new Set(images.map((image) => image.jobId).filter((jobId): jobId is string => Boolean(jobId)))];
     const [jobs, themes] = await Promise.all([
       jobIds.length
@@ -108,30 +120,38 @@ export class ExploreRepository {
         : [],
     ]);
     const imageById = new Map(images.map((image) => [image.imageId, image]));
+    const adminUploadByImageId = new Map(adminUploads.map((upload) => [upload.imageId, upload]));
     const jobById = new Map(jobs.map((job) => [job.jobId, job]));
     const themeById = new Map(themes.map((theme) => [theme.id.toString(), theme]));
 
     return publicImages.map((publicImage) => {
-      const image = imageById.get(publicImage.imageId);
+      const isAdminUpload = publicImage.imageSource === 'admin_upload';
+      const image = isAdminUpload ? null : imageById.get(publicImage.imageId);
+      const adminUpload = isAdminUpload ? adminUploadByImageId.get(publicImage.imageId) : null;
       const job = image?.jobId ? jobById.get(image.jobId) : null;
-      const imageUrl = image ? buildStoredImageUrl(image) : null;
+      const imageUrl = adminUpload ? buildStoredImageUrl(adminUpload) : image ? buildStoredImageUrl(image) : null;
       const theme = publicImage.themeId ? themeById.get(publicImage.themeId.toString()) : null;
+      const promptUsed = publicImage.promptPublic
+        ? adminUpload?.prompt ?? job?.prompt ?? null
+        : null;
+      const width = adminUpload?.width ?? image?.width ?? null;
+      const height = adminUpload?.height ?? image?.height ?? null;
       return {
         publicImageId: publicImage.publicImageId,
         title: publicImage.title,
         altText: publicImage.altText,
         creationNote: publicImage.creationNote,
-        promptUsed: publicImage.promptPublic ? job?.prompt ?? null : null,
+        promptUsed,
         likeCount: publicImage.likeCount,
         saveCount: publicImage.saveCount,
         theme: theme ? { id: theme.id.toString(), title: theme.title, brief: theme.brief } : null,
-        image: image
+        image: image || adminUpload
           ? {
-              imageId: image.imageId,
+              imageId: publicImage.imageId,
               imageUrl,
               thumbnailUrl: imageUrl,
-              width: image.width,
-              height: image.height,
+              width,
+              height,
             }
           : null,
       };

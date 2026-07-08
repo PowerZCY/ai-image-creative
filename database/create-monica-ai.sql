@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.public_images (
     id               BIGSERIAL PRIMARY KEY,
     public_image_id  UUID        NOT NULL DEFAULT gen_random_uuid(),
     image_id         UUID        NOT NULL,
+    image_source     VARCHAR(50) NOT NULL DEFAULT 'generated',
     source_submission_id BIGINT,
     source_type      VARCHAR(50) NOT NULL DEFAULT 'user_submission',
     created_by       UUID,
@@ -196,6 +197,35 @@ CREATE TABLE IF NOT EXISTS monica_ai.public_images (
 CREATE INDEX IF NOT EXISTS idx_public_images_published_at ON monica_ai.public_images (published_at);
 CREATE INDEX IF NOT EXISTS idx_public_images_theme_featured_score ON monica_ai.public_images (theme_id, featured_score);
 CREATE INDEX IF NOT EXISTS idx_public_images_like_count ON monica_ai.public_images (like_count);
+CREATE INDEX IF NOT EXISTS idx_public_images_image_source_image_id ON monica_ai.public_images (image_source, image_id);
+
+CREATE TABLE IF NOT EXISTS monica_ai.admin_image_uploads (
+    id             BIGSERIAL PRIMARY KEY,
+    image_id       UUID         NOT NULL DEFAULT gen_random_uuid(),
+    admin_user_id  UUID         NOT NULL,
+    theme_id       BIGINT       NOT NULL,
+    storage_key    TEXT         NOT NULL,
+    mime_type      VARCHAR(100),
+    file_size      INTEGER,
+    width          INTEGER,
+    height         INTEGER,
+    title          VARCHAR(255) NOT NULL,
+    alt_text       TEXT,
+    creation_note  TEXT,
+    prompt         TEXT,
+    tags           JSONB,
+    status         VARCHAR(50)  NOT NULL DEFAULT 'published',
+    metadata       JSONB,
+    created_at     TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+    deleted        INTEGER      NOT NULL DEFAULT 0,
+    CONSTRAINT admin_image_uploads_image_id_key UNIQUE (image_id),
+    CONSTRAINT admin_image_uploads_deleted_check CHECK (deleted = ANY (ARRAY[0, 1]))
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_image_uploads_admin_created_at ON monica_ai.admin_image_uploads (admin_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_image_uploads_theme_created_at ON monica_ai.admin_image_uploads (theme_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_image_uploads_status_created_at ON monica_ai.admin_image_uploads (status, created_at);
 
 CREATE TABLE IF NOT EXISTS monica_ai.assistant_interactions (
     id                    BIGSERIAL PRIMARY KEY,
