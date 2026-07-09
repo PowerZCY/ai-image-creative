@@ -11,6 +11,7 @@ export type CreateAdminImageUploadInput = {
   height?: number | null;
   title: string;
   altText?: string | null;
+  model?: string | null;
   creationNote?: string | null;
   prompt?: string | null;
   tags?: Prisma.InputJsonValue;
@@ -31,6 +32,7 @@ export class AdminImageUploadRepository {
           height: input.height,
           title: input.title,
           altText: input.altText,
+          model: input.model,
           creationNote: input.creationNote,
           prompt: input.prompt,
           tags: input.tags ?? Prisma.JsonNull,

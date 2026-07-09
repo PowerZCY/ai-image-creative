@@ -18,6 +18,7 @@ export type UploadAdminImageInput = {
   file: File;
   title?: string;
   altText?: string;
+  model?: string;
   creationNote?: string;
   prompt?: string;
   tags?: string[];
@@ -71,6 +72,7 @@ export class AdminImageUploadService {
       height: dimensions.height,
       title,
       altText: normalizeNullableText(input.altText, 255),
+      model: normalizeNullableText(input.model, 100),
       creationNote: normalizeNullableText(input.creationNote),
       prompt: normalizeNullableText(input.prompt),
       tags: normalizeTags(input.tags) as Prisma.InputJsonValue,

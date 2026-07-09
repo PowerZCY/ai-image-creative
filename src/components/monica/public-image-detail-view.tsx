@@ -74,6 +74,13 @@ export function PublicImageDetailView({
             </section>
           ) : null}
 
+          {publicImage.model ? (
+            <section className="mt-6">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Model</h2>
+              <p className="mt-1.5 text-sm leading-6 text-foreground">{publicImage.model}</p>
+            </section>
+          ) : null}
+
           <section className="mt-6">
             <div className="flex items-center justify-between gap-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{copy.prompt}</div>

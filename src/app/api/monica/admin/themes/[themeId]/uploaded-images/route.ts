@@ -27,6 +27,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       file,
       title: readFormString(formData, 'title'),
       altText: readFormString(formData, 'altText'),
+      model: readFormString(formData, 'model'),
       creationNote: readFormString(formData, 'creationNote'),
       prompt: readFormString(formData, 'prompt'),
       tags: readTags(formData),

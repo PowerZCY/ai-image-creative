@@ -211,6 +211,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.admin_image_uploads (
     height         INTEGER,
     title          VARCHAR(255) NOT NULL,
     alt_text       TEXT,
+    model          VARCHAR(100),
     creation_note  TEXT,
     prompt         TEXT,
     tags           JSONB,

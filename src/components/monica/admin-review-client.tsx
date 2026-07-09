@@ -107,6 +107,7 @@ type SubmitImageDraft = {
 type UploadImageDraft = {
   title: string;
   altText: string;
+  model: string;
   prompt: string;
   creationNote: string;
   tags: string;
@@ -173,6 +174,13 @@ const inputCls =
 const textareaCls =
   'w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground';
 const labelSpanCls = 'text-xs font-medium text-muted-foreground';
+const adminUploadModelOptions = [
+  { value: 'gpt-image-2', label: 'GPT Image 2' },
+  { value: 'nano-banana-2', label: 'Nano Banana 2' },
+  { value: 'nano-banana-pro', label: 'Nano Banana Pro' },
+  { value: 'seedream-4.5', label: 'Seedream 4.5' },
+  { value: 'reve-2.0', label: 'Reve 2.0' },
+];
 
 // ─── Side nav button ──────────────────────────────────────────────────────────
 
@@ -841,6 +849,7 @@ function UploadImageModal({
   const [draft, setDraft] = useState<UploadImageDraft>({
     title: '',
     altText: '',
+    model: adminUploadModelOptions[0].value,
     prompt: '',
     creationNote: '',
     tags: '',
@@ -868,6 +877,7 @@ function UploadImageModal({
       formData.set('file', file);
       formData.set('title', draft.title);
       formData.set('altText', draft.altText);
+      formData.set('model', draft.model);
       formData.set('prompt', draft.prompt);
       formData.set('creationNote', draft.creationNote);
       formData.set('tags', JSON.stringify(splitLines(draft.tags)));
@@ -944,6 +954,20 @@ function UploadImageModal({
                 rows={2}
                 className={cn('mt-1', textareaCls)}
               />
+            </label>
+            <label className="block">
+              <span className={labelSpanCls}>Model</span>
+              <select
+                value={draft.model}
+                onChange={(e) => updateDraft({ model: e.target.value })}
+                className={cn('mt-1', inputCls)}
+              >
+                {adminUploadModelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block">
               <span className={labelSpanCls}>Prompt</span>

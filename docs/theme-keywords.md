@@ -4,8 +4,8 @@
     "brief": "Show how glasses reveal details, clarity, or a whole new way of seeing.",
     "themeNote": "Putting on glasses can be a real moment: someone finally recognizes a familiar face, reads a sign, or notices details that were always there.\n\nIt can also be a visual metaphor. The glasses may stand for a new skill, a method, a mindset, or a way of thinking that makes the same world easier to understand.\n\nThe creative question is: who or what puts them on? A person, a cat with glasses, a dog with glasses, an object, or even a city can all become different ways to show clearer vision.",
     "seo": {
-      "title": "After Putting On Glasses - Glasses and Perspective AI Art Prompt",
-      "metaDescription": "Create AI images about glasses, clearer vision, and new perspectives. Explore a person, a cat with glasses, a dog with glasses, or even a city transformed by a new way of seeing."
+      "title": "After Putting On Glasses - Glasses AI Art Prompt",
+      "metaDescription": "Create AI images about glasses, clearer vision, and new perspectives. Explore a person, a cat with glasses, a dog with glasses, an object transformed by a new way of seeing."
     },
     "tags": [
       "glasses",
@@ -41,19 +41,7 @@
         "idea": "Experience changes the same old room",
         "prompt": "A quiet interior where an older person wears invisible glasses made of memory and experience, seeing the same old room with new clarity, ordinary objects glowing with meaning, layered reflections in the lenses, warm natural light, emotional realism"
       }
-    ],
-    "imageSeoNotes": {
-      "note": "For submitted or featured images, use image-level titles, alt text, and tags to carry specific long-tail searches such as cat with glasses and dog with glasses.",
-      "example": {
-        "imageTitle": "Cat With Glasses",
-        "altText": "A cute white cat with glasses sits on a bright sunlit wooden windowsill, surrounded by potted succulents and lush green trailing plants.",
-        "imageTags": [
-          "cat with glasses",
-          "anthropomorphic animal",
-          "glasses"
-        ]
-      }
-    }
+    ]
   },
   {
     "theme": "Dream Life",
@@ -108,19 +96,61 @@
         "idea": "A simple dinner that feels like enough",
         "prompt": "A simple dinner table under warm lights where the dream life is not luxury but time, peace, health, and people you love, hands reaching for shared food, modest home setting, intimate documentary realism, rich warm details"
       }
+    ]
+  },
+  {
+    "theme": "A Quote That Speaks to Me",
+    "brief": "Choose a quote that speaks to you and turn its meaning into a visual image.",
+    "themeNote": "Some quotes stay with us because they say something we need to hear.\n\nIt could be a line from a book, a movie, a speech, a song, a poem, a teacher, a family member, or even a sentence you wrote yourself.\n\nFor this theme, choose a quote that feels meaningful to you and create an image around it. The quote should appear clearly in the artwork so viewers can connect the words with the image.\n\nThe goal is to make the words and the image work together. Think about the mood, symbols, characters, colors, setting, and story that best express what the quote means.",
+    "seo": {
+      "title": "A Quote That Speaks to Me - Quote Inspired AI Art Prompt",
+      "metaDescription": "Create quote-inspired AI art by turning a meaningful quote into an image with visible words, expressive typography, symbolic scenes, and personal emotion."
+    },
+    "tags": [
+      "quote art",
+      "quote poster",
+      "meaningful quote",
+      "inspirational quote",
+      "personal quote",
+      "typography art",
+      "text in image",
+      "visual storytelling"
     ],
-    "imageSeoNotes": {
-      "note": "For submitted or featured images, use image-level titles, alt text, and tags to cover concrete long-tail searches such as cozy home, countryside life, slow living, future self, and peaceful morning.",
-      "example": {
-        "imageTitle": "Peaceful Countryside Dream Life",
-        "altText": "A person drinks coffee on the porch of a small countryside home at sunrise, surrounded by wildflowers, soft morning light, and a quiet garden.",
-        "imageTags": [
-          "dream life",
-          "peaceful countryside",
-          "slow living",
-          "cozy home"
-        ]
+    "seoKeywords": [
+      "quote inspired AI art prompt",
+      "meaningful quote AI image prompt",
+      "inspirational quote AI art",
+      "quote art prompt",
+      "text-based AI art",
+      "visual metaphor AI image",
+      "personal quote artwork",
+      "quote poster AI image"
+    ],
+    "generatorIdeas": [
+      {
+        "idea": "The journey of a thousand miles begins with a single step",
+        "prompt": "A traveler taking the first step onto a long winding road through mountains at sunrise, with the quote 'The journey of a thousand miles begins with a single step' written on a small wooden sign beside the path, hopeful atmosphere, cinematic landscape, realistic detail"
+      },
+      {
+        "idea": "Stay hungry, stay foolish",
+        "prompt": "A young inventor working late in a messy garage studio filled with sketches, tools, glowing screens, and unfinished prototypes, with the quote 'Stay hungry, stay foolish' handwritten on the wall above the desk, energetic creative mood, warm dramatic lighting"
+      },
+      {
+        "idea": "This too shall pass",
+        "prompt": "A person standing quietly under an umbrella as a storm begins to clear, sunlight breaking through dark clouds, puddles reflecting golden sky, with the quote 'This too shall pass' written in elegant lettering on the umbrella, emotional and peaceful cinematic realism"
+      },
+      {
+        "idea": "Be the change you wish to see in the world",
+        "prompt": "A community garden growing in the middle of a gray city street, one person planting flowers while others begin to join, with the quote 'Be the change you wish to see in the world' painted as a mural on a nearby wall, hopeful social atmosphere, rich realistic details"
+      },
+      {
+        "idea": "Not all those who wander are lost",
+        "prompt": "A lone hiker walking through a magical forest path at dusk, fireflies glowing around ancient trees, a worn map in hand, with the quote 'Not all those who wander are lost' written across the map, adventurous and poetic mood, fantasy realism"
+      },
+      {
+        "idea": "The best way out is always through",
+        "prompt": "A determined person walking through a narrow tunnel toward bright daylight at the other end, with the quote 'The best way out is always through' painted clearly on the tunnel wall, strong contrast between shadow and light, hopeful realistic atmosphere, cinematic composition"
       }
-    }
+    ]
   }
 ]

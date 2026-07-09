@@ -109,7 +109,7 @@ export class ExploreRepository {
       jobIds.length
         ? prisma.generationJob.findMany({
             where: { jobId: { in: jobIds }, deleted: 0 },
-            select: { jobId: true, prompt: true },
+            select: { jobId: true, prompt: true, model: true },
           })
         : [],
       themeIds.length
@@ -134,6 +134,7 @@ export class ExploreRepository {
       const promptUsed = publicImage.promptPublic
         ? adminUpload?.prompt ?? job?.prompt ?? null
         : null;
+      const model = adminUpload?.model ?? job?.model ?? null;
       const width = adminUpload?.width ?? image?.width ?? null;
       const height = adminUpload?.height ?? image?.height ?? null;
       return {
@@ -142,6 +143,7 @@ export class ExploreRepository {
         altText: publicImage.altText,
         creationNote: publicImage.creationNote,
         promptUsed,
+        model,
         likeCount: publicImage.likeCount,
         saveCount: publicImage.saveCount,
         theme: theme ? { id: theme.id.toString(), title: theme.title, brief: theme.brief } : null,

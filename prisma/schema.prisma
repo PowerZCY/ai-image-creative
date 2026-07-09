@@ -392,6 +392,7 @@ model AdminImageUpload {
   height       Int?
   title        String    @db.VarChar(255)
   altText      String?   @map("alt_text") @db.Text
+  model        String?   @db.VarChar(100)
   creationNote String?   @map("creation_note") @db.Text
   prompt       String?   @db.Text
   tags         Json?
