@@ -849,7 +849,7 @@ function UploadImageModal({
   const [draft, setDraft] = useState<UploadImageDraft>({
     title: '',
     altText: '',
-    model: adminUploadModelOptions[0].value,
+    model: 'seedream-4.5',
     prompt: '',
     creationNote: '',
     tags: '',
