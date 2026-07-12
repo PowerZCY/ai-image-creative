@@ -108,12 +108,9 @@
     "tags": [
       "quote art",
       "quote poster",
-      "meaningful quote",
       "inspirational quote",
-      "personal quote",
       "typography art",
-      "text in image",
-      "visual storytelling"
+      "text in image"
     ],
     "seoKeywords": [
       "quote inspired AI art prompt",
@@ -127,16 +124,16 @@
     ],
     "generatorIdeas": [
       {
-        "idea": "The journey of a thousand miles begins with a single step",
-        "prompt": "A traveler taking the first step onto a long winding road through mountains at sunrise, with the quote 'The journey of a thousand miles begins with a single step' written on a small wooden sign beside the path, hopeful atmosphere, cinematic landscape, realistic detail"
+        "idea": "What we think, we become",
+        "prompt": "A thoughtful person looking into a mirror where their inner thoughts transform into a confident future self, glowing handwritten words and symbolic shapes flowing between mind and reflection, with the quote 'What we think, we become' written clearly across the mirror frame, introspective atmosphere, cinematic lighting, realistic detail"
       },
       {
         "idea": "Stay hungry, stay foolish",
         "prompt": "A young inventor working late in a messy garage studio filled with sketches, tools, glowing screens, and unfinished prototypes, with the quote 'Stay hungry, stay foolish' handwritten on the wall above the desk, energetic creative mood, warm dramatic lighting"
       },
       {
-        "idea": "This too shall pass",
-        "prompt": "A person standing quietly under an umbrella as a storm begins to clear, sunlight breaking through dark clouds, puddles reflecting golden sky, with the quote 'This too shall pass' written in elegant lettering on the umbrella, emotional and peaceful cinematic realism"
+        "idea": "Hope is the thing with feathers",
+        "prompt": "A quiet portrait of a person holding a small glowing bird close to their chest in a dim room, soft feathers catching warm light while the outside world remains gray and rainy, with the quote 'Hope is the thing with feathers' written clearly on a handwritten note beside them, intimate poetic mood, gentle cinematic realism, delicate details"
       },
       {
         "idea": "Be the change you wish to see in the world",
