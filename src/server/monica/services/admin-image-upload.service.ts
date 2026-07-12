@@ -32,7 +32,7 @@ export class AdminImageUploadService {
     }
 
     const themeId = BigInt(input.themeId);
-    const theme = await themeRepository.findPublicThemeById(themeId);
+    const theme = await themeRepository.findAdminThemeById(themeId);
     if (!theme) {
       throw new Error('Theme is not available');
     }

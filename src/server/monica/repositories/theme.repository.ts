@@ -83,11 +83,9 @@ const USER_THEME_STATUS_TO_INTERNAL: Record<string, string[]> = {
   ],
 };
 
-const PUBLIC_THEME_TIME_ZONE = process.env.MONICA_PUBLICATION_TIME_ZONE || 'Asia/Shanghai';
-
 function getPublicThemeDateCutoff() {
   const date = new Intl.DateTimeFormat('en-CA', {
-    timeZone: PUBLIC_THEME_TIME_ZONE,
+    timeZone: 'UTC',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -395,6 +393,15 @@ export class ThemeRepository {
       where: {
         ...publicThemeWhere(),
         id: themeId,
+      },
+    });
+  }
+
+  async findAdminThemeById(themeId: bigint) {
+    return prisma.theme.findFirst({
+      where: {
+        id: themeId,
+        deleted: 0,
       },
     });
   }

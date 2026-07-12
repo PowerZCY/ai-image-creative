@@ -44,7 +44,7 @@
     ]
   },
   {
-    "theme": "Dream Life",
+    "theme": ""Dream Life,
     "brief": "Imagine the life you long for right now, from quiet routines to bold future dreams.",
     "themeNote": "What does your dream life look like right now?\n\nThe answer may change at different stages of life. As a child, it might be a treehouse, endless summer, or a room full of toys. As a student, it might be freedom, discovery, and a future full of possibilities. As an adult, it might be a peaceful home, meaningful work, financial security, or enough time for the people you love. Later in life, it might become health, companionship, quiet mornings, and a place where memories feel close.\n\nThis theme is about the life you long for in this moment. It can be simple or ambitious, realistic or impossible, luxurious or beautifully ordinary.\n\nShow a scene, a place, a routine, or a future version of yourself that represents your ideal life.",
     "seo": {
@@ -56,8 +56,7 @@
       "ideal life",
       "simple living",
       "life goals",
-      "future self",
-      "conceptual AI art"
+      "future self"
     ],
     "seoKeywords": [
       "dream life AI art prompt",
@@ -73,28 +72,28 @@
     ],
     "generatorIdeas": [
       {
-        "idea": "A peaceful countryside morning",
-        "prompt": "A quiet countryside morning where someone lives the peaceful life they once only imagined, small home beside wildflowers, coffee on the porch, soft sunrise, mist over distant fields, slow living atmosphere, realistic cinematic lighting"
+        "idea": "Waking up without anxiety",
+        "prompt": "A gentle illustrated character opening their eyes to soft morning light with a calm expression, phone silent, journal nearby, relaxed breathing, and a sense that the day belongs to them, cozy editorial illustration, soft colors, clean shapes, quiet cinematic atmosphere"
       },
       {
-        "idea": "A sunlit kitchen with no urgent schedule",
-        "prompt": "A cozy sunlit kitchen filled with plants, coffee, books, handmade ceramics, and the feeling of having nowhere urgent to be, warm natural light, lived-in details, calm everyday beauty, refined interior photography style"
+        "idea": "Having time for what truly matters",
+        "prompt": "A stylized illustrated character moving through a calm day with unhurried work, meaningful conversation, reading, cooking, sunlight, rest, and small moments of joy, visualizing freedom from constant pressure, warm illustrated details, soft colors, gentle cinematic atmosphere"
       },
       {
-        "idea": "Choosing nature over a rushed city life",
-        "prompt": "A person stands between a crowded fast-moving city and a small warm home in nature, choosing the life they long for, split-scene composition, city lights fading behind them, forest path ahead, emotional but restrained visual metaphor, cinematic depth"
+        "idea": "Doing work that feels meaningful",
+        "prompt": "An illustrated character fully engaged in meaningful work, focused but not stressed, surrounded by sketches, notes, tools, messages of thanks, and signs that their effort helps real people, warm daylight, expressive illustration style, inspiring but natural mood"
       },
       {
-        "idea": "A fulfilled future self in the garden",
-        "prompt": "An elderly future version of someone sits in a peaceful garden and gently shows their younger self what a fulfilled life could look like, flowers, old photographs, soft afternoon light, tender intergenerational mood, realistic emotional scene"
+        "idea": "Being healthy enough to enjoy ordinary days",
+        "prompt": "A cheerful illustrated character enjoying an ordinary day with steady energy, stretching in the morning, walking comfortably, carrying groceries with ease, cooking a simple meal, and smiling at small details, body relaxed and strong, fresh air, natural colors, wholesome illustration style, emotional atmosphere"
       },
       {
-        "idea": "A floating house made of memories",
-        "prompt": "A surreal floating house made of memories, dreams, and everyday comforts, with rooms formed from childhood sunlight, travel postcards, family dinners, books, and quiet mornings, poetic conceptual AI art, balanced composition, luminous atmosphere"
+        "idea": "Sharing more days with people you love",
+        "prompt": "Illustrated friends or family gathered in an ordinary moment of laughter, helping, listening, and being fully present, no one distracted or rushed, soft warm light, expressive characters, emotional but understated composition, polished illustration style"
       },
       {
-        "idea": "A simple dinner that feels like enough",
-        "prompt": "A simple dinner table under warm lights where the dream life is not luxury but time, peace, health, and people you love, hands reaching for shared food, modest home setting, intimate documentary realism, rich warm details"
+        "idea": "Having the courage to live your own way",
+        "prompt": "A stylized illustrated character stepping forward with quiet confidence while old expectations fade behind them as paper shadows, the road ahead open and sunlit, calm determination, symbolic illustration style, balanced composition, hopeful atmosphere"
       }
     ]
   },

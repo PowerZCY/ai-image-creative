@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { exploreService } from '@/server/monica/services/explore.service';
 import { themeFeaturedImageRepository } from '@/server/monica/repositories/theme-featured-image.repository';
+import { themeRepository } from '@/server/monica/repositories/theme.repository';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
 
 installBigIntJsonSerialization();
@@ -21,9 +22,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (!/^\d+$/.test(themeId)) {
       return NextResponse.json({ error: 'themeId is invalid' }, { status: 400 });
     }
+    const numericThemeId = BigInt(themeId);
+    const theme = await themeRepository.findAdminThemeById(numericThemeId);
+    if (!theme) {
+      return NextResponse.json({ error: 'Theme is not available' }, { status: 400 });
+    }
 
     const [selected, pool] = await Promise.all([
-      themeFeaturedImageRepository.listByTheme(BigInt(themeId)),
+      themeFeaturedImageRepository.listByTheme(numericThemeId),
       exploreService.searchPublicImages({
         page: 1,
         pageSize: 80,
@@ -46,6 +52,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (!/^\d+$/.test(themeId)) {
       return NextResponse.json({ error: 'themeId is invalid' }, { status: 400 });
     }
+    const numericThemeId = BigInt(themeId);
+    const theme = await themeRepository.findAdminThemeById(numericThemeId);
+    if (!theme) {
+      return NextResponse.json({ error: 'Theme is not available' }, { status: 400 });
+    }
 
     const body = await request.json() as { publicImageIds?: unknown };
     const publicImageIds = Array.isArray(body.publicImageIds)
@@ -59,7 +70,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     const selected = await themeFeaturedImageRepository.setForTheme({
-      themeId: BigInt(themeId),
+      themeId: numericThemeId,
       publicImageIds,
       createdBy: user.userId,
     });

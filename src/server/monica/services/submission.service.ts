@@ -20,7 +20,7 @@ export class SubmissionService {
       throw new Error('Generated image not found');
     }
     const themeId = BigInt(input.themeId);
-    const theme = await themeRepository.findPublicThemeById(themeId);
+    const theme = await themeRepository.findAdminThemeById(themeId);
     if (!theme) {
       throw new Error('Theme is not available');
     }
