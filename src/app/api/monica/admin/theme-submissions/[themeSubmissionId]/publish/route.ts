@@ -1,5 +1,6 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { themeService } from '@/server/monica/services/theme.service';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
@@ -20,6 +21,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const input = parsePublishThemeInput(body);
     const result = await themeService.publishFromSubmission(user.userId, themeSubmissionId, input);
     if (!result) return NextResponse.json({ error: 'Theme submission not found' }, { status: 404 });
+    revalidatePath('/themes');
+    revalidatePath(`/themes/${result.theme.slug}`);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -1,5 +1,6 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { themeService } from '@/server/monica/services/theme.service';
 import { parseAdminThemeUpdateInput } from '@/server/monica/validators/theme.validator';
@@ -22,6 +23,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!theme) {
       return NextResponse.json({ error: 'Theme not found' }, { status: 404 });
     }
+    revalidatePath('/themes');
+    revalidatePath(`/themes/${theme.slug}`);
 
     return NextResponse.json({ theme });
   } catch (error) {

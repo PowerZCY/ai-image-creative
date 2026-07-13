@@ -10,6 +10,10 @@ export class ThemeService {
     return themeRepository.listPublicThemesPage(input);
   }
 
+  listPublicThemesCursor(input: Parameters<typeof themeRepository.listPublicThemesCursor>[0]) {
+    return themeRepository.listPublicThemesCursor(input);
+  }
+
   searchAdminThemes(input: Parameters<typeof themeRepository.searchAdminThemes>[0]) {
     return themeRepository.searchAdminThemes(input);
   }

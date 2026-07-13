@@ -1,7 +1,9 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { adminImageUploadService } from '@/server/monica/services/admin-image-upload.service';
+import { themeRepository } from '@/server/monica/repositories/theme.repository';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
 
 installBigIntJsonSerialization();
@@ -33,6 +35,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       tags: readTags(formData),
       setFeatured: readFormString(formData, 'setFeatured') === 'true',
     });
+    if (/^\d+$/.test(themeId)) {
+      const theme = await themeRepository.findAdminThemeById(BigInt(themeId));
+      if (theme) {
+        revalidatePath('/themes');
+        revalidatePath(`/themes/${theme.slug}`);
+      }
+    }
 
     return NextResponse.json(result);
   } catch (error) {

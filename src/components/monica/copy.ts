@@ -144,6 +144,8 @@ export type MonicaThemesCopy = MonicaPublicImageCopy & {
   title: string;
   description: string;
   loading: string;
+  loadMore: string;
+  retry: string;
   emptyThemes: string;
   viewTheme: string;
   createFromTheme: string;

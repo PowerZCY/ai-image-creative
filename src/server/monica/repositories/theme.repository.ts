@@ -57,6 +57,13 @@ type AdminThemeCreateInput = {
 
 type PublicThemeListFilters = Record<string, unknown>;
 
+export type PublicThemeCursor = {
+  publishDate: string;
+  id: string;
+};
+
+export type PublicThemeFilter = 'all' | 'featured' | 'open';
+
 type ThemeSearchFilters = {
   keyword?: string;
   visibility?: string;
@@ -204,6 +211,7 @@ async function attachFeaturedImages(themes: NormalizedTheme[]) {
         id: publicImage.id.toString(),
         publicImageId: publicImage.publicImageId,
         title: publicImage.title,
+        altText: publicImage.altText,
         imageUrl,
         thumbnailUrl: imageUrl,
       },
@@ -220,6 +228,26 @@ async function attachFeaturedImages(themes: NormalizedTheme[]) {
       .slice(0, 3)
       .map((row) => publicImageById.get(row.publicImageId) ?? null),
   }));
+}
+
+async function getThemeIdsWithFeaturedImages() {
+  const featuredRows = await prisma.themeFeaturedImage.findMany({
+    where: { deleted: 0 },
+    select: { themeId: true, publicImageId: true },
+  });
+  if (featuredRows.length === 0) return [];
+
+  const publicImageIds = [...new Set(featuredRows.map((row) => row.publicImageId))];
+  const publicImages = await prisma.publicImage.findMany({
+    where: { publicImageId: { in: publicImageIds }, deleted: 0 },
+    select: { publicImageId: true },
+  });
+  const activeImageIds = new Set(publicImages.map((image) => image.publicImageId));
+  return [...new Set(
+    featuredRows
+      .filter((row) => activeImageIds.has(row.publicImageId))
+      .map((row) => row.themeId),
+  )];
 }
 
 function toSubmissionId(value: string) {
@@ -327,6 +355,48 @@ export class ThemeRepository {
     return {
       items: await attachFeaturedImages(items.map((theme) => normalizeTheme(theme))),
       pagination: buildPagination({ page, pageSize, total }),
+    };
+  }
+
+  async listPublicThemesCursor(input: { cursor?: PublicThemeCursor | null; pageSize?: number; filter?: PublicThemeFilter }) {
+    const requestedPageSize = Number.isFinite(input.pageSize) ? Math.trunc(input.pageSize as number) : 20;
+    const pageSize = Math.min(30, Math.max(5, requestedPageSize));
+    const cursorDate = input.cursor?.publishDate ? new Date(input.cursor.publishDate) : null;
+    const cursorId = input.cursor?.id && /^\d+$/.test(input.cursor.id) ? BigInt(input.cursor.id) : null;
+    if ((input.cursor && !cursorDate) || (cursorDate && Number.isNaN(cursorDate.getTime())) || (input.cursor && !cursorId)) {
+      throw new Error('Invalid theme cursor');
+    }
+
+    const filter = input.filter ?? 'all';
+    const featuredThemeIds = filter === 'all' ? [] : await getThemeIdsWithFeaturedImages();
+
+    const items = await prisma.theme.findMany({
+      where: {
+        ...publicThemeWhere(),
+        ...(filter === 'featured' ? { id: { in: featuredThemeIds } } : {}),
+        ...(filter === 'open' ? { id: { notIn: featuredThemeIds } } : {}),
+        ...(cursorDate && cursorId
+          ? {
+              OR: [
+                { publishDate: { lt: cursorDate } },
+                { publishDate: cursorDate, id: { lt: cursorId } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ publishDate: 'desc' }, { id: 'desc' }],
+      take: pageSize + 1,
+    });
+    const hasMore = items.length > pageSize;
+    const pageItems = items.slice(0, pageSize);
+    const lastItem = pageItems.at(-1);
+
+    return {
+      items: await attachFeaturedImages(pageItems.map((theme) => normalizeTheme(theme))),
+      hasMore,
+      nextCursor: hasMore && lastItem?.publishDate
+        ? { publishDate: lastItem.publishDate.toISOString(), id: lastItem.id.toString() }
+        : null,
     };
   }
 

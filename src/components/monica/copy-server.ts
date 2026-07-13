@@ -190,6 +190,8 @@ export async function getMonicaThemesCopy(locale: string): Promise<MonicaThemesC
     title: t('title'),
     description: t('description'),
     loading: t('loading'),
+    loadMore: t('loadMore'),
+    retry: t('retry'),
     empty: t('empty'),
     emptyThemes: t('emptyThemes'),
     untitled: t('untitled'),

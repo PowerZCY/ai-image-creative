@@ -1,5 +1,6 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { galleryService } from '@/server/monica/services/gallery.service';
 import { themeFeaturedImageRepository } from '@/server/monica/repositories/theme-featured-image.repository';
@@ -74,6 +75,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       publicImageIds,
       createdBy: user.userId,
     });
+    revalidatePath('/themes');
+    revalidatePath(`/themes/${theme.slug}`);
     return NextResponse.json({ selected });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

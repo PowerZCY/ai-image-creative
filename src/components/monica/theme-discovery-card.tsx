@@ -14,6 +14,7 @@ export type SharedThemeItem = {
     imageUrl?: string | null;
     thumbnailUrl?: string | null;
     title?: string | null;
+    altText?: string | null;
   } | null>;
   slug: string;
   publishDate?: Date | string | null;
@@ -49,15 +50,6 @@ export function formatThemeDate(value?: Date | string | null) {
 
 function getThemeHref(theme: SharedThemeItem) {
   return `/themes/${theme.slug}`;
-}
-
-function getThemePreviewImages(theme: SharedThemeItem) {
-  const featured = theme.featuredImages
-    ?.map((image) => image?.thumbnailUrl || image?.imageUrl)
-    .filter((url): url is string => Boolean(url)) ?? [];
-  const covers = [theme.coverImageUrl].filter((url): url is string => Boolean(url));
-
-  return [...featured, ...covers].slice(0, 3);
 }
 
 export function ThemeDiscoveryCard({ theme, eyebrow, hideMeta = false, emptyDescriptionFallback = 'Explore this theme.', viewThemeText = 'View theme' }: ThemeDiscoveryCardProps) {
@@ -97,22 +89,34 @@ export function ThemeDiscoveryCard({ theme, eyebrow, hideMeta = false, emptyDesc
 }
 
 function HorizontalThemeFeaturedPreview({ theme }: { theme: SharedThemeItem }) {
-  const images = getThemePreviewImages(theme);
-  const slots = Array.from({ length: 3 }, (_, index) => images?.[index] ?? null);
+  const images = theme.featuredImages
+    ?.map((image) => image && {
+      url: image.thumbnailUrl || image.imageUrl,
+      alt: image.altText || image.title || `${theme.title} featured image`,
+    })
+    .filter((image): image is { url: string; alt: string } => Boolean(image?.url)) ?? [];
+  const slots = Array.from({ length: 3 }, (_, index) => images[index] ?? null);
   
   return (
     <div className="grid grid-cols-3 gap-2.5">
-      {slots.map((imageUrl, index) => (
-        <div key={`${imageUrl ?? 'empty'}-${index}`} className="relative flex w-full flex-col justify-center overflow-hidden rounded-xl bg-muted">
-          {imageUrl ? (
-            <Image 
-              src={imageUrl} 
-              alt={theme.title} 
-              width={360} 
-              height={360} 
-              unoptimized 
-              className="h-auto w-full object-cover transition-transform duration-300 group-hover:scale-105" 
-            />
+      {slots.map((image, index) => (
+        <div key={`${image?.url ?? 'empty'}-${index}`} className="relative flex aspect-[3/4] w-full flex-col justify-center overflow-hidden rounded-xl bg-muted">
+          {image ? (
+            <>
+              <div aria-hidden className="absolute inset-0 flex flex-col justify-end gap-2 p-3">
+                <div className="h-2 w-4/5 rounded-sm bg-background/50" />
+                <div className="h-2 w-3/5 rounded-sm bg-background/35" />
+              </div>
+              <Image
+                src={image.url}
+                alt={image.alt}
+                width={450}
+                height={600}
+                quality={75}
+                sizes="(min-width: 768px) 15vw, 29vw"
+                className="relative z-10 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            </>
           ) : (
             <div className="grid aspect-square w-full place-items-center text-muted-foreground/60">
               <ImagePlus className="size-7" />

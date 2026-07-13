@@ -4,6 +4,8 @@
       "title": "Daily themes",
       "description": "Choose a daily theme, get inspired, and create your own take.",
       "loading": "Loading",
+      "loadMore": "Load more themes",
+      "retry": "Try again",
       "empty": "No public images yet.",
       "emptyThemes": "No themes match this filter.",
       "untitled": "Untitled Image",

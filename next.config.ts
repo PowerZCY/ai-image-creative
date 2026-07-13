@@ -3,6 +3,21 @@ import { NextConfig } from 'next';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n.ts');
 
+function imageRemotePattern(value: string | undefined) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return { protocol: url.protocol.replace(':', '') as 'http' | 'https', hostname: url.hostname };
+  } catch {
+    return null;
+  }
+}
+
+const configuredImagePatterns = [
+  imageRemotePattern(process.env.NEXT_PUBLIC_CDN_ACCESS_DOMAIN),
+  imageRemotePattern(process.env.NEXT_PUBLIC_R2_BASE_URL),
+].filter((pattern): pattern is { protocol: 'http' | 'https'; hostname: string } => Boolean(pattern));
+
 /** @type {import('next').NextConfig} */
 const nextConfig: NextConfig = {
   // Monorepo development config
@@ -16,13 +31,20 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
 
   images: {
-    unoptimized: true,
-    // allow remote image host
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'favicon.im',
-      }
+      },
+      {
+        protocol: 'https',
+        hostname: 'r2.d8ger.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos',
+      },
+      ...configuredImagePatterns,
     ],
     // allow remote svg image
     dangerouslyAllowSVG: true,
