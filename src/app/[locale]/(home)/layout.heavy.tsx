@@ -13,6 +13,7 @@ export async function homeHeavyItems(locale: string): Promise<SiteNavItemConfig[
         <CreditOverviewNavClient
           locale={locale}
           endpoint="/api/user/credit-overview"
+          enabledBillingTypes={['onetime']}
         />
       ),
     },

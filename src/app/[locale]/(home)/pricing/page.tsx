@@ -35,7 +35,7 @@ export default async function Pricing({
   const forceShow = process.env.SHOW_FINGERPRINT_STATUS === 'true'
   const enableSubscriptionUpgrade = process.env.ENABLE_STRIPE_SUBSCRIPTION_UPGRADE !== 'false';
   const { locale } =  await params;
-  const enabledBillingTypes = ['monthly', 'yearly', 'onetime'];
+  const enabledBillingTypes = ['onetime'];
   const data = await buildMoneyPriceData({
     locale,
     currency: moneyPriceConfig.display.currency,
