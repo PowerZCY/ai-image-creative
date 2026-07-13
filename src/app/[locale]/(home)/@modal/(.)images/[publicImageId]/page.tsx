@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
 import { BodyScrollLock } from '@/components/monica/body-scroll-lock';
-import { getMonicaExploreCopy } from '@/components/monica/copy-server';
+import { getMonicaGalleryCopy } from '@/components/monica/copy-server';
 import { PublicImageDetailView } from '@/components/monica/public-image-detail-view';
-import { exploreService } from '@/server/monica/services/explore.service';
+import { galleryService } from '@/server/monica/services/gallery.service';
 
 type InterceptedImageDetailPageProps = {
   params: Promise<{ locale: string; publicImageId: string }>;
@@ -13,8 +13,8 @@ export const dynamic = 'force-dynamic';
 export default async function InterceptedImageDetailPage({ params }: InterceptedImageDetailPageProps) {
   const { locale, publicImageId } = await params;
   const [copy, publicImage] = await Promise.all([
-    getMonicaExploreCopy(locale),
-    exploreService.findPublicImageDetail(publicImageId),
+    getMonicaGalleryCopy(locale),
+    galleryService.findPublicImageDetail(publicImageId),
   ]);
 
   if (!publicImage) {

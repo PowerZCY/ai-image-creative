@@ -1,13 +1,12 @@
 {
   "monica": {
-    "explore": {
-      "title": "Explore",
-      "description": "Choose a daily theme, get inspired by the gallery, and create your own take.",
+    "themes": {
+      "title": "Daily themes",
+      "description": "Choose a daily theme, get inspired, and create your own take.",
       "loading": "Loading",
       "empty": "No public images yet.",
       "emptyThemes": "No themes match this filter.",
       "untitled": "Untitled Image",
-      "searchPlaceholder": "Search themes or prompts...",
       "viewTheme": "View theme",
       "createFromTheme": "Create from this theme",
       "openDetail": "Open image detail",
@@ -18,21 +17,6 @@
       "useAsInspiration": "Use as inspiration",
       "copyPrompt": "Copy prompt",
       "copied": "Copied",
-      "tabs": {
-        "themes": "Themes",
-        "images": "Images"
-      },
-      "filters": {
-        "latest": "Latest",
-        "popular": "Popular",
-        "cinematic": "Cinematic",
-        "surreal": "Surreal"
-      },
-      "sort": {
-        "newest": "Newest",
-        "mostLiked": "Most liked",
-        "featured": "Featured"
-      },
       "actions": {
         "like": "Like",
         "save": "Save"
@@ -63,6 +47,21 @@
           "coverImageUrl": ""
         }
       ]
+    },
+    "gallery": {
+      "title": "Gallery",
+      "description": "Browse public creations from the community.",
+      "loading": "Loading",
+      "empty": "No public images yet.",
+      "untitled": "Untitled Image",
+      "openDetail": "Open image detail",
+      "prompt": "Prompt",
+      "usePrompt": "Use prompt",
+      "copied": "Copied",
+      "actions": {
+        "like": "Like",
+        "save": "Save"
+      }
     }
   }
 }

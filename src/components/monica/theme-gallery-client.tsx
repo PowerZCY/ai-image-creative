@@ -1,13 +1,13 @@
 'use client';
 
-import type { MonicaExploreCopy, MonicaThemeCopy } from './copy';
+import type { MonicaGalleryCopy, MonicaThemeCopy } from './copy';
 import { useMonicaPagedList } from './list-components';
 import { PublicImageGallery, type PublicImage } from './public-image-gallery';
 
-export function ThemeGalleryClient({ themeId, copy, galleryCopy }: { themeId: string; copy: MonicaThemeCopy; galleryCopy: MonicaExploreCopy }) {
-  const gallery = useMonicaPagedList<{ keyword: string; themeId: string }, PublicImage>({
-    endpoint: '/api/monica/explore/images/search',
-    initialFilters: { keyword: '', themeId },
+export function ThemeGalleryClient({ themeId, copy, galleryCopy }: { themeId: string; copy: MonicaThemeCopy; galleryCopy: MonicaGalleryCopy }) {
+  const gallery = useMonicaPagedList<{ themeId: string }, PublicImage>({
+    endpoint: '/api/monica/gallery/images/list',
+    initialFilters: { themeId },
     initialSortBy: 'featured',
     pageSize: 12,
   });

@@ -6,8 +6,8 @@ export class ThemeService {
     return themeRepository.listPublicThemes();
   }
 
-  searchPublicThemes(input: Parameters<typeof themeRepository.searchPublicThemes>[0]) {
-    return themeRepository.searchPublicThemes(input);
+  listPublicThemesPage(input: Parameters<typeof themeRepository.listPublicThemesPage>[0]) {
+    return themeRepository.listPublicThemesPage(input);
   }
 
   searchAdminThemes(input: Parameters<typeof themeRepository.searchAdminThemes>[0]) {

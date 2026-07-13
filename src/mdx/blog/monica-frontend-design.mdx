@@ -63,7 +63,8 @@ Monica AI 用户侧建议包含以下页面：
 | --- | --- | --- |
 | Home | `/[locale]` 或 `/[locale]/create` | 通用创作入口、今日主题入口、创作结果展示 |
 | Theme Detail | `/[locale]/themes/[themeId]` | 主题详情、主题上下文创作、主题 Gallery |
-| Explore | `/[locale]/explore` | Themes / Images 浏览、筛选、图片详情 |
+| Themes | `/[locale]/themes` | 每日主题与往期主题浏览、筛选 |
+| Gallery | `/[locale]/gallery` | 公开图片浏览、图片详情 |
 | Submit a theme | `/[locale]/submit-theme` | 用户提交纯文本主题想法、查看自己的主题提案审核状态 |
 | My Studio | `/[locale]/studio` | 个人创作、生成历史、投稿状态管理 |
 | Admin Review | `/[locale]/admin/monica` | 管理员审核主题提案、管理正式主题、审核图片投稿 |
@@ -989,11 +990,11 @@ export async function searchAdminImageSubmissions(input: MonicaPagedRequest<Admi
 - `POST /api/monica/generation/jobs`：创建生成任务。
 - `GET /api/monica/generation/jobs/:jobId`：轮询任务状态。
 - `POST /api/monica/reference-images`：保存参考图记录。
-- `POST /api/monica/themes/search`：正式主题分页搜索。
+- `POST /api/monica/themes/list`：正式主题分页列表。
 - `GET /api/monica/themes/:themeId`：正式主题详情，前端 URL 使用主题 id。
 - `POST /api/monica/submissions`：提交生成图片进入图片审核流。
 - `POST /api/monica/studio/images/search`：Studio 图片分页搜索。
-- `POST /api/monica/explore/images/search`：公开图片分页搜索。
+- `POST /api/monica/gallery/images/list`：公开图片分页列表。
 - `POST /api/monica/public-images/:publicImageId/like`：点赞切换。
 - `POST /api/monica/public-images/:publicImageId/save`：收藏切换。
 - `POST /api/monica/themes/my`：提交主题想法。

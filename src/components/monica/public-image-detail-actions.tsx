@@ -13,7 +13,7 @@ async function readError(response: Response) {
   }
 }
 
-export function PublicImageCloseButton({ mode = 'explore' }: { mode?: 'back' | 'explore' }) {
+export function PublicImageCloseButton({ mode = 'gallery' }: { mode?: 'back' | 'gallery' }) {
   const router = useRouter();
 
   return (
@@ -23,7 +23,7 @@ export function PublicImageCloseButton({ mode = 'explore' }: { mode?: 'back' | '
         if (mode === 'back') {
           router.back();
         } else {
-          router.push('/explore');
+          router.push('/gallery');
         }
       }}
       className="grid size-10 place-items-center rounded-full border border-border bg-background/90 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"

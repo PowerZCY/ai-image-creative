@@ -1,7 +1,7 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
-import { exploreService } from '@/server/monica/services/explore.service';
+import { galleryService } from '@/server/monica/services/gallery.service';
 import { themeFeaturedImageRepository } from '@/server/monica/repositories/theme-featured-image.repository';
 import { themeRepository } from '@/server/monica/repositories/theme.repository';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
@@ -30,7 +30,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     const [selected, pool] = await Promise.all([
       themeFeaturedImageRepository.listByTheme(numericThemeId),
-      exploreService.searchPublicImages({
+      galleryService.listPublicImagesPage({
         page: 1,
         pageSize: 80,
         filters: { themeId },

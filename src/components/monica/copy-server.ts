@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import type { MonicaCreatorCopy, MonicaExploreCopy, MonicaStudioCopy, MonicaThemeCopy } from './copy';
+import type { MonicaCreatorCopy, MonicaGalleryCopy, MonicaStudioCopy, MonicaThemeCopy, MonicaThemesCopy } from './copy';
 
 function rawArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : [];
@@ -184,8 +184,8 @@ export async function getMonicaStudioCopy(locale: string): Promise<MonicaStudioC
   };
 }
 
-export async function getMonicaExploreCopy(locale: string): Promise<MonicaExploreCopy> {
-  const t = await getTranslations({ locale, namespace: 'monica.explore' });
+export async function getMonicaThemesCopy(locale: string): Promise<MonicaThemesCopy> {
+  const t = await getTranslations({ locale, namespace: 'monica.themes' });
   return {
     title: t('title'),
     description: t('description'),
@@ -193,7 +193,6 @@ export async function getMonicaExploreCopy(locale: string): Promise<MonicaExplor
     empty: t('empty'),
     emptyThemes: t('emptyThemes'),
     untitled: t('untitled'),
-    searchPlaceholder: t('searchPlaceholder'),
     viewTheme: t('viewTheme'),
     createFromTheme: t('createFromTheme'),
     openDetail: t('openDetail'),
@@ -204,26 +203,30 @@ export async function getMonicaExploreCopy(locale: string): Promise<MonicaExplor
     copyPrompt: t('copyPrompt'),
     copied: t('copied'),
     useAsInspiration: t('useAsInspiration'),
-    tabs: {
-      themes: t('tabs.themes'),
-      images: t('tabs.images'),
-    },
-    filters: {
-      latest: t('filters.latest'),
-      popular: t('filters.popular'),
-      cinematic: t('filters.cinematic'),
-      surreal: t('filters.surreal'),
-    },
-    sort: {
-      newest: t('sort.newest'),
-      mostLiked: t('sort.mostLiked'),
-      featured: t('sort.featured'),
-    },
     actions: {
       like: t('actions.like'),
       save: t('actions.save'),
     },
     themes: rawArray(t.raw('themes')),
+  };
+}
+
+export async function getMonicaGalleryCopy(locale: string): Promise<MonicaGalleryCopy> {
+  const t = await getTranslations({ locale, namespace: 'monica.gallery' });
+  return {
+    title: t('title'),
+    description: t('description'),
+    loading: t('loading'),
+    empty: t('empty'),
+    untitled: t('untitled'),
+    openDetail: t('openDetail'),
+    prompt: t('prompt'),
+    usePrompt: t('usePrompt'),
+    copied: t('copied'),
+    actions: {
+      like: t('actions.like'),
+      save: t('actions.save'),
+    },
   };
 }
 

@@ -13,7 +13,7 @@ import {
   getStatusTone,
   useMonicaPagedList,
 } from './list-components';
-import { UnderlineFilterTabs } from './explore-client';
+import { UnderlineFilterTabs } from './themes-index-client';
 import { DialogShell, SubmitImageDialog } from './submit-image-dialog';
 
 type StudioImage = {
@@ -191,13 +191,13 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
     setThemesLoading(true);
     setActionError(null);
     try {
-      const response = await fetch('/api/monica/themes/search', {
+      const response = await fetch('/api/monica/themes/list', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({
           page: 1,
           pageSize: 100,
-          filters: { keyword: '' },
+          filters: {},
         }),
       });
       if (!response.ok) throw new Error(await readError(response));

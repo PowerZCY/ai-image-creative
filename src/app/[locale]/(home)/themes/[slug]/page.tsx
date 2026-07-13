@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createLocalizedPageMetadata, createLocalizedSiteMetadata } from '@windrun-huaiin/third-ui/lib/seo-metadata';
 import { MonicaCreator } from '@/components/monica/creator-client';
-import { getMonicaCreatorCopy, getMonicaExploreCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
+import { getMonicaCreatorCopy, getMonicaGalleryCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
 import { monicaContentWidthClass } from '@/components/monica/layout';
 import { ThemeGalleryClient } from '@/components/monica/theme-gallery-client';
 import { appConfig } from '@/lib/appConfig';
@@ -81,10 +81,10 @@ export default async function ThemeDetailPage({
   params: Promise<{ locale: string; slug: string }>;
 }) {
   const { locale, slug } = await params;
-  const [creatorCopy, themeCopy, exploreCopy] = await Promise.all([
+  const [creatorCopy, themeCopy, galleryCopy] = await Promise.all([
     getMonicaCreatorCopy(locale),
     getMonicaThemeCopy(locale),
-    getMonicaExploreCopy(locale),
+    getMonicaGalleryCopy(locale),
   ]);
   const dbTheme = await themeService.findPublicThemeBySlug(slug);
 
@@ -102,9 +102,9 @@ export default async function ThemeDetailPage({
       <section className="px-4 pb-8 pt-20 md:px-8 md:pt-24">
         <div className="mx-auto max-w-4xl text-center">
           <div className="mb-6">
-            <Link href="/explore" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground">
+            <Link href="/themes" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground">
               <ArrowLeft className="size-4" />
-              Back to explore
+              Back to themes
             </Link>
           </div>
           <h1 className="text-4xl font-medium leading-tight text-foreground md:text-5xl">
@@ -140,7 +140,7 @@ export default async function ThemeDetailPage({
 
       <section className="px-4 pt-16 pb-24 md:px-8">
         <div className={monicaContentWidthClass}>
-          <ThemeGalleryClient themeId={dbTheme.id.toString()} copy={themeCopy} galleryCopy={exploreCopy} />
+          <ThemeGalleryClient themeId={dbTheme.id.toString()} copy={themeCopy} galleryCopy={galleryCopy} />
         </div>
       </section>
     </div>

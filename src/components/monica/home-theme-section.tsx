@@ -37,8 +37,8 @@ export function HomeThemeSection({ copy, themes = [] }: { copy: MonicaThemeCopy;
               <h3 className="text-2xl font-bold tracking-tight text-foreground">
                 {copy.recentTitle}
               </h3>
-              <Link href="/explore" className="group flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-                View all in Explore
+              <Link href="/themes" className="group flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+                View all themes
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>

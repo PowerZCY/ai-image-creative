@@ -558,7 +558,7 @@ publishSubmission(imageSubmissionId: number): Promise<PublicImage>
 rejectSubmission(imageSubmissionId: number, reason): Promise<ImageSubmission>
 ```
 
-### 6.7 ExploreService
+### 6.7 GalleryService
 
 职责：
 
@@ -983,9 +983,9 @@ AI 调用：留空，由 `runGenerationJob` 后续实现。
 - 通过时创建 `PublicImage`。
 - 拒绝时更新状态，并把审核备注写入 `ImageSubmission.reviewFlow`。
 
-### 7.9 Explore API
+### 7.9 Gallery API
 
-#### `GET /api/explore/images`
+#### `POST /api/monica/gallery/images/list`
 
 鉴权：Optional Auth
 
@@ -1002,7 +1002,7 @@ Query：
 - 返回公开图片列表。
 - 登录用户附带 liked/saved 状态。
 
-#### `POST /api/explore/images/:publicImageId/like`
+#### `POST /api/monica/public-images/:publicImageId/like`
 
 鉴权：Required Auth
 
@@ -1012,7 +1012,7 @@ Query：
 - 写入 `ImageLike` 用户关系。
 - Redis 实时维护 like 计数，异步刷新 `PublicImage.likeCount`。
 
-#### `POST /api/explore/images/:publicImageId/save`
+#### `POST /api/monica/public-images/:publicImageId/save`
 
 鉴权：Required Auth
 

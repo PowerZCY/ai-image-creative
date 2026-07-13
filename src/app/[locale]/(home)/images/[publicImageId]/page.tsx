@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createLocalizedPageMetadata, createLocalizedSiteMetadata } from '@windrun-huaiin/third-ui/lib/seo-metadata';
-import { getMonicaExploreCopy } from '@/components/monica/copy-server';
+import { getMonicaGalleryCopy } from '@/components/monica/copy-server';
 import { PublicImageDetailView } from '@/components/monica/public-image-detail-view';
 import { appConfig } from '@/lib/appConfig';
-import { exploreService } from '@/server/monica/services/explore.service';
+import { galleryService } from '@/server/monica/services/gallery.service';
 
 type ImageDetailPageProps = {
   params: Promise<{ locale: string; publicImageId: string }>;
@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: ImageDetailPageProps): Promis
       defaultLocale: appConfig.i18n.defaultLocale,
       localePrefixAsNeeded: appConfig.i18n.localePrefixAsNeeded,
     }),
-    exploreService.findPublicImageDetail(publicImageId),
+    galleryService.findPublicImageDetail(publicImageId),
   ]);
 
   const pathname = `/images/${publicImageId}`;
@@ -74,8 +74,8 @@ export async function generateMetadata({ params }: ImageDetailPageProps): Promis
 export default async function PublicImageDetailPage({ params }: ImageDetailPageProps) {
   const { locale, publicImageId } = await params;
   const [copy, publicImage] = await Promise.all([
-    getMonicaExploreCopy(locale),
-    exploreService.findPublicImageDetail(publicImageId),
+    getMonicaGalleryCopy(locale),
+    galleryService.findPublicImageDetail(publicImageId),
   ]);
 
   if (!publicImage) {
@@ -106,7 +106,7 @@ export default async function PublicImageDetailPage({ params }: ImageDetailPageP
         />
       ) : null}
 
-      <PublicImageDetailView publicImage={publicImage} copy={copy} closeMode="explore" />
+      <PublicImageDetailView publicImage={publicImage} copy={copy} closeMode="gallery" />
     </main>
   );
 }

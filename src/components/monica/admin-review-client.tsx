@@ -14,7 +14,7 @@ import {
   getStatusTone,
   useMonicaPagedList,
 } from './list-components';
-import { UnderlineFilterTabs } from './explore-client';
+import { UnderlineFilterTabs } from './themes-index-client';
 import { DialogShell } from './submit-image-dialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

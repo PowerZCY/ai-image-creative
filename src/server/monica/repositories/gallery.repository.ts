@@ -3,14 +3,13 @@ import { Prisma } from '@app-prisma';
 import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
 import { buildStoredImageUrl } from '../utils/image-url';
 
-export type ExploreSort = 'newest' | 'most_liked' | 'featured';
+export type GallerySort = 'newest' | 'most_liked' | 'featured';
 type PublicImageFilters = {
-  keyword?: string;
   themeId?: string;
 };
 
-export class ExploreRepository {
-  async listPublicImages(sort: ExploreSort = 'newest') {
+export class GalleryRepository {
+  async listPublicImages(sort: GallerySort = 'newest') {
     const orderBy =
       sort === 'most_liked'
         ? [{ likeCount: 'desc' as const }, { publishedAt: 'desc' as const }]
@@ -29,7 +28,7 @@ export class ExploreRepository {
     return this.enrichPublicImages(publicImages);
   }
 
-  async searchPublicImages(input: MonicaPagedRequest<PublicImageFilters>) {
+  async listPublicImagesPage(input: MonicaPagedRequest<PublicImageFilters>) {
     const sort = input.sortBy === 'most_liked' || input.sortBy === 'featured' ? input.sortBy : 'newest';
     const orderBy =
       sort === 'most_liked'
@@ -38,21 +37,11 @@ export class ExploreRepository {
           ? [{ featuredScore: 'desc' as const }, { publishedAt: 'desc' as const }]
           : [{ publishedAt: 'desc' as const }];
     const { page, pageSize, skip } = normalizePagination(input);
-    const keyword = readStringFilter(input.filters?.keyword);
     const themeIdText = readStringFilter(input.filters?.themeId);
     const themeId = /^\d+$/.test(themeIdText) ? BigInt(themeIdText) : undefined;
     const where: Prisma.PublicImageWhereInput = {
       deleted: 0,
       ...(themeId ? { themeId } : {}),
-      ...(keyword
-        ? {
-            OR: [
-              { title: { contains: keyword, mode: 'insensitive' } },
-              { altText: { contains: keyword, mode: 'insensitive' } },
-              { creationNote: { contains: keyword, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
     };
 
     const [publicImages, total] = await prisma.$transaction([
@@ -267,4 +256,4 @@ export class ExploreRepository {
   }
 }
 
-export const exploreRepository = new ExploreRepository();
+export const galleryRepository = new GalleryRepository();

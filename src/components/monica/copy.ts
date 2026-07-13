@@ -127,44 +127,37 @@ export type MonicaThemeSummary = {
   coverImageUrl?: string;
 };
 
-export type MonicaExploreCopy = {
-  title: string;
-  description: string;
-  loading: string;
+export type MonicaPublicImageCopy = {
   empty: string;
-  emptyThemes: string;
   untitled: string;
-  searchPlaceholder: string;
-  viewTheme: string;
-  createFromTheme: string;
   openDetail: string;
-  imageDetail: string;
   prompt: string;
-  close: string;
   usePrompt: string;
-  copyPrompt: string;
   copied: string;
-  useAsInspiration: string;
-  tabs: {
-    themes: string;
-    images: string;
-  };
-  filters: {
-    latest: string;
-    popular: string;
-    cinematic: string;
-    surreal: string;
-  };
-  sort: {
-    newest: string;
-    mostLiked: string;
-    featured: string;
-  };
   actions: {
     like: string;
     save: string;
   };
+};
+
+export type MonicaThemesCopy = MonicaPublicImageCopy & {
+  title: string;
+  description: string;
+  loading: string;
+  emptyThemes: string;
+  viewTheme: string;
+  createFromTheme: string;
+  imageDetail: string;
+  close: string;
+  copyPrompt: string;
+  useAsInspiration: string;
   themes: MonicaThemeSummary[];
+};
+
+export type MonicaGalleryCopy = MonicaPublicImageCopy & {
+  title: string;
+  description: string;
+  loading: string;
 };
 
 export type MonicaGalleryImage = {

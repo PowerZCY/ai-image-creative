@@ -1,40 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { cn } from '@windrun-huaiin/lib/utils';
-import type { MonicaExploreCopy } from './copy';
+import type { MonicaThemesCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
 import { FilterPills, useMonicaPagedList } from './list-components';
-import { EmptyNotice, ErrorNotice, PaginationControls, PublicImageGallery, type PublicImage } from './public-image-gallery';
+import { EmptyNotice, ErrorNotice, PaginationControls } from './public-image-gallery';
 import { ThemeDiscoveryCard, type SharedThemeItem } from './theme-discovery-card';
 
-type ExploreFilters = {
-  keyword: string;
-  themeId?: string;
-};
-
-type ExploreTab = 'themes' | 'images';
 type ThemeFilter = 'all' | 'featured' | 'open';
 
-export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
-  const [tab, setTab] = useState<ExploreTab>('themes');
+export function ThemesIndexClient({ copy }: { copy: MonicaThemesCopy }) {
   const [themeFilter, setThemeFilter] = useState<ThemeFilter>('all');
-  const themes = useMonicaPagedList<ExploreFilters, SharedThemeItem>({
-    endpoint: '/api/monica/themes/search',
-    initialFilters: { keyword: '' },
+  const themes = useMonicaPagedList<Record<string, unknown>, SharedThemeItem>({
+    endpoint: '/api/monica/themes/list',
+    initialFilters: {},
     pageSize: 12,
   });
-  const images = useMonicaPagedList<ExploreFilters, PublicImage>({
-    endpoint: '/api/monica/explore/images/search',
-    initialFilters: { keyword: '' },
-    initialSortBy: 'newest',
-    pageSize: 12,
-  });
-
-  const tabOptions: Array<{ value: ExploreTab; label: string }> = [
-    { value: 'themes', label: copy.tabs.themes },
-    { value: 'images', label: copy.tabs.images },
-  ];
   const themeFilterOptions: Array<{ value: ThemeFilter; label: string }> = [
     { value: 'all', label: 'All themes' },
     { value: 'featured', label: 'With featured picks' },
@@ -54,44 +35,29 @@ export function ExploreClient({ copy }: { copy: MonicaExploreCopy }) {
           <div className="max-w-3xl">
             <p className="text-lg leading-8 text-muted-foreground lg:whitespace-nowrap">{copy.description}</p>
           </div>
-          <div className="mt-8 flex justify-start">
-            <FilterPills value={tab} options={tabOptions} onChange={setTab} />
-          </div>
         </div>
 
-        {tab === 'themes' ? (
-          <div className="space-y-4">
-            <UnderlineFilterTabs value={themeFilter} options={themeFilterOptions} onChange={setThemeFilter} />
-            {themes.error ? <ErrorNotice message={themes.error} /> : null}
-            {themes.loading ? (
-              <ThemeSkeleton />
-            ) : visibleThemes.length === 0 ? (
-              <EmptyNotice message={copy.emptyThemes} />
-            ) : (
-              <div className="grid gap-5">
-                {visibleThemes.map((theme) => (
-                  <ThemeDiscoveryCard 
-                    key={theme.id ?? theme.title} 
-                    theme={theme} 
-                    emptyDescriptionFallback={copy.emptyThemes}
-                    viewThemeText={copy.viewTheme}
-                  />
-                ))}
-              </div>
-            )}
-            <PaginationControls pagination={themes.pagination} onPageChange={themes.setPage} />
-          </div>
-        ) : (
-          <PublicImageGallery
-            items={images.items}
-            loading={images.loading}
-            error={images.error}
-            pagination={images.pagination}
-            onPageChange={images.setPage}
-            onReload={images.reload}
-            copy={copy}
-          />
-        )}
+        <div className="space-y-4">
+          <FilterPills value={themeFilter} options={themeFilterOptions} onChange={setThemeFilter} />
+          {themes.error ? <ErrorNotice message={themes.error} /> : null}
+          {themes.loading ? (
+            <ThemeSkeleton />
+          ) : visibleThemes.length === 0 ? (
+            <EmptyNotice message={copy.emptyThemes} />
+          ) : (
+            <div className="grid gap-5">
+              {visibleThemes.map((theme) => (
+                <ThemeDiscoveryCard
+                  key={theme.id ?? theme.title}
+                  theme={theme}
+                  emptyDescriptionFallback={copy.emptyThemes}
+                  viewThemeText={copy.viewTheme}
+                />
+              ))}
+            </div>
+          )}
+          <PaginationControls pagination={themes.pagination} onPageChange={themes.setPage} />
+        </div>
       </div>
     </section>
   );

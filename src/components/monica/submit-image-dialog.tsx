@@ -86,13 +86,13 @@ export function SubmitImageDialog({
     async function loadThemes() {
       setThemesLoading(true);
       try {
-        const response = await fetch('/api/monica/themes/search', {
+        const response = await fetch('/api/monica/themes/list', {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify({
             page: 1,
             pageSize: 100,
-            filters: { keyword: '' },
+            filters: {},
           }),
         });
         if (!response.ok) throw new Error(await readError(response));

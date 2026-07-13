@@ -1,23 +1,23 @@
 import Image from 'next/image';
 import { Hash } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
-import type { exploreService } from '@/server/monica/services/explore.service';
-import type { MonicaExploreCopy } from './copy';
+import type { galleryService } from '@/server/monica/services/gallery.service';
+import type { MonicaGalleryCopy } from './copy';
 import { PublicImageCloseButton, PublicImageDetailActions, PublicImagePromptCopyButton } from './public-image-detail-actions';
 
-type PublicImageDetail = NonNullable<Awaited<ReturnType<typeof exploreService.findPublicImageDetail>>>;
+type PublicImageDetail = NonNullable<Awaited<ReturnType<typeof galleryService.findPublicImageDetail>>>;
 
 type PublicImageDetailViewProps = {
   publicImage: PublicImageDetail;
-  copy: MonicaExploreCopy;
-  closeMode?: 'back' | 'explore';
+  copy: MonicaGalleryCopy;
+  closeMode?: 'back' | 'gallery';
   className?: string;
 };
 
 export function PublicImageDetailView({
   publicImage,
   copy,
-  closeMode = 'explore',
+  closeMode = 'gallery',
   className,
 }: PublicImageDetailViewProps) {
   const imageUrl = publicImage.image?.imageUrl;

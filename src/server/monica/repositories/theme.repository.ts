@@ -55,6 +55,8 @@ type AdminThemeCreateInput = {
   publishDate?: string;
 };
 
+type PublicThemeListFilters = Record<string, unknown>;
+
 type ThemeSearchFilters = {
   keyword?: string;
   visibility?: string;
@@ -94,7 +96,7 @@ function getPublicThemeDateCutoff() {
   return new Date(`${date}T00:00:00.000Z`);
 }
 
-function publicThemeWhere(keyword?: string): Prisma.ThemeWhereInput {
+function publicThemeWhere(): Prisma.ThemeWhereInput {
   const publicDateCutoff = getPublicThemeDateCutoff();
   return {
     deleted: 0,
@@ -102,19 +104,6 @@ function publicThemeWhere(keyword?: string): Prisma.ThemeWhereInput {
       not: null,
       lte: publicDateCutoff,
     },
-    ...(keyword
-      ? {
-          AND: [
-            {
-              OR: [
-                { title: { contains: keyword, mode: 'insensitive' } },
-                { brief: { contains: keyword, mode: 'insensitive' } },
-                { themeNote: { contains: keyword, mode: 'insensitive' } },
-              ],
-            },
-          ],
-        }
-      : {}),
   };
 }
 
@@ -321,10 +310,9 @@ export class ThemeRepository {
     return attachFeaturedImages(themes.map((theme) => normalizeTheme(theme)));
   }
 
-  async searchPublicThemes(input: MonicaPagedRequest<ThemeSearchFilters>) {
+  async listPublicThemesPage(input: MonicaPagedRequest<PublicThemeListFilters>) {
     const { page, pageSize, skip } = normalizePagination(input);
-    const keyword = readStringFilter(input.filters?.keyword);
-    const where = publicThemeWhere(keyword);
+    const where = publicThemeWhere();
 
     const [items, total] = await prisma.$transaction([
       prisma.theme.findMany({
