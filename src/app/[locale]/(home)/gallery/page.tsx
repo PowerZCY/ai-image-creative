@@ -5,7 +5,7 @@ import { getMonicaGalleryCopy } from '@/components/monica/copy-server';
 import { appConfig } from '@/lib/appConfig';
 import { galleryService } from '@/server/monica/services/gallery.service';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 14400;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
@@ -51,5 +51,12 @@ export default async function GalleryPage({ params }: { params: Promise<{ locale
     }),
   ]);
 
-  return <GalleryClient copy={copy} initialItems={gallery.items} initialPagination={gallery.pagination} />;
+  return (
+    <GalleryClient
+      copy={copy}
+      initialItems={gallery.items}
+      initialPagination={gallery.pagination}
+      heading={{ title: copy.title, description: copy.description }}
+    />
+  );
 }

@@ -127,7 +127,6 @@ function PublicImageCard({
             alt={imageAlt}
             width={publicImage.image?.width ?? 1024}
             height={publicImage.image?.height ?? 1280}
-            unoptimized
             className="h-auto w-full transition duration-300 group-hover:scale-[1.03]"
           />
         ) : (

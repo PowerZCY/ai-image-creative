@@ -5,12 +5,13 @@ import { createLocalizedPageMetadata, createLocalizedSiteMetadata } from '@windr
 import { MonicaCreator } from '@/components/monica/creator-client';
 import { getMonicaCreatorCopy, getMonicaGalleryCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
 import { monicaContentWidthClass } from '@/components/monica/layout';
-import { ThemeGalleryClient } from '@/components/monica/theme-gallery-client';
+import { GalleryClient } from '@/components/monica/gallery-client';
 import { appConfig } from '@/lib/appConfig';
 import { themeService } from '@/server/monica/services/theme.service';
+import { galleryService } from '@/server/monica/services/gallery.service';
 import { ArrowLeft } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 14400;
 
 export async function generateMetadata({
   params,
@@ -92,6 +93,13 @@ export default async function ThemeDetailPage({
     notFound();
   }
 
+  const gallery = await galleryService.listPublicImagesPage({
+    page: 1,
+    pageSize: 20,
+    sortBy: 'featured',
+    filters: { themeId: dbTheme.id.toString() },
+  });
+
   const title = dbTheme.title;
   const description = dbTheme.description ?? dbTheme.brief ?? themeCopy.homeDescription;
   const tags = dbTheme.tags as string[];
@@ -140,7 +148,14 @@ export default async function ThemeDetailPage({
 
       <section className="px-4 pt-16 pb-24 md:px-8">
         <div className={monicaContentWidthClass}>
-          <ThemeGalleryClient themeId={dbTheme.id.toString()} copy={themeCopy} galleryCopy={galleryCopy} />
+          <GalleryClient
+            copy={galleryCopy}
+            initialItems={gallery.items}
+            initialPagination={gallery.pagination}
+            filters={{ themeId: dbTheme.id.toString() }}
+            sortBy="featured"
+            heading={{ title: themeCopy.galleryTitle, level: 'h2' }}
+          />
         </div>
       </section>
     </div>

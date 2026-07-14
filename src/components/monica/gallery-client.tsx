@@ -7,16 +7,24 @@ import type { Pagination, PagedResult } from './list-components';
 import { PublicImageGallery, type PublicImage } from './public-image-gallery';
 
 type GalleryFilters = Record<string, unknown>;
+type GallerySort = 'newest' | 'most_liked' | 'featured';
 const pageSize = 20;
+const emptyGalleryFilters: GalleryFilters = {};
 
 export function GalleryClient({
   copy,
   initialItems,
   initialPagination,
+  filters = emptyGalleryFilters,
+  sortBy = 'newest',
+  heading,
 }: {
   copy: MonicaGalleryCopy;
   initialItems: PublicImage[];
   initialPagination: Pagination;
+  filters?: GalleryFilters;
+  sortBy?: GallerySort;
+  heading?: { title: string; description?: string; level?: 'h1' | 'h2' };
 }) {
   const [items, setItems] = useState(initialItems);
   const [pagination, setPagination] = useState(initialPagination);
@@ -40,8 +48,8 @@ export function GalleryClient({
         body: JSON.stringify({
           page: pagination.page + 1,
           pageSize,
-          sortBy: 'newest',
-          filters: {} satisfies GalleryFilters,
+          sortBy,
+          filters,
         }),
       });
       if (!response.ok) throw new Error(response.statusText);
@@ -58,7 +66,7 @@ export function GalleryClient({
       loadingRef.current = false;
       setLoadingMore(false);
     }
-  }, [pagination.page, pagination.totalPages]);
+  }, [filters, pagination.page, pagination.totalPages, sortBy]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -75,12 +83,18 @@ export function GalleryClient({
   }, [loadMore, pagination.page, pagination.totalPages]);
 
   return (
-    <section className="monica-surface min-h-screen py-12 md:py-16">
-      <div className={monicaContentWidthClass}>
-        <div className="mb-8 max-w-3xl">
-          <h1 className="text-4xl font-semibold text-foreground md:text-5xl">{copy.title}</h1>
-          <p className="text-lg leading-8 text-muted-foreground">{copy.description}</p>
-        </div>
+    <section className={heading?.level === 'h2' ? undefined : 'monica-surface min-h-screen py-12 md:py-16'}>
+      <div className={heading?.level === 'h2' ? undefined : monicaContentWidthClass}>
+        {heading ? (
+          <div className={heading.level === 'h2' ? 'mb-5' : 'mb-8 max-w-3xl'}>
+            {heading.level === 'h2' ? (
+              <h2 className="text-2xl font-semibold text-foreground">{heading.title}</h2>
+            ) : (
+              <h1 className="text-4xl font-semibold text-foreground md:text-5xl">{heading.title}</h1>
+            )}
+            {heading.description ? <p className="text-lg leading-8 text-muted-foreground">{heading.description}</p> : null}
+          </div>
+        ) : null}
         <PublicImageGallery
           items={items}
           loading={false}
