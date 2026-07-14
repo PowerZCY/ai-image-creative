@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { RefObject } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Heart, ImagePlus } from 'lucide-react';
@@ -53,6 +54,7 @@ export function PublicImageGallery({
   onPageChange,
   onReload,
   copy,
+  infinite,
 }: {
   items: PublicImage[];
   loading: boolean;
@@ -61,6 +63,7 @@ export function PublicImageGallery({
   onPageChange: (page: number) => void;
   onReload: () => void;
   copy: PublicImageGalleryCopy;
+  infinite?: { hasMore: boolean; loading: boolean; sentinelRef: RefObject<HTMLDivElement | null> };
 }) {
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -98,7 +101,7 @@ export function PublicImageGallery({
           ))}
         </div>
       )}
-      <PaginationControls pagination={pagination} onPageChange={onPageChange} />
+      {infinite ? <InfiniteLoadIndicator {...infinite} /> : <PaginationControls pagination={pagination} onPageChange={onPageChange} />}
     </div>
   );
 }
@@ -167,10 +170,27 @@ export function PaginationControls({ pagination, onPageChange }: { pagination: P
   );
 }
 
-function ImageGridSkeleton() {
+function InfiniteLoadIndicator({
+  hasMore,
+  loading,
+  sentinelRef,
+}: {
+  hasMore: boolean;
+  loading: boolean;
+  sentinelRef: RefObject<HTMLDivElement | null>;
+}) {
+  if (!hasMore) return null;
+  return (
+    <div ref={sentinelRef} className="py-4" aria-live="polite">
+      {loading ? <ImageGridSkeleton count={4} /> : <span className="sr-only">Load more images</span>}
+    </div>
+  );
+}
+
+function ImageGridSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {Array.from({ length: 8 }, (_, index) => <div key={index} className="aspect-4/5 animate-pulse rounded-lg bg-muted" />)}
+      {Array.from({ length: count }, (_, index) => <div key={index} className="aspect-4/5 animate-pulse rounded-lg bg-muted" />)}
     </div>
   );
 }
