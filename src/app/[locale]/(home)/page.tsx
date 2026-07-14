@@ -6,6 +6,9 @@ import { themeService } from '@/server/monica/services/theme.service';
 import { FingerprintStatus } from '@windrun-huaiin/third-ui/fingerprint';
 import { CTA, FAQ, Features, SeoContent, Tips, Usage } from '@windrun-huaiin/third-ui/main/home/server';
 
+// Refresh date-driven featured themes within 10 minutes of their scheduled change.
+export const revalidate = 600;
+
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const isDev = process.env.NODE_ENV !== 'production';
   const forceShow = process.env.SHOW_FINGERPRINT_STATUS === 'true';
@@ -13,7 +16,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   const [creatorCopy, themeCopy, publicThemes] = await Promise.all([
     getMonicaCreatorCopy(locale),
     getMonicaThemeCopy(locale),
-    themeService.listPublicThemes(),
+    themeService.listHomeThemes(),
   ]);
   const currentTheme = publicThemes[0] ?? null;
 

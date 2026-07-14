@@ -338,6 +338,27 @@ export class ThemeRepository {
     return attachFeaturedImages(themes.map((theme) => normalizeTheme(theme)));
   }
 
+  async listHomeThemes() {
+    const themes = await prisma.theme.findMany({
+      where: publicThemeWhere(),
+      orderBy: [{ publishDate: 'desc' }, { createdAt: 'desc' }],
+      take: 3,
+    });
+
+    return attachFeaturedImages(themes.map((theme) => normalizeTheme(theme)));
+  }
+
+  async isCurrentHomeTheme(themeId: bigint) {
+    const themes = await prisma.theme.findMany({
+      where: publicThemeWhere(),
+      orderBy: [{ publishDate: 'desc' }, { createdAt: 'desc' }],
+      take: 3,
+      select: { id: true },
+    });
+
+    return themes.some((theme) => theme.id === themeId);
+  }
+
   async listPublicThemesPage(input: MonicaPagedRequest<PublicThemeListFilters>) {
     const { page, pageSize, skip } = normalizePagination(input);
     const where = publicThemeWhere();
@@ -459,6 +480,17 @@ export class ThemeRepository {
     return prisma.theme.findFirst({
       where: {
         id: themeId,
+        deleted: 0,
+      },
+    });
+  }
+
+  async findAdminThemeBySourceSubmissionId(themeSubmissionId: string) {
+    if (!/^\d+$/.test(themeSubmissionId)) return null;
+
+    return prisma.theme.findFirst({
+      where: {
+        sourceSubmissionId: BigInt(themeSubmissionId),
         deleted: 0,
       },
     });

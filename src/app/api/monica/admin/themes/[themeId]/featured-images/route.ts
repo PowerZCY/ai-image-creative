@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { galleryService } from '@/server/monica/services/gallery.service';
+import { themeService } from '@/server/monica/services/theme.service';
 import { themeFeaturedImageRepository } from '@/server/monica/repositories/theme-featured-image.repository';
 import { themeRepository } from '@/server/monica/repositories/theme.repository';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
@@ -77,6 +78,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     });
     revalidatePath('/themes');
     revalidatePath(`/themes/${theme.slug}`);
+    if (await themeService.isCurrentHomeTheme(numericThemeId)) {
+      revalidatePath('/[locale]', 'page');
+    }
     return NextResponse.json({ selected });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

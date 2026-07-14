@@ -6,6 +6,14 @@ export class ThemeService {
     return themeRepository.listPublicThemes();
   }
 
+  listHomeThemes() {
+    return themeRepository.listHomeThemes();
+  }
+
+  isCurrentHomeTheme(themeId: bigint) {
+    return themeRepository.isCurrentHomeTheme(themeId);
+  }
+
   listPublicThemesPage(input: Parameters<typeof themeRepository.listPublicThemesPage>[0]) {
     return themeRepository.listPublicThemesPage(input);
   }
@@ -28,6 +36,10 @@ export class ThemeService {
 
   findAdminThemeById(themeId: bigint) {
     return themeRepository.findAdminThemeById(themeId);
+  }
+
+  findAdminThemeBySourceSubmissionId(themeSubmissionId: string) {
+    return themeRepository.findAdminThemeBySourceSubmissionId(themeSubmissionId);
   }
 
   updateAdminTheme(themeId: string, input: Parameters<typeof themeRepository.updateAdminTheme>[1]) {

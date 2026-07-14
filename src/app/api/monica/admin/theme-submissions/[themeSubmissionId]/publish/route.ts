@@ -19,10 +19,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const { themeSubmissionId } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const input = parsePublishThemeInput(body);
+    const previousTheme = await themeService.findAdminThemeBySourceSubmissionId(themeSubmissionId);
+    const wasOnHome = previousTheme
+      ? await themeService.isCurrentHomeTheme(previousTheme.id)
+      : false;
     const result = await themeService.publishFromSubmission(user.userId, themeSubmissionId, input);
     if (!result) return NextResponse.json({ error: 'Theme submission not found' }, { status: 404 });
     revalidatePath('/themes');
     revalidatePath(`/themes/${result.theme.slug}`);
+    if (wasOnHome || await themeService.isCurrentHomeTheme(result.theme.id)) {
+      revalidatePath('/[locale]', 'page');
+    }
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

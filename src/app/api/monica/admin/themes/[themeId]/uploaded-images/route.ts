@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { adminImageUploadService } from '@/server/monica/services/admin-image-upload.service';
+import { themeService } from '@/server/monica/services/theme.service';
 import { themeRepository } from '@/server/monica/repositories/theme.repository';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
 
@@ -24,6 +25,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'file is required' }, { status: 400 });
     }
 
+    const setFeatured = readFormString(formData, 'setFeatured') === 'true';
+
     const result = await adminImageUploadService.uploadImageToTheme(user.userId, {
       themeId,
       file,
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       creationNote: readFormString(formData, 'creationNote'),
       prompt: readFormString(formData, 'prompt'),
       tags: readTags(formData),
-      setFeatured: readFormString(formData, 'setFeatured') === 'true',
+      setFeatured,
     });
     if (/^\d+$/.test(themeId)) {
       const theme = await themeRepository.findAdminThemeById(BigInt(themeId));
@@ -42,6 +45,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
         revalidatePath('/themes');
         revalidatePath(`/themes/${theme.slug}`);
         revalidatePath(`/images/${result.publicImage.publicImageId}`);
+        if (setFeatured && await themeService.isCurrentHomeTheme(theme.id)) {
+          revalidatePath('/[locale]', 'page');
+        }
       }
     }
 

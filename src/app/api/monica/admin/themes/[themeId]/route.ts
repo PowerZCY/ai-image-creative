@@ -21,7 +21,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!/^\d+$/.test(themeId)) {
       return NextResponse.json({ error: 'Theme not found' }, { status: 404 });
     }
-    const previousTheme = await themeService.findAdminThemeById(BigInt(themeId));
+    const numericThemeId = BigInt(themeId);
+    const [previousTheme, wasOnHome] = await Promise.all([
+      themeService.findAdminThemeById(numericThemeId),
+      themeService.isCurrentHomeTheme(numericThemeId),
+    ]);
     const body = await request.json() as Record<string, unknown>;
     const input = parseAdminThemeUpdateInput(body);
     const theme = await themeService.updateAdminTheme(themeId, input);
@@ -33,6 +37,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       revalidatePath(`/themes/${previousTheme.slug}`);
     }
     revalidatePath(`/themes/${theme.slug}`);
+    if (wasOnHome || await themeService.isCurrentHomeTheme(numericThemeId)) {
+      revalidatePath('/[locale]', 'page');
+    }
     const publicImageIds = await galleryService.listPublicImageIdsByThemeId(theme.id);
     for (const publicImageId of publicImageIds) {
       revalidatePath(`/images/${publicImageId}`);

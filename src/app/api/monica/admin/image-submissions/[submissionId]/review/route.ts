@@ -39,7 +39,6 @@ export async function POST(
         : null;
       revalidatePath('/gallery');
       if (theme) revalidatePath(`/themes/${theme.slug}`);
-      revalidatePath(`/images/${submission.publicImage.publicImageId}`);
     }
 
     return NextResponse.json({ submission });
