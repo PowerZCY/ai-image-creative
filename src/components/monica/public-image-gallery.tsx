@@ -30,7 +30,6 @@ export type PublicImageGalleryCopy = {
   untitled: string;
   openDetail: string;
   prompt: string;
-  usePrompt: string;
   copied: string;
   actions: {
     save: string;

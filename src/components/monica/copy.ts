@@ -132,7 +132,6 @@ export type MonicaPublicImageCopy = {
   untitled: string;
   openDetail: string;
   prompt: string;
-  usePrompt: string;
   copied: string;
   actions: {
     like: string;

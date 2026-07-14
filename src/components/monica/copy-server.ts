@@ -201,7 +201,6 @@ export async function getMonicaThemesCopy(locale: string): Promise<MonicaThemesC
     imageDetail: t('imageDetail'),
     prompt: t('prompt'),
     close: t('close'),
-    usePrompt: t('usePrompt'),
     copyPrompt: t('copyPrompt'),
     copied: t('copied'),
     useAsInspiration: t('useAsInspiration'),
@@ -223,7 +222,6 @@ export async function getMonicaGalleryCopy(locale: string): Promise<MonicaGaller
     untitled: t('untitled'),
     openDetail: t('openDetail'),
     prompt: t('prompt'),
-    usePrompt: t('usePrompt'),
     copied: t('copied'),
     actions: {
       like: t('actions.like'),

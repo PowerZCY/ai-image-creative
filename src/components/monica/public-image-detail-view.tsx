@@ -67,17 +67,22 @@ export function PublicImageDetailView({
             </h1>
           </div>
 
+          <section className="mt-6">
+            <div className="flex items-start justify-between gap-3">
+              {publicImage.model ? (
+                <p className="min-w-0 text-sm leading-6 text-foreground">{publicImage.model}</p>
+              ) : <span />}
+              <PublicImageDetailActions
+                publicImageId={publicImage.publicImageId}
+                saveLabel={copy.actions.save}
+              />
+            </div>
+          </section>
+
           {publicImage.creationNote ? (
             <section className="mt-6">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Creation note</h2>
               <p className="mt-1.5 text-sm leading-6 text-foreground">{publicImage.creationNote}</p>
-            </section>
-          ) : null}
-
-          {publicImage.model ? (
-            <section className="mt-6">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Model</h2>
-              <p className="mt-1.5 text-sm leading-6 text-foreground">{publicImage.model}</p>
             </section>
           ) : null}
 
@@ -90,14 +95,6 @@ export function PublicImageDetailView({
               {promptText}
             </p>
           </section>
-
-          <div className="mt-6">
-            <PublicImageDetailActions
-              publicImageId={publicImage.publicImageId}
-              usePromptLabel={copy.usePrompt}
-              saveLabel={copy.actions.save}
-            />
-          </div>
         </aside>
       </div>
     </div>

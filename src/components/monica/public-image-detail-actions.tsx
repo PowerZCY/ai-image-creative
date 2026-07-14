@@ -36,11 +36,9 @@ export function PublicImageCloseButton({ mode = 'gallery' }: { mode?: 'back' | '
 
 export function PublicImageDetailActions({
   publicImageId,
-  usePromptLabel = 'Use prompt',
   saveLabel = 'Save',
 }: {
   publicImageId: string;
-  usePromptLabel?: string;
   saveLabel?: string;
 }) {
   const [saving, setSaving] = useState(false);
@@ -69,20 +67,15 @@ export function PublicImageDetailActions({
           {error}
         </div>
       ) : null}
-      <div className="flex gap-2">
-        <button type="button" onClick={() => { window.location.href = '/'; }} className="monica-button-primary flex-1">
-          {usePromptLabel}
-        </button>
-        <button
-          type="button"
-          onClick={() => void saveImage()}
-          disabled={saving}
-          className="grid size-11 shrink-0 place-items-center rounded-md border border-border hover:bg-muted disabled:opacity-50"
-          aria-label={saveLabel}
-        >
-          <Heart className="size-4" />
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => void saveImage()}
+        disabled={saving}
+        className="grid size-11 shrink-0 place-items-center rounded-md hover:bg-muted disabled:opacity-50"
+        aria-label={saveLabel}
+      >
+        <Heart className="size-4" />
+      </button>
     </div>
   );
 }

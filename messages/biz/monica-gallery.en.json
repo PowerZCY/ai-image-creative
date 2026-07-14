@@ -15,7 +15,6 @@
       "imageDetail": "Image detail",
       "prompt": "Prompt",
       "close": "Close",
-      "usePrompt": "Use prompt",
       "useAsInspiration": "Use as inspiration",
       "copyPrompt": "Copy prompt",
       "copied": "Copied",
@@ -58,7 +57,6 @@
       "untitled": "Untitled Image",
       "openDetail": "Open image detail",
       "prompt": "Prompt",
-      "usePrompt": "Use prompt",
       "copied": "Copied",
       "actions": {
         "like": "Like",
