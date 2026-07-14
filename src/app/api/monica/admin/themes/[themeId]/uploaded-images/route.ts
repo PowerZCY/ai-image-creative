@@ -38,8 +38,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (/^\d+$/.test(themeId)) {
       const theme = await themeRepository.findAdminThemeById(BigInt(themeId));
       if (theme) {
+        revalidatePath('/gallery');
         revalidatePath('/themes');
         revalidatePath(`/themes/${theme.slug}`);
+        revalidatePath(`/images/${result.publicImage.publicImageId}`);
       }
     }
 

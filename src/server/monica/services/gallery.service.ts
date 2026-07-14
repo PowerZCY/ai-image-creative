@@ -1,6 +1,10 @@
 import { galleryRepository, type GallerySort } from '../repositories/gallery.repository';
 
 export class GalleryService {
+  listPublicImageIdsByThemeId(themeId: bigint) {
+    return galleryRepository.listPublicImageIdsByThemeId(themeId);
+  }
+
   listPublicImages(input: { sort?: string }) {
     const sort = input.sort === 'most_liked' || input.sort === 'featured' ? input.sort : 'newest';
     return galleryRepository.listPublicImages(sort as GallerySort);

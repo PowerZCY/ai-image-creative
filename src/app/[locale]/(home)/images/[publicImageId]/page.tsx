@@ -10,7 +10,7 @@ type ImageDetailPageProps = {
   params: Promise<{ locale: string; publicImageId: string }>;
 };
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 14400;
 
 export async function generateMetadata({ params }: ImageDetailPageProps): Promise<Metadata> {
   const { locale, publicImageId } = await params;

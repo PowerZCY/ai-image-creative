@@ -9,6 +9,14 @@ type PublicImageFilters = {
 };
 
 export class GalleryRepository {
+  async listPublicImageIdsByThemeId(themeId: bigint) {
+    const publicImages = await prisma.publicImage.findMany({
+      where: { themeId, deleted: 0 },
+      select: { publicImageId: true },
+    });
+    return publicImages.map((image) => image.publicImageId);
+  }
+
   async listPublicImages(sort: GallerySort = 'newest') {
     const orderBy =
       sort === 'most_liked'

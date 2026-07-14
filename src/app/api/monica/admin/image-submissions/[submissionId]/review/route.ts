@@ -1,7 +1,9 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { submissionService } from '@/server/monica/services/submission.service';
+import { themeRepository } from '@/server/monica/repositories/theme.repository';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
 
 installBigIntJsonSerialization();
@@ -29,6 +31,15 @@ export async function POST(
 
     if (!submission) {
       return NextResponse.json({ error: 'Image submission not found' }, { status: 404 });
+    }
+
+    if (submission.publicImage) {
+      const theme = submission.publicImage.themeId
+        ? await themeRepository.findAdminThemeById(submission.publicImage.themeId)
+        : null;
+      revalidatePath('/gallery');
+      if (theme) revalidatePath(`/themes/${theme.slug}`);
+      revalidatePath(`/images/${submission.publicImage.publicImageId}`);
     }
 
     return NextResponse.json({ submission });
