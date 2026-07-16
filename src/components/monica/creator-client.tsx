@@ -1457,16 +1457,18 @@ function AssistantPanelContent({
                   </div>
                 </div>
               ))}
-              <div className="flex flex-wrap gap-2 pt-1">
-                <SmallActionButton onClick={onMoreIdeas} disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin" />
-                      <span>Generating...</span>
-                    </>
-                  ) : copy.assistant.moreIdeas}
-                </SmallActionButton>
-              </div>
+              {ideas.length > 0 ? (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <SmallActionButton onClick={onMoreIdeas} disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        <span>Generating...</span>
+                      </>
+                    ) : copy.assistant.moreIdeas}
+                  </SmallActionButton>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
