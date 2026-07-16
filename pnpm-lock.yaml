@@ -21,8 +21,8 @@ importers:
         specifier: ^2.0.13
         version: 2.0.14
       '@windrun-huaiin/backend-core':
-        specifier: 31.0.2
-        version: 31.0.2(671487d8d23720b9b0d939e9d0c71e2a)
+        specifier: 31.0.3
+        version: 31.0.3(671487d8d23720b9b0d939e9d0c71e2a)
       '@windrun-huaiin/base-ui':
         specifier: 31.0.1
         version: 31.0.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(clsx@2.1.1)(next-intl@4.13.0(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwind-merge@3.6.0)(tailwindcss@4.3.0)
@@ -2013,8 +2013,8 @@ packages:
   '@upstash/redis@1.38.0':
     resolution: {integrity: sha512-wu+dZBptlLy0+MCUEoHmzrY/TnmgDey3+c7EbIGwrLqAvkP8yi5MWZHYGIFtAygmL4Bkz2TdFu+eU0vFPncIcg==}
 
-  '@windrun-huaiin/backend-core@31.0.2':
-    resolution: {integrity: sha512-AbUo0UAGQ3COerwPj1fxBGTjDworlzfqx/7w/N3eyVqDZm5rPL6VHcoK5QUsnUqvksqkX8Zgcn9am7nRbj/tOQ==}
+  '@windrun-huaiin/backend-core@31.0.3':
+    resolution: {integrity: sha512-Alg6AQ20oubBrva5YPZvycGTR+rvRwh7NId+6KNMlBZ2QVrTg+I9zd/KrDAy2PxdE/AJedjiF/QMDQQBsgaKNw==}
     peerDependencies:
       '@clerk/nextjs': ^7.3.3
       '@prisma/client': ^7.8.0
@@ -6779,7 +6779,7 @@ snapshots:
     dependencies:
       uncrypto: 0.1.3
 
-  '@windrun-huaiin/backend-core@31.0.2(671487d8d23720b9b0d939e9d0c71e2a)':
+  '@windrun-huaiin/backend-core@31.0.3(671487d8d23720b9b0d939e9d0c71e2a)':
     dependencies:
       '@clerk/nextjs': 7.4.3(next@16.1.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@prisma/client': 7.8.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)

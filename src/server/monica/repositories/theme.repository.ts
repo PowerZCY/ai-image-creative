@@ -1,23 +1,21 @@
 import { prisma } from '@/server/prisma';
 import { Prisma } from '@app-prisma';
-import { THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
+import { THEME_STATUS, THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
 import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
 import { buildStoredImageUrl } from '../utils/image-url';
 import { generatorIdeasToJson, normalizeGeneratorIdeas, type ThemeGeneratorIdea } from '../types/theme';
 
 type ThemeRecord = NonNullable<Awaited<ReturnType<typeof prisma.theme.findFirst>>>;
 
-type ThemeSubmissionDraftInput = {
+type ThemeSubmissionInput = {
   title: string;
   details: string;
   submitReason?: string;
-  submitNow?: boolean;
 };
 
 type PublishThemeInput = {
   title: string;
   slug: string;
-  issueNumber?: number;
   brief?: string;
   description?: string;
   coverImageUrl?: string;
@@ -25,13 +23,11 @@ type PublishThemeInput = {
   promptTexts: string[];
   tags: string[];
   publishDate?: string;
-  status: string;
 };
 
 type AdminThemeUpdateInput = {
   title?: string;
   slug?: string;
-  issueNumber?: number | null;
   brief?: string | null;
   description?: string | null;
   coverImageUrl?: string | null;
@@ -49,7 +45,6 @@ type AdminThemeUpdateInput = {
 type AdminThemeCreateInput = {
   title: string;
   slug: string;
-  issueNumber?: number;
   brief?: string;
   description?: string;
   publishDate?: string;
@@ -77,20 +72,29 @@ type ThemeSubmissionSearchFilters = {
 };
 
 const USER_THEME_STATUS_TO_INTERNAL: Record<string, string[]> = {
-  under_review: [
-    THEME_SUBMISSION_STATUS.DRAFT,
-    THEME_SUBMISSION_STATUS.UNDER_REVIEW,
-    THEME_SUBMISSION_STATUS.ACCEPTED_TO_POOL,
-  ],
-  accepted: [
-    THEME_SUBMISSION_STATUS.SELECTED,
-    THEME_SUBMISSION_STATUS.PUBLISHED,
-  ],
-  not_selected: [
-    THEME_SUBMISSION_STATUS.REJECTED,
-    THEME_SUBMISSION_STATUS.DUPLICATE,
-  ],
+  under_review: [THEME_SUBMISSION_STATUS.UNDER_REVIEW],
+  accepted: [THEME_SUBMISSION_STATUS.ACCEPTED],
+  not_selected: [THEME_SUBMISSION_STATUS.REJECTED],
 };
+
+const FIRST_THEME_PUBLISH_DATE = '2026-07-17';
+
+function getIssueNumber(publishDate: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(publishDate)) {
+    throw new Error('publishDate must use YYYY-MM-DD');
+  }
+
+  const firstDate = Date.parse(`${FIRST_THEME_PUBLISH_DATE}T00:00:00.000Z`);
+  const scheduledDate = Date.parse(`${publishDate}T00:00:00.000Z`);
+  if (Number.isNaN(scheduledDate) || new Date(scheduledDate).toISOString().slice(0, 10) !== publishDate) {
+    throw new Error('publishDate must be a valid date');
+  }
+  if (scheduledDate < firstDate) {
+    throw new Error(`publishDate cannot be before ${FIRST_THEME_PUBLISH_DATE}`);
+  }
+
+  return Math.floor((scheduledDate - firstDate) / 86_400_000) + 1;
+}
 
 function getPublicThemeDateCutoff() {
   const date = new Intl.DateTimeFormat('en-CA', {
@@ -107,6 +111,7 @@ function publicThemeWhere(): Prisma.ThemeWhereInput {
   const publicDateCutoff = getPublicThemeDateCutoff();
   return {
     deleted: 0,
+    status: THEME_STATUS.SCHEDULED,
     publishDate: {
       not: null,
       lte: publicDateCutoff,
@@ -296,10 +301,10 @@ function mapSubmissionForApi<T extends { id: bigint; title: string; details: str
 }
 
 function mapUserThemeSubmissionStatus(status: string) {
-  if (status === THEME_SUBMISSION_STATUS.SELECTED || status === THEME_SUBMISSION_STATUS.PUBLISHED) {
+  if (status === THEME_SUBMISSION_STATUS.ACCEPTED) {
     return 'accepted';
   }
-  if (status === THEME_SUBMISSION_STATUS.REJECTED || status === THEME_SUBMISSION_STATUS.DUPLICATE) {
+  if (status === THEME_SUBMISSION_STATUS.REJECTED) {
     return 'not_selected';
   }
   return 'under_review';
@@ -502,7 +507,6 @@ export class ThemeRepository {
     const data: Prisma.ThemeUpdateInput = {};
     if (input.title !== undefined) data.title = input.title;
     if (input.slug !== undefined) data.slug = input.slug;
-    if (input.issueNumber !== undefined) (data as { issueNumber?: number | null }).issueNumber = input.issueNumber;
     if (input.brief !== undefined) data.brief = input.brief;
     if (input.description !== undefined) data.themeNote = input.description;
     if (input.coverImageUrl !== undefined) data.coverImageUrl = input.coverImageUrl;
@@ -514,7 +518,12 @@ export class ThemeRepository {
     if (input.generatorIdeas !== undefined) data.generatorIdeas = generatorIdeasToJson(input.generatorIdeas);
     else if (input.promptTexts !== undefined) data.generatorIdeas = generatorIdeasToJson(normalizeGeneratorIdeas(input.promptTexts));
     if (input.tags !== undefined) data.tags = input.tags;
-    if (input.publishDate !== undefined) data.publishDate = input.publishDate ? new Date(input.publishDate) : null;
+    if (input.publishDate !== undefined) {
+      const issueNumber = input.publishDate ? getIssueNumber(input.publishDate) : null;
+      data.publishDate = input.publishDate ? new Date(`${input.publishDate}T00:00:00.000Z`) : null;
+      data.issueNumber = issueNumber;
+      data.status = input.publishDate ? THEME_STATUS.SCHEDULED : THEME_STATUS.DRAFT;
+    }
 
     const theme = await prisma.theme.update({
       where: { id: BigInt(themeId) },
@@ -525,14 +534,16 @@ export class ThemeRepository {
   }
 
   async createAdminTheme(input: AdminThemeCreateInput) {
+    const issueNumber = input.publishDate ? getIssueNumber(input.publishDate) : null;
     const theme = await prisma.theme.create({
       data: {
         title: input.title,
         slug: input.slug,
-        issueNumber: input.issueNumber,
+        status: input.publishDate ? THEME_STATUS.SCHEDULED : THEME_STATUS.DRAFT,
+        issueNumber,
         brief: input.brief,
         themeNote: input.description,
-        publishDate: input.publishDate ? new Date(input.publishDate) : null,
+        publishDate: input.publishDate ? new Date(`${input.publishDate}T00:00:00.000Z`) : null,
         sourceType: 'admin',
         generatorIdeas: generatorIdeasToJson([]),
         tags: [],
@@ -611,41 +622,30 @@ export class ThemeRepository {
     };
   }
 
-  async createSubmission(userId: string, input: ThemeSubmissionDraftInput) {
-    const status = input.submitNow ? THEME_SUBMISSION_STATUS.UNDER_REVIEW : THEME_SUBMISSION_STATUS.DRAFT;
-    const [existingSubmittedCount, submission] = await prisma.$transaction([
-      prisma.themeSubmission.count({
-        where: {
-          userId,
-          deleted: 0,
-          status: { not: THEME_SUBMISSION_STATUS.DRAFT },
-        },
-      }),
-      prisma.themeSubmission.create({
+  async createSubmission(userId: string, input: ThemeSubmissionInput) {
+    const submission = await prisma.themeSubmission.create({
         data: {
           userId,
-          status,
+          status: THEME_SUBMISSION_STATUS.UNDER_REVIEW,
           title: input.title,
           details: input.details,
           submitReason: input.submitReason,
-          submittedAt: input.submitNow ? new Date() : undefined,
+          submittedAt: new Date(),
           reviewFlow: appendReviewFlow(null, {
-            status,
+            status: THEME_SUBMISSION_STATUS.UNDER_REVIEW,
             actorUserId: userId,
             actorType: 'user',
-            note: input.submitReason,
+            note: 'Thanks for sharing! Our team is reviewing this idea.',
           }),
         },
-      }),
-    ]);
+      });
 
     return {
       submission: mapSubmissionForApi(submission),
-      isFirstSubmission: input.submitNow && existingSubmittedCount === 0,
     };
   }
 
-  async reviewSubmission(reviewerUserId: string, themeSubmissionId: string, status: ThemeSubmissionStatus, reason?: string) {
+  async reviewSubmission(reviewerUserId: string, themeSubmissionId: string, status: ThemeSubmissionStatus, _reason?: string) {
     const id = toSubmissionId(themeSubmissionId);
     const existing = await prisma.themeSubmission.findFirst({
       where: {
@@ -656,9 +656,8 @@ export class ThemeRepository {
     if (!existing) return null;
     if (
       existing.status !== THEME_SUBMISSION_STATUS.UNDER_REVIEW
-      && existing.status !== THEME_SUBMISSION_STATUS.ACCEPTED_TO_POOL
     ) {
-      throw new Error('Only under-review or accepted theme submissions can be reviewed');
+      throw new Error('Only under-review theme submissions can be reviewed');
     }
 
     const submission = await prisma.themeSubmission.update({
@@ -669,7 +668,9 @@ export class ThemeRepository {
           status,
           actorUserId: reviewerUserId,
           actorType: 'reviewer',
-          note: reason,
+          note: status === THEME_SUBMISSION_STATUS.ACCEPTED
+            ? 'Featured as a daily theme. 20 free credits added to your account — enjoy!'
+            : "Not selected this time, but we'd love to see more ideas from you soon.",
         }),
       },
     });
@@ -677,7 +678,7 @@ export class ThemeRepository {
     return mapSubmissionForApi(submission);
   }
 
-  async publishFromSubmission(reviewerUserId: string, themeSubmissionId: string, input: PublishThemeInput) {
+  async publishFromSubmission(_reviewerUserId: string, themeSubmissionId: string, input: PublishThemeInput) {
     const id = toSubmissionId(themeSubmissionId);
     const existing = await prisma.themeSubmission.findFirst({
       where: {
@@ -687,18 +688,17 @@ export class ThemeRepository {
     });
     if (!existing) return null;
     if (
-      existing.status !== THEME_SUBMISSION_STATUS.ACCEPTED_TO_POOL
-      && existing.status !== THEME_SUBMISSION_STATUS.UNDER_REVIEW
-      && existing.status !== THEME_SUBMISSION_STATUS.SELECTED
+      existing.status !== THEME_SUBMISSION_STATUS.ACCEPTED
     ) {
-      throw new Error('Theme submission must be under review, accepted, or selected before publishing');
+      throw new Error('Theme submission must be accepted before creating a daily theme');
     }
 
     return prisma.$transaction(async (tx) => {
       const themeData = {
         title: input.title,
         slug: input.slug,
-        issueNumber: input.issueNumber,
+        status: input.publishDate ? THEME_STATUS.SCHEDULED : THEME_STATUS.DRAFT,
+        issueNumber: input.publishDate ? getIssueNumber(input.publishDate) : null,
         brief: input.brief,
         themeNote: input.description,
         coverImageUrl: input.coverImageUrl,
@@ -706,7 +706,7 @@ export class ThemeRepository {
         tags: input.tags,
         sourceType: 'theme_submission',
         sourceSubmissionId: existing.id,
-        publishDate: input.publishDate ? new Date(input.publishDate) : new Date(),
+        publishDate: input.publishDate ? new Date(`${input.publishDate}T00:00:00.000Z`) : null,
       };
       const existingTheme = await tx.theme.findFirst({
         where: {
@@ -723,23 +723,8 @@ export class ThemeRepository {
             data: themeData,
           });
 
-      const submissionStatus = THEME_SUBMISSION_STATUS.SELECTED;
-
-      const submission = await tx.themeSubmission.update({
-        where: { id: existing.id },
-        data: {
-          status: submissionStatus,
-          reviewFlow: appendReviewFlow(existing.reviewFlow, {
-            status: submissionStatus,
-            actorUserId: reviewerUserId,
-            actorType: 'reviewer',
-            note: `Theme ${input.status}`,
-          }),
-        },
-      });
-
       return {
-        submission: mapSubmissionForApi(submission, normalizeTheme(theme)),
+        submission: mapSubmissionForApi(existing, normalizeTheme(theme)),
         theme: normalizeTheme(theme),
       };
     });

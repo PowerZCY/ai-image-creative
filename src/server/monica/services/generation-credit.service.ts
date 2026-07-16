@@ -1,16 +1,20 @@
 import { prisma } from '@/server/prisma';
 import { Prisma } from '@app-prisma';
 import { creditService } from '@windrun-huaiin/backend-core/database';
-import { GENERATION_FEATURE, GENERATION_TYPE, type GenerationType } from '../constants/generation';
+import {
+  estimateGenerationCredits,
+  GENERATION_FEATURE,
+  GENERATION_TYPE,
+  type GenerationType,
+} from '../constants/generation';
 
 const CREDIT_FEATURE_BY_GENERATION_TYPE: Record<GenerationType, string> = {
   [GENERATION_TYPE.TEXT_TO_IMAGE]: GENERATION_FEATURE.IMAGE_GENERATION,
 };
 
 export class GenerationCreditService {
-  estimateCredits(input: { imageCount: number; generationType?: GenerationType }) {
-    const count = Number.isFinite(input.imageCount) ? input.imageCount : 1;
-    return Math.max(1, Math.trunc(count));
+  estimateCredits(input: { model: string; imageCount: number; generationType?: GenerationType }) {
+    return estimateGenerationCredits(input.model, input.imageCount);
   }
 
   async consumeForJob(
@@ -42,13 +46,17 @@ export class GenerationCreditService {
       throw new Error('User credits not found');
     }
 
+    const now = new Date();
+    const availableFree = credit.freeEnd && now < credit.freeEnd ? Math.max(credit.balanceFree, 0) : 0;
+    const availableOneTimePaid = credit.oneTimePaidEnd && now < credit.oneTimePaidEnd
+      ? Math.max(credit.balanceOneTimePaid, 0)
+      : 0;
+
     let remaining = amount;
-    const free = Math.min(Math.max(credit.balanceFree, 0), remaining);
+    const free = Math.min(availableFree, remaining);
     remaining -= free;
-    const oneTimePaid = Math.min(Math.max(credit.balanceOneTimePaid, 0), remaining);
+    const oneTimePaid = Math.min(availableOneTimePaid, remaining);
     remaining -= oneTimePaid;
-    const paid = Math.min(Math.max(credit.balancePaid, 0), remaining);
-    remaining -= paid;
 
     if (remaining > 0) {
       throw new Error('Insufficient credits');
@@ -56,7 +64,7 @@ export class GenerationCreditService {
 
     return creditService.consumeCredit(
       userId,
-      { free, oneTimePaid, paid },
+      { free, oneTimePaid },
       {
         feature: CREDIT_FEATURE_BY_GENERATION_TYPE[generationType],
         operationReferId: jobId,

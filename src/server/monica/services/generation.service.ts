@@ -198,6 +198,7 @@ export class GenerationService {
 
     const generationType = input.generationType ?? GENERATION_TYPE.TEXT_TO_IMAGE;
     const estimatedCredits = generationCreditService.estimateCredits({
+      model: input.model,
       imageCount: input.imageCount,
       generationType,
     });

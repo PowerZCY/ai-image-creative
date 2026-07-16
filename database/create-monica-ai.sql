@@ -3,6 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS monica_ai.themes (
     id                BIGSERIAL PRIMARY KEY,
+    status            VARCHAR(50)  NOT NULL DEFAULT 'draft',
     issue_number      INTEGER,
     slug              VARCHAR(255) NOT NULL,
     title             VARCHAR(255) NOT NULL,
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.themes (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_themes_issue_number ON monica_ai.themes (issue_number);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_themes_slug ON monica_ai.themes (slug);
 CREATE INDEX IF NOT EXISTS idx_themes_publish_date ON monica_ai.themes (publish_date);
+CREATE INDEX IF NOT EXISTS idx_themes_status_publish_date ON monica_ai.themes (status, publish_date);
 CREATE INDEX IF NOT EXISTS idx_themes_source_submission_id ON monica_ai.themes (source_submission_id);
 
 CREATE TABLE IF NOT EXISTS monica_ai.theme_submissions (

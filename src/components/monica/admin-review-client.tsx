@@ -29,6 +29,7 @@ type ThemeSubmission = {
   submitReason?: string | null;
   status: string;
   reviewFlow?: unknown;
+  acceptedTheme?: ThemeItem | null;
   user?: { email?: string | null; userName?: string | null } | null;
 };
 
@@ -39,6 +40,7 @@ type ThemeGeneratorIdea = {
 
 type ThemeItem = {
   id: string;
+  status?: string;
   issueNumber?: number | null;
   slug: string;
   title: string;
@@ -122,7 +124,6 @@ type Filters = {
 type EditAcceptDraft = {
   title: string;
   slug: string;
-  issueNumber: string;
   brief: string;
   description: string;
   publishDate: string;
@@ -146,6 +147,14 @@ function normalizeSlugInput(value: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function getIssueNumberPreview(publishDate: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(publishDate)) return null;
+  const firstDate = Date.parse('2026-07-17T00:00:00.000Z');
+  const date = Date.parse(`${publishDate}T00:00:00.000Z`);
+  if (Number.isNaN(date) || new Date(date).toISOString().slice(0, 10) !== publishDate || date < firstDate) return null;
+  return Math.floor((date - firstDate) / 86_400_000) + 1;
 }
 
 function parseJsonOrNull(value: string) {
@@ -222,7 +231,6 @@ function ThemeFieldsModal({
 }) {
   const [title, setTitle] = useState(theme.title ?? '');
   const [slug, setSlug] = useState(theme.slug ?? '');
-  const [issueNumber, setIssueNumber] = useState(theme.issueNumber?.toString() ?? '');
   const [brief, setBrief] = useState(theme.brief ?? '');
   const [description, setDescription] = useState(theme.description ?? '');
   const [coverImageUrl, setCoverImageUrl] = useState(theme.coverImageUrl ?? '');
@@ -269,7 +277,6 @@ function ThemeFieldsModal({
         body: JSON.stringify({
           title,
           slug,
-          issueNumber,
           brief,
           description,
           coverImageUrl,
@@ -320,16 +327,12 @@ function ThemeFieldsModal({
               className={cn('mt-1', inputCls)}
             />
           </label>
-          <label className="block">
+          <div className="block">
             <span className={labelSpanCls}>Issue #</span>
-            <input
-              type="number"
-              min={1}
-              value={issueNumber}
-              onChange={(e) => setIssueNumber(e.target.value)}
-              className={cn('mt-1', inputCls)}
-            />
-          </label>
+            <p className="mt-1 flex h-10 items-center rounded-md border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
+              {getIssueNumberPreview(publishDate) ?? 'Set a publish date to calculate'}
+            </p>
+          </div>
           <label className="block">
             <span className={labelSpanCls}>Publish date</span>
             <input
@@ -1041,8 +1044,8 @@ function NewThemeModal({
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
-  const [issueNumber, setIssueNumber] = useState('');
   const [brief, setBrief] = useState('');
+  const [publishDate, setPublishDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1053,7 +1056,7 @@ function NewThemeModal({
       const response = await fetch('/api/monica/admin/themes', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ title, slug, issueNumber, brief, description: brief }),
+        body: JSON.stringify({ title, slug, brief, description: brief, publishDate }),
       });
       if (!response.ok) throw new Error(await readError(response));
       onCreated();
@@ -1073,7 +1076,7 @@ function NewThemeModal({
             {error}
           </div>
         ) : null}
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)_160px]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.65fr)_180px]">
           <label className="block">
             <span className={labelSpanCls}>Theme</span>
             <input
@@ -1098,12 +1101,11 @@ function NewThemeModal({
             />
           </label>
           <label className="block">
-            <span className={labelSpanCls}>Issue #</span>
+            <span className={labelSpanCls}>Publish date</span>
             <input
-              type="number"
-              min={1}
-              value={issueNumber}
-              onChange={(e) => setIssueNumber(e.target.value)}
+              type="date"
+              value={publishDate}
+              onChange={(e) => setPublishDate(e.target.value)}
               className={cn('mt-1', inputCls)}
             />
           </label>
@@ -1281,16 +1283,12 @@ function EditAcceptPanel({
             className={cn('mt-1', inputCls)}
           />
         </label>
-        <label className="block">
+        <div className="block">
           <span className={labelSpanCls}>Issue #</span>
-          <input
-            type="number"
-            min={1}
-            value={draft.issueNumber}
-            onChange={(e) => onChange({ issueNumber: e.target.value })}
-            className={cn('mt-1', inputCls)}
-          />
-        </label>
+          <p className="mt-1 flex h-10 items-center rounded-md border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
+            {getIssueNumberPreview(draft.publishDate) ?? 'Set a publish date to calculate'}
+          </p>
+        </div>
         <label className="block">
           <span className={labelSpanCls}>Publish date</span>
           <input
@@ -1401,7 +1399,7 @@ function EditAcceptPanel({
           onClick={() => onSave(draft)}
           className="monica-button-primary min-h-10 px-4 text-sm disabled:opacity-50"
         >
-          {saving ? <SpinnerLabel>Schedule</SpinnerLabel> : 'Save scheduled theme'}
+          {saving ? <SpinnerLabel>Save</SpinnerLabel> : 'Save daily theme'}
         </button>
         <button
           type="button"
@@ -1533,12 +1531,11 @@ export function AdminReviewClient({
   const statusOptions = [
     { value: 'all', label: 'All' },
     { value: 'under_review', label: 'Under review' },
-    { value: 'accepted_to_pool', label: 'Accepted' },
-    { value: 'approved', label: 'Approved' },
+    { value: 'accepted', label: 'Accepted' },
     { value: 'rejected', label: 'Rejected' },
   ];
 
-  async function reviewThemeSubmission(id: string, action: 'accepted_to_pool' | 'rejected') {
+  async function reviewThemeSubmission(id: string, action: 'accepted' | 'rejected') {
     setActingId(`${id}:${action}`);
     setActionError(null);
     try {
@@ -1557,15 +1554,15 @@ export function AdminReviewClient({
   }
 
   function buildInitialEditAcceptDraft(item: ThemeSubmission): EditAcceptDraft {
+    const theme = item.acceptedTheme;
     return {
-      title: item.title,
-      slug: normalizeSlugInput(item.title),
-      issueNumber: '',
-      brief: item.details,
-      description: item.details,
-      publishDate: '',
-      generatorIdeas: [],
-      tags: '',
+      title: theme?.title ?? item.title,
+      slug: theme?.slug ?? normalizeSlugInput(item.title),
+      brief: theme?.brief ?? item.details,
+      description: theme?.description ?? item.details,
+      publishDate: theme?.publishDate?.slice(0, 10) ?? '',
+      generatorIdeas: theme?.generatorIdeas ?? [],
+      tags: (theme?.tags ?? []).join('\n'),
     };
   }
 
@@ -1587,7 +1584,6 @@ export function AdminReviewClient({
         ...(current[id] ?? {
           title: '',
           slug: '',
-          issueNumber: '',
           brief: '',
           description: '',
           publishDate: '',
@@ -1600,8 +1596,7 @@ export function AdminReviewClient({
   }
 
   async function publishThemeSubmission(item: ThemeSubmission, draft: EditAcceptDraft) {
-    const status = 'scheduled';
-    setActingId(`${item.themeSubmissionId}:${status}`);
+    setActingId(`${item.themeSubmissionId}:create-theme`);
     setActionError(null);
     try {
       const response = await fetch(
@@ -1612,7 +1607,6 @@ export function AdminReviewClient({
           body: JSON.stringify({
             title: draft.title,
             slug: draft.slug,
-            issueNumber: draft.issueNumber,
             brief: draft.brief,
             description: draft.description,
             generatorIdeas: draft.generatorIdeas
@@ -1620,7 +1614,6 @@ export function AdminReviewClient({
               .filter((idea) => idea.idea || idea.prompt),
             tags: splitLines(draft.tags),
             publishDate: draft.publishDate,
-            status,
           }),
         },
       );
@@ -1746,18 +1739,18 @@ export function AdminReviewClient({
                                   onClick={() =>
                                     void reviewThemeSubmission(
                                       item.themeSubmissionId,
-                                      'accepted_to_pool',
+                                      'accepted',
                                     )
                                   }
                                   disabled={Boolean(actingId)}
                                   className="monica-button-primary min-h-10 px-3 text-sm disabled:opacity-50"
                                 >
-                                  {actingId === `${item.themeSubmissionId}:accepted_to_pool` ? (
-                                    <SpinnerLabel>Accept</SpinnerLabel>
+                                  {actingId === `${item.themeSubmissionId}:accepted` ? (
+                                    <SpinnerLabel>Accepting</SpinnerLabel>
                                   ) : (
                                     <>
                                       <Check className="size-4" />
-                                      Accept as theme
+                                      Accept submission
                                     </>
                                   )}
                                 </button>
@@ -1774,9 +1767,7 @@ export function AdminReviewClient({
                                 </button>
                               </>
                             ) : null}
-                            {item.status === 'under_review' ||
-                            item.status === 'accepted_to_pool' ||
-                            item.status === 'selected' ? (
+                            {item.status === 'accepted' ? (
                               <button
                                 type="button"
                                 onClick={() => openEditAccept(item)}
@@ -1784,7 +1775,7 @@ export function AdminReviewClient({
                                 className="monica-button-primary min-h-10 px-3 text-sm disabled:opacity-50"
                               >
                                 <Pencil className="size-4" />
-                                Edit and accept
+                                {item.acceptedTheme ? 'Edit daily theme' : 'Create daily theme'}
                               </button>
                             ) : null}
                           </div>
@@ -1799,7 +1790,7 @@ export function AdminReviewClient({
                               editAcceptDraftById[item.themeSubmissionId] ??
                               buildInitialEditAcceptDraft(item)
                             }
-                            saving={actingId === `${item.themeSubmissionId}:scheduled`}
+                            saving={actingId === `${item.themeSubmissionId}:create-theme`}
                             disabled={Boolean(actingId)}
                             onChange={(patch) =>
                               updateEditAcceptDraft(item.themeSubmissionId, patch)

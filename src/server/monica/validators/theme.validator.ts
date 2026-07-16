@@ -1,4 +1,4 @@
-import { THEME_STATUS, THEME_SUBMISSION_STATUS, type ThemeStatus } from '../constants/theme';
+import { THEME_SUBMISSION_STATUS } from '../constants/theme';
 import { normalizeGeneratorIdeas } from '../types/theme';
 
 function readString(value: unknown) {
@@ -8,20 +8,6 @@ function readString(value: unknown) {
 function readOptionalString(value: unknown) {
   const text = readString(value);
   return text || undefined;
-}
-
-function readOptionalPositiveInteger(value: unknown) {
-  if (value === null || value === undefined || value === '') return undefined;
-  const number = typeof value === 'number' ? value : Number(readString(value));
-  if (!Number.isInteger(number) || number <= 0) {
-    throw new Error('issueNumber must be a positive integer');
-  }
-  return number;
-}
-
-function readNullablePositiveInteger(value: unknown) {
-  if (value === null || value === undefined || value === '') return null;
-  return readOptionalPositiveInteger(value) ?? null;
 }
 
 function readStringArray(value: unknown) {
@@ -64,7 +50,7 @@ function readNullableUrlPath(value: unknown, fieldName: string) {
   return text;
 }
 
-export function parseThemeSubmissionDraftInput(body: Record<string, unknown>) {
+export function parseThemeSubmissionInput(body: Record<string, unknown>) {
   const rawTitle = readString(body.rawTitle);
   if (!rawTitle) {
     throw new Error('rawTitle is required');
@@ -74,18 +60,16 @@ export function parseThemeSubmissionDraftInput(body: Record<string, unknown>) {
     title: rawTitle,
     details: readOptionalString(body.rawDescription) ?? '',
     submitReason: readOptionalString(body.triggerType),
-    submitNow: body.submitNow === true,
   };
 }
 
 export function parseThemeReviewInput(body: Record<string, unknown>) {
   const action = readString(body.action);
   if (
-    action !== THEME_SUBMISSION_STATUS.ACCEPTED_TO_POOL
+    action !== THEME_SUBMISSION_STATUS.ACCEPTED
     && action !== THEME_SUBMISSION_STATUS.REJECTED
-    && action !== THEME_SUBMISSION_STATUS.DUPLICATE
   ) {
-    throw new Error('action must be accepted_to_pool, rejected, or duplicate');
+    throw new Error('action must be accepted or rejected');
   }
 
   return {
@@ -100,17 +84,11 @@ export function parsePublishThemeInput(body: Record<string, unknown>) {
     throw new Error('title is required');
   }
 
-  const status = readString(body.status) as ThemeStatus;
-  if (status && status !== THEME_STATUS.SCHEDULED) {
-    throw new Error('status must be scheduled');
-  }
-
   const promptTexts = readStringArray(body.promptTexts);
 
   return {
     title,
     slug: normalizeThemeSlug(body.slug),
-    issueNumber: readOptionalPositiveInteger(body.issueNumber),
     brief: readOptionalString(body.brief),
     description: readOptionalString(body.description),
     coverImageUrl: readOptionalString(body.coverImageUrl),
@@ -120,7 +98,6 @@ export function parsePublishThemeInput(body: Record<string, unknown>) {
     promptTexts,
     tags: readStringArray(body.tags),
     publishDate: readOptionalString(body.publishDate),
-    status: status || THEME_STATUS.SCHEDULED,
   };
 }
 
@@ -133,7 +110,6 @@ export function parseAdminThemeUpdateInput(body: Record<string, unknown>) {
   return {
     title,
     slug: 'slug' in body ? normalizeThemeSlug(body.slug) : undefined,
-    issueNumber: 'issueNumber' in body ? readNullablePositiveInteger(body.issueNumber) : undefined,
     brief: 'brief' in body ? readNullableString(body.brief) : undefined,
     description: 'description' in body ? readNullableString(body.description) : undefined,
     coverImageUrl: 'coverImageUrl' in body ? readNullableString(body.coverImageUrl) : undefined,
@@ -162,7 +138,6 @@ export function parseAdminThemeCreateInput(body: Record<string, unknown>) {
   return {
     title,
     slug: normalizeThemeSlug(body.slug),
-    issueNumber: readOptionalPositiveInteger(body.issueNumber),
     brief: readOptionalString(body.brief),
     description: readOptionalString(body.description),
     publishDate: readOptionalString(body.publishDate),

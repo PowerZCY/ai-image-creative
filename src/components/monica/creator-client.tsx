@@ -16,6 +16,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { createR2Client } from '@/lib/r2-explorer-sdk';
+import {
+  estimateGenerationCredits,
+} from '@/server/monica/constants/generation';
 import type { MonicaCreatorCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
 import { SubmitImageDialog, type SubmitImageTarget } from './submit-image-dialog';
@@ -241,12 +244,15 @@ export function MonicaCreator({
   onRequestThemeIdeas?: () => void;
   onGenerationUpdated?: () => void;
 }) {
-  const modelOptions = useMemo(() => [
-    { value: 'gpt-image-2', label: copy.modelOptions.gptImage2 },
-    { value: 'nano-banana-2', label: copy.modelOptions.nanoBanana2 },
-    { value: 'nano-banana-pro', label: copy.modelOptions.nanoBananaPro },
-    { value: 'seedream-4.5', label: copy.modelOptions.seedream45 },
-  ], [copy.modelOptions.gptImage2, copy.modelOptions.nanoBanana2, copy.modelOptions.nanoBananaPro, copy.modelOptions.seedream45]);
+  const modelOptions = useMemo(() => {
+    return [
+      { value: 'reve-2.0', label: copy.modelOptions.reve20 },
+      { value: 'gpt-image-2', label: copy.modelOptions.gptImage2 },
+      { value: 'nano-banana-2', label: copy.modelOptions.nanoBanana2 },
+      { value: 'nano-banana-pro', label: copy.modelOptions.nanoBananaPro },
+      { value: 'seedream-4.5', label: copy.modelOptions.seedream45 },
+    ];
+  }, [copy.modelOptions]);
   const starterIdeaPool = useMemo(() => {
     return normalizeStarterIdeas(starterIdeas);
   }, [starterIdeas]);
@@ -291,7 +297,10 @@ export function MonicaCreator({
     apiToken: r2ApiToken,
   }), []);
 
-  const estimatedCredits = useMemo(() => Math.max(1, imageCount), [imageCount]);
+  const estimatedCredits = useMemo(
+    () => estimateGenerationCredits(model, imageCount),
+    [imageCount, model],
+  );
 
   useEffect(() => {
     if (!openSelectKey) return;

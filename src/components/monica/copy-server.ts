@@ -43,6 +43,7 @@ export async function getMonicaCreatorCopy(locale: string): Promise<MonicaCreato
       nanoBanana2: t('modelOptions.nanoBanana2'),
       nanoBananaPro: t('modelOptions.nanoBananaPro'),
       seedream45: t('modelOptions.seedream45'),
+      reve20: t('modelOptions.reve20'),
     },
     assistant: {
       getIdeasToday: t('assistant.getIdeasToday'),

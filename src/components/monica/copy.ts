@@ -36,6 +36,7 @@ export type MonicaCreatorCopy = {
     nanoBanana2: string;
     nanoBananaPro: string;
     seedream45: string;
+    reve20: string;
   };
   assistant: {
     getIdeasToday: string;

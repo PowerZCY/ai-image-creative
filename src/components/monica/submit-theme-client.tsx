@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertCircle, CalendarDays, CheckCircle2, Clock, MessageSquareText, PartyPopper, RotateCcw, Send, X } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, Clock, MessageSquareText, RotateCcw, Send, X } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
 import { SpinnerLabel, useMonicaPagedList } from './list-components';
 
@@ -21,7 +21,7 @@ type Filters = {
   status: string;
 };
 
-type FeedbackType = 'first-success' | 'success' | 'error';
+type FeedbackType = 'success' | 'error';
 
 const FEEDBACK: Record<FeedbackType, {
   icon: typeof CheckCircle2;
@@ -29,16 +29,10 @@ const FEEDBACK: Record<FeedbackType, {
   message: string;
   tone: string;
 }> = {
-  'first-success': {
-    icon: PartyPopper,
-    title: 'Congratulations on your first submission!',
-    message: "We've added 20 points to your account. We'll review your idea and get back to you soon.",
-    tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-  },
   success: {
     icon: CheckCircle2,
-    title: 'Thanks for sharing idea!',
-    message: 'We appreciate it and will take a look as soon as we can.',
+    title: 'Theme idea submitted',
+    message: "Thanks for sharing. We'll review your idea soon",
     tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
   },
   error: {
@@ -56,11 +50,6 @@ async function readError(response: Response) {
   } catch {
     return response.statusText;
   }
-}
-
-async function readSubmitResult(response: Response) {
-  const data = await response.json() as { isFirstSubmission?: unknown };
-  return data.isFirstSubmission === true;
 }
 
 export function SubmitThemeClient() {
@@ -95,15 +84,14 @@ export function SubmitThemeClient() {
           rawTitle: title,
           rawDescription: details,
           triggerType: submitReason,
-          submitNow: true,
         }),
       });
       if (!response.ok) throw new Error(await readError(response));
-      const isFirstSubmission = await readSubmitResult(response);
+      await response.json();
       setTitle('');
       setDetails('');
       setSubmitReason('');
-      setFeedback(isFirstSubmission ? 'first-success' : 'success');
+      setFeedback('success');
       list.reload();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : String(submitError));
@@ -122,10 +110,7 @@ export function SubmitThemeClient() {
           </h1>
           <div className="max-w-2xl space-y-1 text-base leading-relaxed text-muted-foreground">
             <p>Got a spark of an idea? Share it with the community.</p>
-            <p>
-              Earn <span className="font-medium text-foreground">20 points</span> for your first submission, and{' '}
-              <span className="font-medium text-foreground">100 points</span> when it&apos;s featured as a daily theme.
-            </p>
+            <p>Selected ideas can become a daily theme.</p>
           </div>
         </div>
 
@@ -385,7 +370,6 @@ function ThemeIdeasList({
 
 function formatNotes(item: ThemeSubmission) {
   const fallback = getFallbackNote(item.status);
-  if (item.status === 'accepted') return fallback;
   if (!item.notes) return fallback;
   if (typeof item.notes === 'string') return item.notes || fallback;
   if (Array.isArray(item.notes)) {
@@ -403,7 +387,7 @@ function formatNotes(item: ThemeSubmission) {
 }
 
 function getFallbackNote(status: string) {
-  if (status === 'accepted') return 'Featured as a daily theme. 100 points added to your account — enjoy!';
+  if (status === 'accepted') return 'Featured as a daily theme. 20 free credits added to your account — enjoy!';
   if (status === 'not_selected') return "Not selected this time, but we'd love to see more ideas from you soon.";
   return 'Thanks for sharing! Our team is reviewing this idea.';
 }

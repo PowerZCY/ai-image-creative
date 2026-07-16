@@ -18,6 +18,25 @@ export const GENERATION_FEATURE = {
   IMAGE_GENERATION: 'ai_image_generation',
 } as const;
 
+export const GENERATION_CREDITS_PER_IMAGE_BY_MODEL = {
+  'gpt-image-2': 2,
+  'nano-banana-2': 2,
+  'nano-banana-pro': 2,
+  'seedream-4.5': 1,
+  'reve-2.0': 1,
+} as const;
+
+export function getGenerationCreditsPerImage(model: string) {
+  return GENERATION_CREDITS_PER_IMAGE_BY_MODEL[
+    model as keyof typeof GENERATION_CREDITS_PER_IMAGE_BY_MODEL
+  ] ?? 2;
+}
+
+export function estimateGenerationCredits(model: string, imageCount: number) {
+  const normalizedImageCount = Number.isFinite(imageCount) ? Math.max(1, Math.trunc(imageCount)) : 1;
+  return normalizedImageCount * getGenerationCreditsPerImage(model);
+}
+
 export const TERMINAL_GENERATION_STATUSES = new Set<string>([
   GENERATION_STATUS.SUCCEEDED,
   GENERATION_STATUS.FAILED,
