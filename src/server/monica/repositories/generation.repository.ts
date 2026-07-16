@@ -1,4 +1,5 @@
 import { prisma } from '@/server/prisma';
+import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 import { Prisma } from '@app-prisma';
 import { GENERATION_STATUS, TERMINAL_GENERATION_STATUSES } from '../constants/generation';
 import type { CreateGenerationJobInput, ImageGenerationProviderResult } from '../types/generation';
@@ -175,7 +176,7 @@ export class GenerationRepository {
   }
 
   async completeSucceeded(jobId: string, result: ImageGenerationProviderResult, estimatedCredits: number) {
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (tx) => {
       const job = await tx.generationJob.findUniqueOrThrow({ where: { jobId } });
 
       for (const image of result.images) {
@@ -224,7 +225,7 @@ export class GenerationRepository {
           failureMessage: null,
         },
       });
-    });
+    }, 'monica_generation_complete_succeeded');
   }
 
   markFailed(jobId: string, failureCode: string, failureMessage: string) {

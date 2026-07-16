@@ -1,4 +1,5 @@
 import { prisma } from '@/server/prisma';
+import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 import { Prisma } from '@app-prisma';
 import { THEME_STATUS, THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
 import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
@@ -693,7 +694,7 @@ export class ThemeRepository {
       throw new Error('Theme submission must be accepted before creating a daily theme');
     }
 
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (tx) => {
       const themeData = {
         title: input.title,
         slug: input.slug,
@@ -727,7 +728,7 @@ export class ThemeRepository {
         submission: mapSubmissionForApi(existing, normalizeTheme(theme)),
         theme: normalizeTheme(theme),
       };
-    });
+    }, 'monica_theme_create_from_submission');
   }
 }
 

@@ -73,25 +73,15 @@ export class GenerationCreditService {
     );
   }
 
-  async refundForJob(userId: string, jobId: string, amount: number, reason: string) {
-    if (amount <= 0) {
-      return null;
-    }
-
-    const existingRefund = await prisma.creditAuditLog.findFirst({
+  async rollbackConsumedCreditsForJob(
+    userId: string,
+    jobId: string,
+    reason: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const consumeLogs = await tx.creditAuditLog.findMany({
       where: {
-        operationReferId: jobId,
-        operationType: 'recharge',
-        deleted: 0,
-      },
-    });
-
-    if (existingRefund) {
-      return null;
-    }
-
-    const consumeLogs = await prisma.creditAuditLog.findMany({
-      where: {
+        userId,
         operationReferId: jobId,
         operationType: 'consume',
         deleted: 0,
@@ -108,10 +98,19 @@ export class GenerationCreditService {
       .filter((log) => log.creditType === 'one_time_paid')
       .reduce((sum, log) => sum + Math.max(log.creditsChange, 0), 0);
 
-    return creditService.rechargeCredit(userId, { free, paid, oneTimePaid }, {
-      feature: reason,
-      operationReferId: jobId,
-    });
+    if (free + paid + oneTimePaid <= 0) {
+      return null;
+    }
+
+    return creditService.rollbackConsumeCredit(
+      userId,
+      { free, paid, oneTimePaid },
+      {
+        feature: reason,
+        operationReferId: jobId,
+      },
+      tx,
+    );
   }
 }
 

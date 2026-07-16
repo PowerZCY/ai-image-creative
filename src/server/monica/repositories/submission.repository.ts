@@ -1,4 +1,5 @@
 import { prisma } from '@/server/prisma';
+import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 import { Prisma } from '@app-prisma';
 
 export type CreateSubmissionInput = {
@@ -94,7 +95,7 @@ export class SubmissionRepository {
   }
 
   createForReview(input: CreateSubmissionInput) {
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (tx) => {
       const submission = await tx.imageSubmission.create({
         data: {
           userId: input.userId,
@@ -122,13 +123,13 @@ export class SubmissionRepository {
       });
 
       return submission;
-    });
+    }, 'monica_submission_create_for_review');
   }
 
   reviewImageSubmission(reviewerUserId: string, submissionId: string, action: 'approved' | 'rejected', note?: string, altText?: string | null) {
     if (!/^\d+$/.test(submissionId)) return null;
 
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (tx) => {
       const existing = await tx.imageSubmission.findFirst({
         where: {
           id: BigInt(submissionId),
@@ -198,7 +199,7 @@ export class SubmissionRepository {
         ...submission,
         publicImage,
       };
-    });
+    }, 'monica_submission_review');
   }
 }
 

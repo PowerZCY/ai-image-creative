@@ -1,4 +1,5 @@
 import { prisma } from '@/server/prisma';
+import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 import { Prisma } from '@app-prisma';
 import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
 import { buildStoredImageUrl } from '../utils/image-url';
@@ -158,7 +159,7 @@ export class GalleryRepository {
   }
 
   async toggleLike(userId: string, publicImageId: string) {
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (tx) => {
       const publicImage = await tx.publicImage.findFirst({
         where: {
           publicImageId,
@@ -207,11 +208,11 @@ export class GalleryRepository {
         data: { likeCount: { increment: 1 } },
       });
       return { liked: true };
-    });
+    }, 'monica_gallery_toggle_like');
   }
 
   async toggleSave(userId: string, publicImageId: string) {
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (tx) => {
       const publicImage = await tx.publicImage.findFirst({
         where: {
           publicImageId,
@@ -260,7 +261,7 @@ export class GalleryRepository {
         data: { saveCount: { increment: 1 } },
       });
       return { saved: true };
-    });
+    }, 'monica_gallery_toggle_save');
   }
 }
 

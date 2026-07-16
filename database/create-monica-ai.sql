@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS monica_ai.generation_jobs (
     image_count        INTEGER      NOT NULL DEFAULT 1,
     estimated_credits  INTEGER      NOT NULL DEFAULT 0,
     charged_credits    INTEGER      NOT NULL DEFAULT 0,
+    credits_rolled_back_at TIMESTAMPTZ,
     failure_code       VARCHAR(100),
     failure_message    TEXT,
     started_at         TIMESTAMPTZ,

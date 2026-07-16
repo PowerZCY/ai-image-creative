@@ -283,6 +283,7 @@ model GenerationJob {
   imageCount       Int       @default(1) @map("image_count")
   estimatedCredits Int       @default(0) @map("estimated_credits")
   chargedCredits   Int       @default(0) @map("charged_credits")
+  creditsRolledBackAt DateTime? @map("credits_rolled_back_at") @db.Timestamptz(6)
   failureCode      String?   @map("failure_code") @db.VarChar(100)
   failureMessage   String?   @map("failure_message") @db.Text
   startedAt        DateTime? @map("started_at") @db.Timestamptz(6)

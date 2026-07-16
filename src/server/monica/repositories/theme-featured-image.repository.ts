@@ -1,4 +1,5 @@
 import { prisma } from '@/server/prisma';
+import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 
 export type SetThemeFeaturedImagesInput = {
   themeId: bigint;
@@ -32,7 +33,7 @@ export class ThemeFeaturedImageRepository {
       throw new Error('Featured images must belong to the selected theme');
     }
 
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (tx) => {
       await tx.themeFeaturedImage.deleteMany({
         where: { themeId: input.themeId },
       });
@@ -52,7 +53,7 @@ export class ThemeFeaturedImageRepository {
         where: { themeId: input.themeId, deleted: 0 },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       });
-    });
+    }, 'monica_theme_set_featured_images');
   }
 }
 

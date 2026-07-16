@@ -1,4 +1,5 @@
 import { prisma } from '@/server/prisma';
+import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 import {
   acquireLock,
   publishFIFOQueueMessage,
@@ -110,6 +111,51 @@ export type CreateGenerationJobResult = {
 };
 
 export class GenerationService {
+  private async finalizeUnsuccessfulJob(input: {
+    jobId: string;
+    status: typeof GENERATION_STATUS.FAILED | typeof GENERATION_STATUS.BLOCKED;
+    failureCode: string;
+    failureMessage: string;
+  }) {
+    return runInTransaction(async (tx) => {
+      // Serialize terminal handling for this job before changing balances.
+      await tx.$queryRaw<{ job_id: string }[]>`
+        SELECT job_id
+        FROM monica_ai.generation_jobs
+        WHERE job_id = ${input.jobId}::uuid
+        FOR UPDATE
+      `;
+
+      const job = await tx.generationJob.findUniqueOrThrow({ where: { jobId: input.jobId } });
+      if (job.creditsRolledBackAt) {
+        return job;
+      }
+
+      await tx.generationJob.update({
+        where: { jobId: input.jobId },
+        data: {
+          status: input.status,
+          chargedCredits: 0,
+          failureCode: input.failureCode,
+          failureMessage: input.failureMessage,
+          completedAt: new Date(),
+        },
+      });
+
+      await generationCreditService.rollbackConsumedCreditsForJob(
+        job.userId,
+        job.jobId,
+        input.failureCode,
+        tx,
+      );
+
+      return tx.generationJob.update({
+        where: { jobId: input.jobId },
+        data: { creditsRolledBackAt: new Date() },
+      });
+    }, 'monica_generation_finalize_unsuccessful_job');
+  }
+
   private async logGenerationFailure(input: {
     job: NonNullable<Awaited<ReturnType<typeof generationRepository.getJobForWorker>>>;
     error: unknown;
@@ -184,7 +230,7 @@ export class GenerationService {
       };
     }
 
-    await this.publishGenerationJob(userId, job.jobId, job.estimatedCredits);
+    await this.publishGenerationJob(job.jobId);
 
     return {
       job: await generationRepository.getJobForOwner(userId, job.jobId),
@@ -203,7 +249,7 @@ export class GenerationService {
       generationType,
     });
 
-    const job = await prisma.$transaction(async (tx) => {
+    const job = await runInTransaction(async (tx) => {
       const created = await generationRepository.createJob(
         tx,
         userId,
@@ -221,12 +267,12 @@ export class GenerationService {
       );
 
       return created;
-    });
+    }, 'monica_generation_create_job_with_credits');
 
     return job;
   }
 
-  private async publishGenerationJob(userId: string, jobId: string, estimatedCredits: number) {
+  private async publishGenerationJob(jobId: string) {
     try {
       const publishResult = await publishFIFOQueueMessage<QstashGenerationPayload>({
         queueName: GENERATION_QUEUE_NAME,
@@ -241,8 +287,12 @@ export class GenerationService {
       await generationRepository.setQstashMessageId(jobId, publishResult.messageId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await generationRepository.markQueuePublishFailed(jobId, message);
-      await generationCreditService.refundForJob(userId, jobId, estimatedCredits, 'queue_publish_failed');
+      await this.finalizeUnsuccessfulJob({
+        jobId,
+        status: GENERATION_STATUS.FAILED,
+        failureCode: 'queue_publish_failed',
+        failureMessage: message,
+      });
       throw error;
     }
   }
@@ -358,17 +408,12 @@ export class GenerationService {
         prompt: job.prompt,
       });
       if (requestSafety.status === SAFETY_STATUS.BLOCKED) {
-        await generationRepository.markBlocked(
-          job.jobId,
-          requestSafety.reasonCode ?? 'safety_blocked',
-          'Generation request was blocked by safety policy',
-        );
-        await generationCreditService.refundForJob(
-          job.userId,
-          job.jobId,
-          job.estimatedCredits,
-          requestSafety.reasonCode ?? 'safety_blocked',
-        );
+        await this.finalizeUnsuccessfulJob({
+          jobId: job.jobId,
+          status: GENERATION_STATUS.BLOCKED,
+          failureCode: requestSafety.reasonCode ?? 'safety_blocked',
+          failureMessage: 'Generation request was blocked by safety policy',
+        });
         return generationRepository.getJobForWorker(job.jobId);
       }
 
@@ -405,17 +450,12 @@ export class GenerationService {
 
       const resultSafety = await safetyService.checkProviderResult(providerResult);
       if (resultSafety.status === SAFETY_STATUS.BLOCKED) {
-        await generationRepository.markBlocked(
-          job.jobId,
-          resultSafety.reasonCode ?? 'provider_result_blocked',
-          'Provider result was blocked by safety policy',
-        );
-        await generationCreditService.refundForJob(
-          job.userId,
-          job.jobId,
-          job.estimatedCredits,
-          resultSafety.reasonCode ?? 'provider_result_blocked',
-        );
+        await this.finalizeUnsuccessfulJob({
+          jobId: job.jobId,
+          status: GENERATION_STATUS.BLOCKED,
+          failureCode: resultSafety.reasonCode ?? 'provider_result_blocked',
+          failureMessage: 'Provider result was blocked by safety policy',
+        });
         return generationRepository.getJobForWorker(job.jobId);
       }
 
@@ -429,8 +469,12 @@ export class GenerationService {
       return generationRepository.getJobForWorker(job.jobId);
     } catch (error) {
       await this.logGenerationFailure({ job, error });
-      await generationRepository.markFailed(job.jobId, 'generation_failed', PUBLIC_GENERATION_FAILED_MESSAGE);
-      await generationCreditService.refundForJob(job.userId, job.jobId, job.estimatedCredits, 'generation_failed');
+      await this.finalizeUnsuccessfulJob({
+        jobId: job.jobId,
+        status: GENERATION_STATUS.FAILED,
+        failureCode: 'generation_failed',
+        failureMessage: PUBLIC_GENERATION_FAILED_MESSAGE,
+      });
       return generationRepository.getJobForWorker(job.jobId);
     }
   }

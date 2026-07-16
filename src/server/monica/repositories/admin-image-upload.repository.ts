@@ -1,4 +1,4 @@
-import { prisma } from '@/server/prisma';
+import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 import { Prisma } from '@app-prisma';
 
 export type CreateAdminImageUploadInput = {
@@ -20,7 +20,7 @@ export type CreateAdminImageUploadInput = {
 
 export class AdminImageUploadRepository {
   createPublishedWithPublicImage(input: CreateAdminImageUploadInput) {
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (tx) => {
       const upload = await tx.adminImageUpload.create({
         data: {
           adminUserId: input.adminUserId,
@@ -58,7 +58,7 @@ export class AdminImageUploadRepository {
       });
 
       return { upload, publicImage };
-    });
+    }, 'monica_admin_image_upload_create_published');
   }
 }
 
