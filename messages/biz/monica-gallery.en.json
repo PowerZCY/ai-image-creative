@@ -18,10 +18,6 @@
       "useAsInspiration": "Use as inspiration",
       "copyPrompt": "Copy prompt",
       "copied": "Copied",
-      "actions": {
-        "like": "Like",
-        "save": "Save"
-      },
       "themes": [
         {
           "title": "After Putting On Glasses",
@@ -57,11 +53,7 @@
       "untitled": "Untitled Image",
       "openDetail": "Open image detail",
       "prompt": "Prompt",
-      "copied": "Copied",
-      "actions": {
-        "like": "Like",
-        "save": "Save"
-      }
+      "copied": "Copied"
     }
   }
 }

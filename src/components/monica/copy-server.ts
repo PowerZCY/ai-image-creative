@@ -75,7 +75,6 @@ export async function getMonicaCreatorCopy(locale: string): Promise<MonicaCreato
     actions: {
       submit: t('actions.submit'),
       delete: t('actions.delete'),
-      favorite: t('actions.favorite'),
       download: t('actions.download'),
     },
     submitDialog: {
@@ -205,10 +204,6 @@ export async function getMonicaThemesCopy(locale: string): Promise<MonicaThemesC
     copyPrompt: t('copyPrompt'),
     copied: t('copied'),
     useAsInspiration: t('useAsInspiration'),
-    actions: {
-      like: t('actions.like'),
-      save: t('actions.save'),
-    },
     themes: rawArray(t.raw('themes')),
   };
 }
@@ -224,10 +219,6 @@ export async function getMonicaGalleryCopy(locale: string): Promise<MonicaGaller
     openDetail: t('openDetail'),
     prompt: t('prompt'),
     copied: t('copied'),
-    actions: {
-      like: t('actions.like'),
-      save: t('actions.save'),
-    },
   };
 }
 

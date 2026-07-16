@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import type { RefObject } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Heart, ImagePlus } from 'lucide-react';
+import { ImagePlus } from 'lucide-react';
 import type { Pagination } from './list-components';
 
 export type PublicImage = {
@@ -31,19 +30,7 @@ export type PublicImageGalleryCopy = {
   openDetail: string;
   prompt: string;
   copied: string;
-  actions: {
-    save: string;
-  };
 };
-
-async function readError(response: Response) {
-  try {
-    const data = await response.json() as { error?: unknown };
-    return typeof data.error === 'string' ? data.error : response.statusText;
-  } catch {
-    return response.statusText;
-  }
-}
 
 export function PublicImageGallery({
   items,
@@ -51,7 +38,6 @@ export function PublicImageGallery({
   error,
   pagination,
   onPageChange,
-  onReload,
   copy,
   infinite,
 }: {
@@ -60,29 +46,11 @@ export function PublicImageGallery({
   error: string | null;
   pagination: Pagination;
   onPageChange: (page: number) => void;
-  onReload: () => void;
   copy: PublicImageGalleryCopy;
   infinite?: { hasMore: boolean; loading: boolean; sentinelRef: RefObject<HTMLDivElement | null> };
 }) {
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  async function toggleSave(publicImageId: string) {
-    setActionError(null);
-    try {
-      const response = await fetch(`/api/monica/public-images/${publicImageId}/save`, {
-        method: 'POST',
-        headers: { accept: 'application/json' },
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      onReload();
-    } catch (saveError) {
-      setActionError(saveError instanceof Error ? saveError.message : String(saveError));
-    }
-  }
-
   return (
     <div className="space-y-4">
-      {actionError ? <ErrorNotice message={actionError} /> : null}
       {error ? <ErrorNotice message={error} /> : null}
       {loading ? (
         <ImageGridSkeleton />
@@ -95,7 +63,6 @@ export function PublicImageGallery({
               key={publicImage.publicImageId}
               publicImage={publicImage}
               copy={copy}
-              onSave={() => void toggleSave(publicImage.publicImageId)}
             />
           ))}
         </div>
@@ -108,11 +75,9 @@ export function PublicImageGallery({
 function PublicImageCard({
   publicImage,
   copy,
-  onSave,
 }: {
   publicImage: PublicImage;
   copy: PublicImageGalleryCopy;
-  onSave: () => void;
 }) {
   const imageUrl = publicImage.image?.thumbnailUrl || publicImage.image?.imageUrl;
   const imageAlt = publicImage.altText || publicImage.title || '';
@@ -132,16 +97,13 @@ function PublicImageCard({
           <div className="grid aspect-4/5 place-items-center text-muted-foreground"><ImagePlus className="size-8" /></div>
         )}
       </Link>
-      <div className="flex items-start justify-between gap-3 p-4">
+      <div className="p-4">
         <Link href={detailHref} className="min-w-0 flex-1 text-left" aria-label={copy.openDetail}>
           <h2 className="line-clamp-1 font-semibold leading-snug">{publicImage.title || copy.untitled}</h2>
           {publicImage.creationNote ? (
             <p className="mt-1.5 line-clamp-2 text-sm leading-5 text-muted-foreground">{publicImage.creationNote}</p>
           ) : null}
         </Link>
-        <button type="button" onClick={onSave} className="mt-0.5 inline-flex shrink-0 items-center text-muted-foreground transition-colors hover:text-emerald-600" aria-label={copy.actions.save}>
-          <Heart className="size-4" />
-        </button>
       </div>
     </article>
   );

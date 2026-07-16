@@ -68,7 +68,6 @@ export type MonicaCreatorCopy = {
   actions: {
     submit: string;
     delete: string;
-    favorite: string;
     download: string;
   };
   submitDialog: SubmitImageDialogCopy;
@@ -134,10 +133,6 @@ export type MonicaPublicImageCopy = {
   openDetail: string;
   prompt: string;
   copied: string;
-  actions: {
-    like: string;
-    save: string;
-  };
 };
 
 export type MonicaThemesCopy = MonicaPublicImageCopy & {

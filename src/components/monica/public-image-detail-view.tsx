@@ -3,7 +3,7 @@ import { Hash } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { galleryService } from '@/server/monica/services/gallery.service';
 import type { MonicaGalleryCopy } from './copy';
-import { PublicImageCloseButton, PublicImageDetailActions, PublicImagePromptCopyButton } from './public-image-detail-actions';
+import { PublicImageCloseButton, PublicImagePromptCopyButton } from './public-image-detail-actions';
 
 type PublicImageDetail = NonNullable<Awaited<ReturnType<typeof galleryService.findPublicImageDetail>>>;
 
@@ -67,17 +67,11 @@ export function PublicImageDetailView({
             </h1>
           </div>
 
-          <section className="mt-6">
-            <div className="flex items-start justify-between gap-3">
-              {publicImage.model ? (
-                <p className="min-w-0 text-sm leading-6 text-foreground">{publicImage.model}</p>
-              ) : <span />}
-              <PublicImageDetailActions
-                publicImageId={publicImage.publicImageId}
-                saveLabel={copy.actions.save}
-              />
-            </div>
-          </section>
+          {publicImage.model ? (
+            <section className="mt-6">
+              <p className="text-sm leading-6 text-foreground">{publicImage.model}</p>
+            </section>
+          ) : null}
 
           {publicImage.creationNote ? (
             <section className="mt-6">

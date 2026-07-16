@@ -1,7 +1,11 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
-import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
+import { getOptionalServerAuthUser } from '@windrun-huaiin/backend-core/auth/server';
+import { anonymousAggregateService } from '@windrun-huaiin/backend-core/aggregate';
+import { UserStatus } from '@windrun-huaiin/backend-core/database';
+import { extractFingerprintFromNextRequest } from '@windrun-huaiin/third-ui/fingerprint/server';
 import { assistantService, type AssistantPromptIdea, type AssistantPromptMessage, type AssistantPromptMode } from '@/server/monica/services/assistant.service';
+import { prisma } from '@/server/prisma';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
 
 installBigIntJsonSerialization();
@@ -20,6 +24,9 @@ const MAX_EXISTING_IDEAS = 10;
 const MAX_EXISTING_IDEA_TEXT_LENGTH = 500;
 const MAX_PREVIOUS_IMPROVED_PROMPTS = 5;
 const MAX_PREVIOUS_IMPROVED_PROMPT_LENGTH = 1000;
+const ANONYMOUS_ASSISTANT_TRIAL_LIMIT = 3;
+
+class LoginRequiredError extends Error {}
 
 function readOptionalString(value: unknown) {
   if (typeof value !== 'string') return undefined;
@@ -102,10 +109,50 @@ function readPreviousImprovedPrompts(value: unknown, mode: AssistantPromptMode) 
   return prompts.length ? prompts.slice(-MAX_PREVIOUS_IMPROVED_PROMPTS) : undefined;
 }
 
+async function resolveAssistantUser(request: NextRequest) {
+  const authenticatedUser = await getOptionalServerAuthUser();
+  if (authenticatedUser) {
+    return authenticatedUser.user;
+  }
+
+  const fingerprintId = extractFingerprintFromNextRequest(request);
+  if (!fingerprintId) {
+    throw new Error('Anonymous user fingerprint is required');
+  }
+
+  const anonymousUser = await anonymousAggregateService.getOrCreateByFingerprintId(fingerprintId);
+  if (anonymousUser.user.status !== UserStatus.ANONYMOUS) {
+    throw new LoginRequiredError('Sign in to continue using the assistant.');
+  }
+
+  return anonymousUser.user;
+}
+
+async function enforceAnonymousAssistantTrialLimit(userId: string) {
+  const successfulInteractions = await prisma.assistantInteraction.count({
+    where: {
+      userId,
+      rootActionType: 'prompt_assistant',
+      status: 'succeeded',
+    },
+  });
+
+  if (successfulInteractions >= ANONYMOUS_ASSISTANT_TRIAL_LIMIT) {
+    return NextResponse.json(
+      {
+        code: 'LOGIN_REQUIRED',
+        error: 'Sign in to continue using the assistant.',
+      },
+      { status: 403 },
+    );
+  }
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const authUtils = new ApiAuthUtils(request);
-    const { user } = await authUtils.requireAuthWithUser();
+    const user = await resolveAssistantUser(request);
 
     if (!request.headers.get('content-type')?.includes('application/json')) {
       return NextResponse.json({ error: 'content-type must be application/json' }, { status: 415 });
@@ -113,6 +160,14 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json() as Record<string, unknown>;
     const mode = readMode(body.mode);
+
+    if (user.status === UserStatus.ANONYMOUS) {
+      const limitResponse = await enforceAnonymousAssistantTrialLimit(user.userId);
+      if (limitResponse) {
+        return limitResponse;
+      }
+    }
+
     const result = await assistantService.createPromptAssistance({
       userId: user.userId,
       mode,
@@ -129,6 +184,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof LoginRequiredError) {
+      return NextResponse.json(
+        {
+          code: 'LOGIN_REQUIRED',
+          error: error.message,
+        },
+        { status: 403 },
+      );
+    }
+
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 400 });
   }

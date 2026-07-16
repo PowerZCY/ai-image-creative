@@ -31,7 +31,6 @@ const protectedApiRoutes = createRouteMatcher([
   '/api/transaction(.*)',
   // Monica creation and account APIs.
   '/api/monica/generation(.*)',
-  '/api/monica/assistant(.*)',
   '/api/admin(.*)',
   '/api/monica/reference-images(.*)',
   '/api/monica/studio(.*)',

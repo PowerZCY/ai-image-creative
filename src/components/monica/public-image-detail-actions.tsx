@@ -2,16 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Check, Copy, Heart, X } from 'lucide-react';
-
-async function readError(response: Response) {
-  try {
-    const data = await response.json() as { error?: unknown };
-    return typeof data.error === 'string' ? data.error : response.statusText;
-  } catch {
-    return response.statusText;
-  }
-}
+import { Check, Copy, X } from 'lucide-react';
 
 export function PublicImageCloseButton({ mode = 'gallery' }: { mode?: 'back' | 'gallery' }) {
   const router = useRouter();
@@ -31,52 +22,6 @@ export function PublicImageCloseButton({ mode = 'gallery' }: { mode?: 'back' | '
     >
       <X className="size-5" />
     </button>
-  );
-}
-
-export function PublicImageDetailActions({
-  publicImageId,
-  saveLabel = 'Save',
-}: {
-  publicImageId: string;
-  saveLabel?: string;
-}) {
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function saveImage() {
-    setSaving(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/monica/public-images/${publicImageId}/save`, {
-        method: 'POST',
-        headers: { accept: 'application/json' },
-      });
-      if (!response.ok) throw new Error(await readError(response));
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      {error ? (
-        <div className="rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-100">
-          {error}
-        </div>
-      ) : null}
-      <button
-        type="button"
-        onClick={() => void saveImage()}
-        disabled={saving}
-        className="grid size-11 shrink-0 place-items-center rounded-md hover:bg-muted disabled:opacity-50"
-        aria-label={saveLabel}
-      >
-        <Heart className="size-4" />
-      </button>
-    </div>
   );
 }
 

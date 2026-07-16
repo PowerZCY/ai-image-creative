@@ -101,7 +101,6 @@ export function GalleryClient({
           error={error}
           pagination={pagination}
           onPageChange={() => undefined}
-          onReload={() => undefined}
           copy={copy}
           infinite={{ hasMore: pagination.page < pagination.totalPages, loading: loadingMore, sentinelRef }}
         />

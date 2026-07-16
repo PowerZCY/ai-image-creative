@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronDown, Download, Heart, ImagePlus, Images, Lightbulb, Loader2, MessageCircle, Sparkles, Trash2, UploadCloud, Wand2, X } from 'lucide-react';
+import { ChevronDown, Download, ImagePlus, Images, Lightbulb, Loader2, MessageCircle, Send, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import {
   themeBgColor,
   themeBorderColor,
@@ -265,7 +265,6 @@ export function MonicaCreator({
   const [job, setJob] = useState<GenerationJobView | null>(null);
   const [batches, setBatches] = useState<GenerationBatch[]>([]);
   const [deletedImageIds, setDeletedImageIds] = useState<Set<string>>(() => new Set());
-  const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
   const [submittedImageIds, setSubmittedImageIds] = useState<Set<string>>(() => new Set());
   const [submitTarget, setSubmitTarget] = useState<SubmitImageTarget | null>(null);
   const [deletingImageIds, setDeletingImageIds] = useState<Set<string>>(() => new Set());
@@ -1094,15 +1093,8 @@ export function MonicaCreator({
               deletedImageIds={deletedImageIds}
               deletingImageIds={deletingImageIds}
               downloadingImageIds={downloadingImageIds}
-              favoriteImageIds={favoriteImageIds}
               onDeleteImage={handleRequestDeleteImage}
               onDownloadImage={(image) => void handleDownloadImage(image)}
-              onToggleFavorite={(imageId) => setFavoriteImageIds((current) => {
-                const next = new Set(current);
-                if (next.has(imageId)) next.delete(imageId);
-                else next.add(imageId);
-                return next;
-              })}
               onSubmitImage={(target) => setSubmitTarget(target)}
               submittedImageIds={submittedImageIds}
               defaultThemeId={themeId}
@@ -1582,10 +1574,8 @@ function ResultPanel({
   deletedImageIds,
   deletingImageIds,
   downloadingImageIds,
-  favoriteImageIds,
   onDeleteImage,
   onDownloadImage,
-  onToggleFavorite,
   onSubmitImage,
   submittedImageIds,
   defaultThemeId,
@@ -1596,10 +1586,8 @@ function ResultPanel({
   deletedImageIds: Set<string>;
   deletingImageIds: Set<string>;
   downloadingImageIds: Set<string>;
-  favoriteImageIds: Set<string>;
   onDeleteImage: (imageId: string) => void;
   onDownloadImage: (image: GeneratedImageView) => void;
-  onToggleFavorite: (imageId: string) => void;
   onSubmitImage: (target: SubmitImageTarget) => void;
   submittedImageIds: Set<string>;
   defaultThemeId?: string | number | bigint | null;
@@ -1675,11 +1663,6 @@ function ResultPanel({
                           </div>
                         )}
                         <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-transparent opacity-0 transition group-hover:opacity-100 md:opacity-0" />
-                        {favoriteImageIds.has(image.imageId) ? (
-                          <div className="absolute left-2 top-2 grid size-8 place-items-center rounded-full border border-rose-200 bg-white/92 text-rose-600 shadow-sm z-10">
-                            <Heart className="size-4 fill-current" />
-                          </div>
-                        ) : null}
                         <div className="absolute right-2 top-2 flex gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100 z-10">
                           <ImageActionButton
                             label={submittedImageIds.has(image.imageId) ? 'Submitted' : copy.actions.submit}
@@ -1691,9 +1674,8 @@ function ResultPanel({
                               defaultThemeId: defaultThemeId?.toString() ?? null,
                             })}
                           >
-                            <UploadCloud className="size-3.5" />
+                            <Send className="size-3.5" />
                           </ImageActionButton>
-                          <ImageActionButton label={copy.actions.favorite} active={favoriteImageIds.has(image.imageId)} onClick={() => onToggleFavorite(image.imageId)}><Heart className="size-3.5" /></ImageActionButton>
                           {image.imageUrl ? (
                             <ImageActionButton label={copy.actions.download} disabled={downloadingImageIds.has(image.imageId)} onClick={() => onDownloadImage(image)}>
                               {downloadingImageIds.has(image.imageId) ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}

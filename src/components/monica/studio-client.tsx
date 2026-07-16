@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode, useCallback } from 'react';
 import Image from 'next/image';
-import { Download, Heart, ImagePlus, Loader2, Send, Trash2, Copy, Check, ChevronDown } from 'lucide-react';
+import { Download, ImagePlus, Loader2, Send, Trash2, Copy, Check, ChevronDown } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
 import type { MonicaCreatorCopy, MonicaStudioCopy } from './copy';
 import { MonicaCreator } from './creator-client';
@@ -168,7 +168,6 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
   const [themesLoading, setThemesLoading] = useState(false);
   const [selectedIdeaThemeId, setSelectedIdeaThemeId] = useState('');
   const [themePickerOpen, setThemePickerOpen] = useState(false);
-  const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
   const [downloadingImageIds, setDownloadingImageIds] = useState<Set<string>>(() => new Set());
   const [deletingImageIds, setDeletingImageIds] = useState<Set<string>>(() => new Set());
 
@@ -227,15 +226,6 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
     }
 
     list.updateFilters({ tab: 'all', submissionStatus: 'all' });
-  }
-
-  function toggleFavorite(imageId: string) {
-    setFavoriteImageIds((current) => {
-      const next = new Set(current);
-      if (next.has(imageId)) next.delete(imageId);
-      else next.add(imageId);
-      return next;
-    });
   }
 
   async function handleDownloadImage(image: StudioImage) {
@@ -364,11 +354,9 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
                         key={batch.batchId}
                         batch={batch}
                         copy={copy}
-                        favoriteImageIds={favoriteImageIds}
                         downloadingImageIds={downloadingImageIds}
                         deletingImageIds={deletingImageIds}
                         actionLabels={creatorCopy.actions}
-                        onToggleFavorite={toggleFavorite}
                         onDownload={(image) => void handleDownloadImage(image)}
                         onDelete={(image) => void handleDeleteImage(image)}
                         onSubmit={setSubmitTarget}
@@ -496,10 +484,8 @@ function StudioImageBatchRow({
   batch,
   copy,
   actionLabels,
-  favoriteImageIds,
   downloadingImageIds,
   deletingImageIds,
-  onToggleFavorite,
   onDownload,
   onDelete,
   onSubmit,
@@ -507,10 +493,8 @@ function StudioImageBatchRow({
   batch: StudioImageBatch;
   copy: MonicaStudioCopy;
   actionLabels: MonicaCreatorCopy['actions'];
-  favoriteImageIds: Set<string>;
   downloadingImageIds: Set<string>;
   deletingImageIds: Set<string>;
-  onToggleFavorite: (imageId: string) => void;
   onDownload: (image: StudioImage) => void;
   onDelete: (image: StudioImage) => void;
   onSubmit: (image: StudioImage) => void;
@@ -544,10 +528,8 @@ function StudioImageBatchRow({
             copy={copy}
             actionLabels={actionLabels}
             ratio={batch.ratio}
-            favorite={favoriteImageIds.has(image.imageId)}
             downloading={downloadingImageIds.has(image.imageId)}
             deleting={deletingImageIds.has(image.imageId)}
-            onToggleFavorite={() => onToggleFavorite(image.imageId)}
             onDownload={() => onDownload(image)}
             onDelete={() => onDelete(image)}
             onSubmit={() => onSubmit(image)}
@@ -563,10 +545,8 @@ function StudioImageTile({
   copy,
   actionLabels,
   ratio,
-  favorite,
   downloading,
   deleting,
-  onToggleFavorite,
   onDownload,
   onDelete,
   onSubmit,
@@ -575,10 +555,8 @@ function StudioImageTile({
   copy: MonicaStudioCopy;
   actionLabels: MonicaCreatorCopy['actions'];
   ratio?: string | null;
-  favorite: boolean;
   downloading: boolean;
   deleting: boolean;
-  onToggleFavorite: () => void;
   onDownload: () => void;
   onDelete: () => void;
   onSubmit: () => void;
@@ -607,11 +585,6 @@ function StudioImageTile({
           </div>
         )}
       </div>
-      {favorite ? (
-        <div className="absolute left-2 top-2 grid size-8 place-items-center rounded-full border border-rose-200 bg-white/92 text-rose-600 shadow-sm">
-          <Heart className="size-4 fill-current" />
-        </div>
-      ) : null}
       {showStatus ? (
         <div className="absolute bottom-2 left-2 max-w-[calc(100%-16px)]">
           <StatusBadge tone={getStatusTone(status)}>
@@ -622,9 +595,6 @@ function StudioImageTile({
       <div className="absolute right-2 top-2 z-20 flex gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100">
         <StudioImageActionButton label={canSubmit ? copy.submitImage : 'Submitted'} disabled={!canSubmit} active={!canSubmit && status !== 'generated'} onClick={onSubmit}>
           <Send className="size-3.5" />
-        </StudioImageActionButton>
-        <StudioImageActionButton label={actionLabels.favorite} active={favorite} onClick={onToggleFavorite}>
-          <Heart className={cn('size-3.5', favorite ? 'fill-current' : '')} />
         </StudioImageActionButton>
         {image.imageUrl ? (
           <StudioImageActionButton label={actionLabels.download} disabled={downloading} onClick={onDownload}>

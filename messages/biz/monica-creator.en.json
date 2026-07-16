@@ -68,7 +68,6 @@
       "actions": {
         "submit": "Submit",
         "delete": "Delete",
-        "favorite": "Favorite",
         "download": "Download"
       },
       "submitDialog": {
