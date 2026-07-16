@@ -585,7 +585,7 @@ function StudioImageTile({
 }) {
   const latestSubmission = image.submissions?.[0];
   const status = latestSubmission?.status ?? image.status;
-  const showStatus = status !== 'generated';
+  const showStatus = status !== 'generated' && status !== 'rejected';
   const canSubmit = !image.isLocked && (image.status === 'generated' || image.status === 'rejected');
   const canDelete = !image.isLocked && (image.status === 'generated' || image.status === 'rejected');
 
@@ -614,7 +614,9 @@ function StudioImageTile({
       ) : null}
       {showStatus ? (
         <div className="absolute bottom-2 left-2 max-w-[calc(100%-16px)]">
-          <StatusBadge tone={getStatusTone(status)}>{copy.statusLabels[status] ?? status}</StatusBadge>
+          <StatusBadge tone={getStatusTone(status)}>
+            {status === 'approved' ? 'Featured · +10 credits' : (copy.statusLabels[status] ?? status)}
+          </StatusBadge>
         </div>
       ) : null}
       <div className="absolute right-2 top-2 z-20 flex gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100">
