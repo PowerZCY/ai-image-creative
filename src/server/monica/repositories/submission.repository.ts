@@ -1,6 +1,8 @@
 import { prisma } from '@/server/prisma';
+import { creditService } from '@windrun-huaiin/backend-core/database';
 import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 import { Prisma } from '@app-prisma';
+import { IMAGE_SUBMISSION_APPROVAL_REWARD } from '../constants/submission-reward';
 
 export type CreateSubmissionInput = {
   userId: string;
@@ -141,8 +143,12 @@ export class SubmissionRepository {
         throw new Error('Image submission cannot be reviewed in its current status');
       }
 
-      const submission = await tx.imageSubmission.update({
-        where: { id: existing.id },
+      const updateResult = await tx.imageSubmission.updateMany({
+        where: {
+          id: existing.id,
+          deleted: 0,
+          status: { in: ['submitted', 'under_review', 'needs_review'] },
+        },
         data: {
           status: action,
           reviewFlow: appendReviewFlow(existing.reviewFlow, {
@@ -153,9 +159,25 @@ export class SubmissionRepository {
           }),
         },
       });
+      if (updateResult.count !== 1) {
+        throw new Error('Image submission cannot be reviewed in its current status');
+      }
+
+      const submission = await tx.imageSubmission.findUnique({ where: { id: existing.id } });
+      if (!submission) throw new Error('Image submission not found after review');
 
       let publicImage = null;
       if (action === 'approved') {
+        await creditService.grantFreeCredit(
+          existing.userId,
+          IMAGE_SUBMISSION_APPROVAL_REWARD.amount,
+          {
+            feature: IMAGE_SUBMISSION_APPROVAL_REWARD.feature,
+            operationReferId: IMAGE_SUBMISSION_APPROVAL_REWARD.operationReferId(existing.id),
+          },
+          tx,
+        );
+
         publicImage = await tx.publicImage.upsert({
           where: {
             imageId: existing.imageId,

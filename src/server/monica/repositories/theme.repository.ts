@@ -1,6 +1,8 @@
 import { prisma } from '@/server/prisma';
+import { creditService } from '@windrun-huaiin/backend-core/database';
 import { runInTransaction } from '@windrun-huaiin/backend-core/prisma';
 import { Prisma } from '@app-prisma';
+import { THEME_SUBMISSION_APPROVAL_REWARD } from '../constants/submission-reward';
 import { THEME_STATUS, THEME_SUBMISSION_STATUS, type ThemeSubmissionStatus } from '../constants/theme';
 import { buildPagination, normalizePagination, readStringFilter, type MonicaPagedRequest } from '../types/pagination';
 import { buildStoredImageUrl } from '../utils/image-url';
@@ -648,35 +650,56 @@ export class ThemeRepository {
 
   async reviewSubmission(reviewerUserId: string, themeSubmissionId: string, status: ThemeSubmissionStatus, _reason?: string) {
     const id = toSubmissionId(themeSubmissionId);
-    const existing = await prisma.themeSubmission.findFirst({
-      where: {
-        id,
-        deleted: 0,
-      },
-    });
-    if (!existing) return null;
-    if (
-      existing.status !== THEME_SUBMISSION_STATUS.UNDER_REVIEW
-    ) {
-      throw new Error('Only under-review theme submissions can be reviewed');
-    }
+    return runInTransaction(async (tx) => {
+      const existing = await tx.themeSubmission.findFirst({
+        where: {
+          id,
+          deleted: 0,
+        },
+      });
+      if (!existing) return null;
+      if (existing.status !== THEME_SUBMISSION_STATUS.UNDER_REVIEW) {
+        throw new Error('Only under-review theme submissions can be reviewed');
+      }
 
-    const submission = await prisma.themeSubmission.update({
-      where: { id: existing.id },
-      data: {
-        status,
-        reviewFlow: appendReviewFlow(existing.reviewFlow, {
+      const updateResult = await tx.themeSubmission.updateMany({
+        where: {
+          id: existing.id,
+          deleted: 0,
+          status: THEME_SUBMISSION_STATUS.UNDER_REVIEW,
+        },
+        data: {
           status,
-          actorUserId: reviewerUserId,
-          actorType: 'reviewer',
-          note: status === THEME_SUBMISSION_STATUS.ACCEPTED
-            ? 'Featured as a daily theme. 20 free credits added to your account — enjoy!'
-            : "Not selected this time, but we'd love to see more ideas from you soon.",
-        }),
-      },
-    });
+          reviewFlow: appendReviewFlow(existing.reviewFlow, {
+            status,
+            actorUserId: reviewerUserId,
+            actorType: 'reviewer',
+            note: status === THEME_SUBMISSION_STATUS.ACCEPTED
+              ? 'Featured as a daily theme. 20 free credits added to your account — enjoy!'
+              : "Not selected this time, but we'd love to see more ideas from you soon.",
+          }),
+        },
+      });
+      if (updateResult.count !== 1) {
+        throw new Error('Theme submission cannot be reviewed in its current status');
+      }
 
-    return mapSubmissionForApi(submission);
+      if (status === THEME_SUBMISSION_STATUS.ACCEPTED) {
+        await creditService.grantFreeCredit(
+          existing.userId,
+          THEME_SUBMISSION_APPROVAL_REWARD.amount,
+          {
+            feature: THEME_SUBMISSION_APPROVAL_REWARD.feature,
+            operationReferId: THEME_SUBMISSION_APPROVAL_REWARD.operationReferId(existing.id),
+          },
+          tx,
+        );
+      }
+
+      const submission = await tx.themeSubmission.findUnique({ where: { id: existing.id } });
+      if (!submission) throw new Error('Theme submission not found after review');
+      return mapSubmissionForApi(submission);
+    }, 'monica_theme_submission_review');
   }
 
   async publishFromSubmission(_reviewerUserId: string, themeSubmissionId: string, input: PublishThemeInput) {
