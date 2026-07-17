@@ -27,10 +27,17 @@ function mapReferenceImageForApi<T extends { referenceId: string; cdnImagePrefix
 }
 
 export class GenerationRepository {
-  createJob(client: Client, userId: string, input: CreateGenerationJobInput, estimatedCredits: number) {
+  createJob(
+    client: Client,
+    userId: string,
+    input: CreateGenerationJobInput,
+    estimatedCredits: number,
+    createdAsAnonymous: boolean,
+  ) {
     return client.generationJob.create({
       data: {
         userId,
+        createdAsAnonymous,
         themeId: input.themeId,
         sourcePage: input.sourcePage,
         status: GENERATION_STATUS.QUEUED,

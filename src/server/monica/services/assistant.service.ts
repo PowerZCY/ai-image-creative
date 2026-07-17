@@ -30,6 +30,7 @@ export type AssistantPromptInput = {
   themeId?: bigint;
   sourcePage?: string;
   userId?: string;
+  createdAsAnonymous?: boolean;
 };
 
 export type AssistantPromptResult = {
@@ -356,6 +357,7 @@ export class AssistantService {
         const result = createMockAssistantResult(normalizedInput);
         const interaction = await assistantInteractionRepository.create({
           userId: input.userId,
+          createdAsAnonymous: input.createdAsAnonymous,
           rootActionType: 'prompt_assistant',
           actionType: input.mode,
           sourcePage: input.sourcePage,
@@ -413,6 +415,7 @@ export class AssistantService {
       const result = parseAssistantResult(content);
       const interaction = await assistantInteractionRepository.create({
         userId: input.userId,
+        createdAsAnonymous: input.createdAsAnonymous,
         rootActionType: 'prompt_assistant',
         actionType: input.mode,
         sourcePage: input.sourcePage,
@@ -446,6 +449,7 @@ export class AssistantService {
     } catch (error) {
       await assistantInteractionRepository.create({
         userId: input.userId,
+        createdAsAnonymous: input.createdAsAnonymous,
         rootActionType: 'prompt_assistant',
         actionType: input.mode,
         sourcePage: input.sourcePage,

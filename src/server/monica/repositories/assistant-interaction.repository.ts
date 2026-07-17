@@ -4,6 +4,7 @@ import { Prisma } from '@app-prisma';
 export type CreateAssistantInteractionInput = {
   sessionId?: string;
   userId?: string | null;
+  createdAsAnonymous?: boolean;
   rootActionType: string;
   actionType: string;
   parentInteractionId?: string | null;
@@ -33,6 +34,7 @@ export class AssistantInteractionRepository {
       data: {
         sessionId: input.sessionId,
         userId: input.userId,
+        createdAsAnonymous: input.createdAsAnonymous ?? false,
         rootActionType: input.rootActionType,
         actionType: input.actionType,
         parentInteractionId: input.parentInteractionId,

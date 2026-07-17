@@ -268,29 +268,30 @@ model GenerationJobReferenceImage {
 }
 
 model GenerationJob {
-  id               BigInt    @id @default(autoincrement())
-  jobId            String    @unique @default(dbgenerated("gen_random_uuid()")) @map("job_id") @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  themeId          BigInt?   @map("theme_id")
-  sourcePage       String?   @map("source_page") @db.VarChar(50)
-  status           String    @default("pending") @db.VarChar(50)
-  generationType   String    @default("text_to_image") @map("generation_type") @db.VarChar(50)
-  prompt           String    @db.Text
-  negativePrompt   String?   @map("negative_prompt") @db.Text
-  model            String    @db.VarChar(100)
-  style            String?   @db.VarChar(100)
-  ratio            String?   @db.VarChar(50)
-  imageCount       Int       @default(1) @map("image_count")
-  estimatedCredits Int       @default(0) @map("estimated_credits")
-  chargedCredits   Int       @default(0) @map("charged_credits")
+  id                  BigInt    @id @default(autoincrement())
+  jobId               String    @unique @default(dbgenerated("gen_random_uuid()")) @map("job_id") @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  createdAsAnonymous  Boolean   @default(false) @map("created_as_anonymous")
+  themeId             BigInt?   @map("theme_id")
+  sourcePage          String?   @map("source_page") @db.VarChar(50)
+  status              String    @default("pending") @db.VarChar(50)
+  generationType      String    @default("text_to_image") @map("generation_type") @db.VarChar(50)
+  prompt              String    @db.Text
+  negativePrompt      String?   @map("negative_prompt") @db.Text
+  model               String    @db.VarChar(100)
+  style               String?   @db.VarChar(100)
+  ratio               String?   @db.VarChar(50)
+  imageCount          Int       @default(1) @map("image_count")
+  estimatedCredits    Int       @default(0) @map("estimated_credits")
+  chargedCredits      Int       @default(0) @map("charged_credits")
   creditsRolledBackAt DateTime? @map("credits_rolled_back_at") @db.Timestamptz(6)
-  failureCode      String?   @map("failure_code") @db.VarChar(100)
-  failureMessage   String?   @map("failure_message") @db.Text
-  startedAt        DateTime? @map("started_at") @db.Timestamptz(6)
-  completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
-  createdAt        DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deleted          Int       @default(0)
+  failureCode         String?   @map("failure_code") @db.VarChar(100)
+  failureMessage      String?   @map("failure_message") @db.Text
+  startedAt           DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt           DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted             Int       @default(0)
 
   @@index([userId, createdAt], map: "idx_generation_jobs_user_created_at")
   @@index([status, createdAt], map: "idx_generation_jobs_status_created_at")
@@ -416,6 +417,7 @@ model AssistantInteraction {
   interactionId       String    @unique @default(dbgenerated("gen_random_uuid()")) @map("interaction_id") @db.Uuid
   sessionId           String    @default(dbgenerated("gen_random_uuid()")) @map("session_id") @db.Uuid
   userId              String?   @map("user_id") @db.Uuid
+  createdAsAnonymous  Boolean   @default(false) @map("created_as_anonymous")
   rootActionType      String    @map("root_action_type") @db.VarChar(50)
   actionType          String    @map("action_type") @db.VarChar(50)
   parentInteractionId String?   @map("parent_interaction_id") @db.Uuid

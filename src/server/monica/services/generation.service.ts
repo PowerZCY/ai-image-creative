@@ -196,7 +196,11 @@ export class GenerationService {
     }
   }
 
-  async createGenerationJob(userId: string, input: CreateGenerationJobInput): Promise<CreateGenerationJobResult> {
+  async createGenerationJob(
+    userId: string,
+    input: CreateGenerationJobInput,
+    createdAsAnonymous = false,
+  ): Promise<CreateGenerationJobResult> {
     const lockKey = `monica:generation:${userId}`;
     const lockToken = await acquireLock(lockKey, CREATE_GENERATION_LOCK_TTL_MS);
     if (!lockToken) {
@@ -204,15 +208,19 @@ export class GenerationService {
     }
 
     try {
-      return await this.createGenerationJobWithLock(userId, input);
+      return await this.createGenerationJobWithLock(userId, input, createdAsAnonymous);
     } finally {
       await releaseLock(lockKey, lockToken);
     }
   }
 
-  private async createGenerationJobWithLock(userId: string, input: CreateGenerationJobInput): Promise<CreateGenerationJobResult> {
+  private async createGenerationJobWithLock(
+    userId: string,
+    input: CreateGenerationJobInput,
+    createdAsAnonymous: boolean,
+  ): Promise<CreateGenerationJobResult> {
     const mode = this.getDispatchMode();
-    const job = await this.createQueuedGenerationJobWithCredits(userId, input);
+    const job = await this.createQueuedGenerationJobWithCredits(userId, input, createdAsAnonymous);
 
     if (mode === GENERATION_DISPATCH_MODE.INLINE) {
       await this.runGenerationJob(job.jobId, 'inline');
@@ -238,7 +246,11 @@ export class GenerationService {
     };
   }
 
-  private async createQueuedGenerationJobWithCredits(userId: string, input: CreateGenerationJobInput) {
+  private async createQueuedGenerationJobWithCredits(
+    userId: string,
+    input: CreateGenerationJobInput,
+    createdAsAnonymous: boolean,
+  ) {
     const referenceIds = input.referenceIds ?? [];
     await referenceImageService.assertOwnedReferenceImages(userId, referenceIds);
 
@@ -255,6 +267,7 @@ export class GenerationService {
         userId,
         { ...input, generationType },
         estimatedCredits,
+        createdAsAnonymous,
       );
       await generationRepository.createJobReferenceImages(tx, created.jobId, referenceIds);
 

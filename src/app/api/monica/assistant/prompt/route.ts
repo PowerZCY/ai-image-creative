@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
 
     const result = await assistantService.createPromptAssistance({
       userId: user.userId,
+      createdAsAnonymous: user.status === UserStatus.ANONYMOUS,
       mode,
       prompt: readOptionalString(body.prompt),
       userInput: readOptionalString(body.userInput),
