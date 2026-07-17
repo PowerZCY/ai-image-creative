@@ -46,6 +46,7 @@ export function useMonicaPagedList<TFilters extends Record<string, unknown>, TIt
   initialFilters: TFilters;
   initialSortBy?: string;
   pageSize?: number;
+  enabled?: boolean;
 }) {
   const [filters, setFilters] = useState<TFilters>(options.initialFilters);
   const [sortBy, setSortBy] = useState(options.initialSortBy);
@@ -77,6 +78,13 @@ export function useMonicaPagedList<TFilters extends Record<string, unknown>, TIt
   const reload = useCallback(() => setReloadKey((current) => current + 1), []);
 
   useEffect(() => {
+    if (options.enabled === false) {
+      setItems([]);
+      setPagination({ ...emptyPagination, pageSize });
+      setLoading(false);
+      setError(null);
+      return;
+    }
     const controller = new AbortController();
 
     async function run() {
@@ -116,7 +124,7 @@ export function useMonicaPagedList<TFilters extends Record<string, unknown>, TIt
 
     void run();
     return () => controller.abort();
-  }, [options.endpoint, page, pageSize, reloadKey, requestBody]);
+  }, [options.enabled, options.endpoint, page, pageSize, reloadKey, requestBody]);
 
   return {
     filters,

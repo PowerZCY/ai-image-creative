@@ -1,7 +1,7 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
+import { requireMonicaAdmin } from '@/server/monica/auth';
 import { submissionService } from '@/server/monica/services/submission.service';
 import { themeRepository } from '@/server/monica/repositories/theme.repository';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
@@ -14,8 +14,7 @@ type RouteContext = {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const authUtils = new ApiAuthUtils(request);
-    const { user } = await authUtils.requireAuthWithUser();
+    const { user } = await requireMonicaAdmin();
     const { themeId } = await context.params;
     const body = await request.json() as { imageId?: string; title?: string; altText?: string; creationNote?: string };
     if (!body.imageId) {

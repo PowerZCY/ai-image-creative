@@ -21,6 +21,8 @@ import {
 } from '@windrun-huaiin/third-ui/fuma/base/site-layout-shared';
 import { getTranslations } from 'next-intl/server';
 import Image from 'next/image';
+import { getOptionalServerAuthUser } from '@windrun-huaiin/backend-core/auth/server';
+import { isMonicaAdmin } from '@/server/monica/auth';
 
 function renderMenuBanner() {
   return (
@@ -49,8 +51,10 @@ function createNavContext(locale: string) {
 export async function primaryNavLinks(locale: string): Promise<SiteNavItemConfig[]> {
   const t1 = await getTranslations({ locale, namespace: 'linkPreview' });
   const context = createNavContext(locale);
+  const authenticated = await getOptionalServerAuthUser();
+  const admin = isMonicaAdmin(authenticated?.providerUserId);
 
-  return [
+  const links: SiteNavItemConfig[] = [
     createLocalizedNavLink(
       {
         text: 'Themes',
@@ -89,15 +93,6 @@ export async function primaryNavLinks(locale: string): Promise<SiteNavItemConfig
     ),
     createLocalizedNavLink(
       {
-        text: 'Admin',
-        path: '/admin/monica',
-        prefetch: false,
-        icon: <SettingsIcon />,
-      },
-      context,
-    ),
-    createLocalizedNavLink(
-      {
         text: t1('pricing'),
         path: '/pricing',
         prefetch: false,
@@ -105,6 +100,20 @@ export async function primaryNavLinks(locale: string): Promise<SiteNavItemConfig
       context,
     ),
   ];
+
+  if (admin) {
+    links.splice(4, 0, createLocalizedNavLink(
+      {
+        text: 'Admin',
+        path: '/admin/monica',
+        prefetch: false,
+        icon: <SettingsIcon />,
+      },
+      context,
+    ));
+  }
+
+  return links;
 }
 
 export async function levelNavLinks(locale: string): Promise<SiteNavItemConfig[]> {

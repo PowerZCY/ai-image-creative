@@ -7,6 +7,7 @@ import { extractFingerprintFromNextRequest } from '@windrun-huaiin/third-ui/fing
 import { assistantService, type AssistantPromptIdea, type AssistantPromptMessage, type AssistantPromptMode } from '@/server/monica/services/assistant.service';
 import { prisma } from '@/server/prisma';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
+import { MONICA_ERROR_CODE, monicaError } from '@/server/monica/api-error';
 
 installBigIntJsonSerialization();
 
@@ -140,7 +141,7 @@ async function enforceAnonymousAssistantTrialLimit(userId: string) {
   if (successfulInteractions >= ANONYMOUS_ASSISTANT_TRIAL_LIMIT) {
     return NextResponse.json(
       {
-        code: 'LOGIN_REQUIRED',
+        code: MONICA_ERROR_CODE.ANONYMOUS_TRIAL_EXHAUSTED,
         error: 'Sign in to continue using the assistant.',
       },
       { status: 403 },
@@ -188,7 +189,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof LoginRequiredError) {
       return NextResponse.json(
         {
-          code: 'LOGIN_REQUIRED',
+          code: MONICA_ERROR_CODE.LOGIN_REQUIRED,
           error: error.message,
         },
         { status: 403 },

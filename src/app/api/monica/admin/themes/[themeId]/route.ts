@@ -1,7 +1,7 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
+import { requireMonicaAdmin } from '@/server/monica/auth';
 import { galleryService } from '@/server/monica/services/gallery.service';
 import { themeService } from '@/server/monica/services/theme.service';
 import { parseAdminThemeUpdateInput } from '@/server/monica/validators/theme.validator';
@@ -15,8 +15,7 @@ type RouteContext = {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const authUtils = new ApiAuthUtils(request);
-    await authUtils.requireAuthWithUser();
+    await requireMonicaAdmin();
     const { themeId } = await context.params;
     if (!/^\d+$/.test(themeId)) {
       return NextResponse.json({ error: 'Theme not found' }, { status: 404 });

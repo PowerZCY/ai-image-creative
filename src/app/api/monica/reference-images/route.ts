@@ -1,9 +1,9 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
-import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
 import { referenceImageService } from '@/server/monica/services/reference-image.service';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
 import { buildStoredImageUrl } from '@/server/monica/utils/image-url';
+import { resolveMonicaActor } from '@/server/monica/auth';
 
 installBigIntJsonSerialization();
 
@@ -39,8 +39,7 @@ function getUploadErrorStatus(error: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authUtils = new ApiAuthUtils(request);
-    const { user } = await authUtils.requireAuthWithUser();
+    const actor = await resolveMonicaActor(request);
 
     if (!request.headers.get('content-type')?.includes('application/json')) {
       return NextResponse.json({ error: 'content-type must be application/json' }, { status: 415 });
@@ -52,7 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'storageKey is required' }, { status: 400 });
     }
 
-    const referenceImage = await referenceImageService.createReferenceImage(user.userId, {
+    const referenceImage = await referenceImageService.createReferenceImage(actor.user.userId, {
       storageKey,
       cdnImagePrefix: readOptionalJsonString(body.cdnImagePrefix),
       mimeType: readOptionalJsonString(body.mimeType),

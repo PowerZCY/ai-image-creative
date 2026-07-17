@@ -15,6 +15,7 @@ import {
 } from './list-components';
 import { UnderlineFilterTabs } from './themes-index-client';
 import { DialogShell, SubmitImageDialog } from './submit-image-dialog';
+import { useMonicaSignUp } from './use-monica-sign-up';
 
 type StudioImage = {
   imageId: string;
@@ -157,10 +158,12 @@ async function readError(response: Response) {
 }
 
 export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; creatorCopy: MonicaCreatorCopy }) {
+  const { isSignedIn, openMonicaSignUp } = useMonicaSignUp();
   const list = useMonicaPagedList<StudioFilters, StudioImage>({
     endpoint: '/api/monica/studio/images/search',
     initialFilters: { tab: 'all', submissionStatus: 'all' },
     pageSize: 80,
+    enabled: isSignedIn,
   });
   const [submitTarget, setSubmitTarget] = useState<StudioImage | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -337,7 +340,11 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
             </div>
           ) : null}
 
-          {list.error ? (
+          {!isSignedIn ? (
+            <div className="rounded-lg border border-dashed border-border bg-card/60 p-6 text-sm text-muted-foreground">
+              Sign in to view your creation history.
+            </div>
+          ) : list.error ? (
             <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 p-4 text-sm text-rose-700 dark:text-rose-100">{list.error}</div>
           ) : list.loading ? (
             <StudioImageSkeleton />
@@ -359,7 +366,13 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
                         actionLabels={creatorCopy.actions}
                         onDownload={(image) => void handleDownloadImage(image)}
                         onDelete={(image) => void handleDeleteImage(image)}
-                        onSubmit={setSubmitTarget}
+                        onSubmit={(image) => {
+                          if (!isSignedIn) {
+                            void openMonicaSignUp();
+                            return;
+                          }
+                          setSubmitTarget(image);
+                        }}
                       />
                     ))}
                   </div>

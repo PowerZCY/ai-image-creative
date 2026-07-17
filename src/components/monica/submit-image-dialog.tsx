@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { ChevronDown, X } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
 import { SpinnerLabel } from './list-components';
+import { useMonicaSignUp } from './use-monica-sign-up';
 
 export type SubmitImageTarget = {
   imageId: string;
@@ -67,6 +68,7 @@ export function SubmitImageDialog({
   onClose: () => void;
   onSubmitted?: () => void;
 }) {
+  const { isSignedIn, openMonicaSignUp } = useMonicaSignUp();
   const [themes, setThemes] = useState<ThemeOption[]>([]);
   const [themesLoading, setThemesLoading] = useState(true);
   const [selectedThemeId, setSelectedThemeId] = useState('');
@@ -135,6 +137,11 @@ export function SubmitImageDialog({
   }, [themeDropdownOpen]);
 
   async function submitImage() {
+    if (!isSignedIn) {
+      onClose();
+      void openMonicaSignUp();
+      return;
+    }
     const cleanTitle = title.trim();
     if (!cleanTitle) {
       setError(copy.titleRequired);

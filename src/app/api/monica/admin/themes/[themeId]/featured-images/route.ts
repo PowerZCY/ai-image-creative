@@ -1,7 +1,7 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
+import { requireMonicaAdmin } from '@/server/monica/auth';
 import { galleryService } from '@/server/monica/services/gallery.service';
 import { themeService } from '@/server/monica/services/theme.service';
 import { themeFeaturedImageRepository } from '@/server/monica/repositories/theme-featured-image.repository';
@@ -18,8 +18,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
-    const authUtils = new ApiAuthUtils(_request);
-    await authUtils.requireAuthWithUser();
+    await requireMonicaAdmin();
     const { themeId } = await context.params;
     if (!/^\d+$/.test(themeId)) {
       return NextResponse.json({ error: 'themeId is invalid' }, { status: 400 });
@@ -48,8 +47,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    const authUtils = new ApiAuthUtils(request);
-    const { user } = await authUtils.requireAuthWithUser();
+    const { user } = await requireMonicaAdmin();
     const { themeId } = await context.params;
     if (!/^\d+$/.test(themeId)) {
       return NextResponse.json({ error: 'themeId is invalid' }, { status: 400 });

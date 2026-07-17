@@ -1,7 +1,7 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
+import { requireMonicaAdmin } from '@/server/monica/auth';
 import { submissionService } from '@/server/monica/services/submission.service';
 import { themeRepository } from '@/server/monica/repositories/theme.repository';
 import { installBigIntJsonSerialization } from '@/server/monica/utils/bigint-json';
@@ -13,8 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ submissionId: string }> },
 ) {
   try {
-    const authUtils = new ApiAuthUtils(request);
-    const { user } = await authUtils.requireAuthWithUser();
+    const { user } = await requireMonicaAdmin();
     const { submissionId } = await params;
     const body = await request.json() as { action?: string; note?: string; altText?: string };
     if (body.action !== 'approved' && body.action !== 'rejected') {

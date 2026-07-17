@@ -11,6 +11,7 @@ import {
 } from '@windrun-huaiin/base-ui/lib';
 import { cn } from '@windrun-huaiin/lib/utils';
 import { dispatchCreditOverviewRefresh } from '@windrun-huaiin/third-ui/main/credit';
+import { createFingerprintHeaders } from '@windrun-huaiin/third-ui/fingerprint';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -22,6 +23,8 @@ import {
 import type { MonicaCreatorCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
 import { SubmitImageDialog, type SubmitImageTarget } from './submit-image-dialog';
+import { isRegistrationRequired, readMonicaApiError } from './api-error';
+import { useMonicaSignUp } from './use-monica-sign-up';
 
 type ReferenceImageView = {
   referenceId: string;
@@ -244,6 +247,7 @@ export function MonicaCreator({
   onRequestThemeIdeas?: () => void;
   onGenerationUpdated?: () => void;
 }) {
+  const { isSignedIn, openMonicaSignUp } = useMonicaSignUp();
   const modelOptions = useMemo(() => {
     return [
       { value: 'reve-2.0', label: copy.modelOptions.reve20 },
@@ -360,9 +364,10 @@ export function MonicaCreator({
   }, [imageCount, model, prompt, ratio, referenceImages]);
 
   const pollJob = useCallback(async (jobId: string) => {
+    const fingerprintHeaders = await createFingerprintHeaders();
     const response = await fetch(`/api/monica/generation/jobs/${jobId}`, {
       method: 'GET',
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', ...fingerprintHeaders },
     });
 
     if (!response.ok) {
@@ -383,9 +388,10 @@ export function MonicaCreator({
   }, [onGenerationUpdated, upsertBatch]);
 
   const runJob = useCallback(async (runUrl: string) => {
+    const fingerprintHeaders = await createFingerprintHeaders();
     const response = await fetch(runUrl, {
       method: 'POST',
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', ...fingerprintHeaders },
     });
 
     if (!response.ok) {
@@ -451,11 +457,13 @@ export function MonicaCreator({
       }
     }
 
+    const fingerprintHeaders = await createFingerprintHeaders();
     const response = await fetch('/api/monica/reference-images', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'application/json',
+        ...fingerprintHeaders,
       },
       body: JSON.stringify({
         storageKey,
@@ -508,11 +516,13 @@ export function MonicaCreator({
     setActiveDispatchMode(null);
 
     try {
+      const fingerprintHeaders = await createFingerprintHeaders();
       const response = await fetch('/api/monica/generation/jobs', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           accept: 'application/json',
+          ...fingerprintHeaders,
         },
         body: JSON.stringify({
           prompt: promptForRequest,
@@ -525,7 +535,13 @@ export function MonicaCreator({
       });
 
       if (!response.ok) {
-        throw new Error(await readError(response));
+        const apiError = await readMonicaApiError(response);
+        if (isRegistrationRequired(apiError.code)) {
+          setGenerating(false);
+          void openMonicaSignUp();
+          return;
+        }
+        throw new Error(apiError.error || 'Unable to generate an image right now.');
       }
 
       const data = await response.json() as CreateGenerationJobResponse;
@@ -591,7 +607,12 @@ export function MonicaCreator({
     });
 
     if (!response.ok) {
-      throw new Error(await readError(response));
+      const apiError = await readMonicaApiError(response);
+      if (isRegistrationRequired(apiError.code)) {
+        void openMonicaSignUp();
+        return null;
+      }
+      throw new Error(apiError.error || 'Unable to use the prompt assistant right now.');
     }
 
     return response.json() as Promise<AssistantPromptResponse>;
@@ -605,6 +626,7 @@ export function MonicaCreator({
       existingIdeas: sourceIdeas,
       signal,
     });
+    if (!data) return [];
     const ideas = normalizeStarterIdeas(data.ideas);
     if (!ideas.length) {
       throw new Error('No ideas returned');
@@ -745,6 +767,7 @@ export function MonicaCreator({
         signal: request.signal,
       });
       if (!isCurrentAssistantRequest(request.requestId)) return;
+      if (!data) return;
       const nextPrompt = data.improvedPrompt?.trim();
       setImprovedPrompt(nextPrompt || null);
       if (nextPrompt) {
@@ -794,6 +817,7 @@ export function MonicaCreator({
         includeThemeContext: false,
         signal: request.signal,
       });
+      if (!data) return;
       const ideas = normalizeStarterIdeas(data.ideas);
       if (!ideas.length) {
         throw new Error('No directions returned');
@@ -1083,7 +1107,7 @@ export function MonicaCreator({
         copy={copy}
       />
 
-      {mode !== 'studio' && batches.length > 0 ? (
+      {(mode !== 'studio' || !isSignedIn) && batches.length > 0 ? (
         <div className={cn(monicaContentWidthClass, 'mt-10')}>
           <div className={creatorWidthClassName}>
             <ResultPanel
@@ -1095,7 +1119,13 @@ export function MonicaCreator({
               downloadingImageIds={downloadingImageIds}
               onDeleteImage={handleRequestDeleteImage}
               onDownloadImage={(image) => void handleDownloadImage(image)}
-              onSubmitImage={(target) => setSubmitTarget(target)}
+              onSubmitImage={(target) => {
+                if (!isSignedIn) {
+                  void openMonicaSignUp();
+                  return;
+                }
+                setSubmitTarget(target);
+              }}
               submittedImageIds={submittedImageIds}
               defaultThemeId={themeId}
             />

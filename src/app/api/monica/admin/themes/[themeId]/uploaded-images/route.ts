@@ -1,7 +1,7 @@
 import '@/server/prisma';
 import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { ApiAuthUtils } from '@windrun-huaiin/backend-core/auth/server';
+import { requireMonicaAdmin } from '@/server/monica/auth';
 import { adminImageUploadService } from '@/server/monica/services/admin-image-upload.service';
 import { themeService } from '@/server/monica/services/theme.service';
 import { themeRepository } from '@/server/monica/repositories/theme.repository';
@@ -15,8 +15,7 @@ type RouteContext = {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const authUtils = new ApiAuthUtils(request);
-    const { user } = await authUtils.requireAuthWithUser();
+    const { user } = await requireMonicaAdmin();
     const { themeId } = await context.params;
 
     const formData = await request.formData();

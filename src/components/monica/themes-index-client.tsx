@@ -8,6 +8,7 @@ import { monicaContentWidthClass } from './layout';
 import { FilterPills } from './list-components';
 import { EmptyNotice, ErrorNotice } from './public-image-gallery';
 import { ThemeDiscoveryCard, type SharedThemeItem } from './theme-discovery-card';
+import { useMonicaSignUp } from './use-monica-sign-up';
 
 type ThemeCursor = { publishDate: string; id: string };
 type ThemeFilter = 'all' | 'featured' | 'open';
@@ -20,6 +21,7 @@ type ThemesIndexClientProps = {
 };
 
 export function ThemesIndexClient({ copy, initialItems, initialNextCursor, initialHasMore }: ThemesIndexClientProps) {
+  const { isSignedIn, openMonicaSignUp } = useMonicaSignUp();
   const [themeFilter, setThemeFilter] = useState<ThemeFilter>('all');
   const [items, setItems] = useState(initialItems);
   const [nextCursor, setNextCursor] = useState<ThemeCursor | null>(initialNextCursor);
@@ -65,6 +67,10 @@ export function ThemesIndexClient({ copy, initialItems, initialNextCursor, initi
 
   const changeFilter = useCallback(async (filter: ThemeFilter) => {
     if (loadingFilterRef.current || filter === themeFilter) return;
+    if (!isSignedIn && filter !== 'all') {
+      void openMonicaSignUp();
+      return;
+    }
     loadingFilterRef.current = true;
     setLoadingFilter(true);
     setError(null);
@@ -90,7 +96,7 @@ export function ThemesIndexClient({ copy, initialItems, initialNextCursor, initi
       loadingFilterRef.current = false;
       setLoadingFilter(false);
     }
-  }, [themeFilter]);
+  }, [isSignedIn, openMonicaSignUp, themeFilter]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;

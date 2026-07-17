@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, CalendarDays, CheckCircle2, Clock, MessageSquareText, RotateCcw, Send, X } from 'lucide-react';
 import { cn } from '@windrun-huaiin/lib/utils';
 import { SpinnerLabel, useMonicaPagedList } from './list-components';
+import { useMonicaSignUp } from './use-monica-sign-up';
 
 type ThemeSubmission = {
   themeSubmissionId: string;
@@ -53,10 +54,12 @@ async function readError(response: Response) {
 }
 
 export function SubmitThemeClient() {
+  const { isSignedIn, openMonicaSignUp } = useMonicaSignUp();
   const list = useMonicaPagedList<Filters, ThemeSubmission>({
     endpoint: '/api/monica/themes/my/search',
     initialFilters: { keyword: '', status: 'all' },
     pageSize: 10,
+    enabled: isSignedIn,
   });
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
@@ -73,6 +76,10 @@ export function SubmitThemeClient() {
   }, [feedback]);
 
   async function submitTheme() {
+    if (!isSignedIn) {
+      void openMonicaSignUp();
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setFeedback(null);
@@ -176,14 +183,23 @@ export function SubmitThemeClient() {
         </form>
 
         <div className="mt-12 border-t border-neutral-200 pt-12">
-          <ThemeIdeasList
-            items={list.items}
-            loading={list.loading}
-            error={list.error}
-            page={list.pagination.page}
-            totalPages={list.pagination.totalPages}
-            onPageChange={list.setPage}
-          />
+          {isSignedIn ? (
+            <ThemeIdeasList
+              items={list.items}
+              loading={list.loading}
+              error={list.error}
+              page={list.pagination.page}
+              totalPages={list.pagination.totalPages}
+              onPageChange={list.setPage}
+            />
+          ) : (
+            <section>
+              <h2 className="text-lg font-semibold tracking-normal text-foreground">Your submissions</h2>
+              <div className="mt-6 rounded-xl border border-dashed border-neutral-200 bg-white py-12 text-center text-sm text-muted-foreground">
+                Sign in to view your submitted theme ideas.
+              </div>
+            </section>
+          )}
         </div>
       </div>
       {feedback ? <FeedbackDialog feedback={feedback} onClose={() => setFeedback(null)} /> : null}
