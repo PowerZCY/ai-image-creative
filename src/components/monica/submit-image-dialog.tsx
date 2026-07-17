@@ -291,8 +291,8 @@ export function DialogShell({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 py-6 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-neutral-200 bg-white shadow-2xl">
+    <div className="fixed inset-x-0 bottom-0 top-[calc(var(--fd-banner-height)+var(--fd-header-height)+0.5rem)] z-[1000] grid place-items-center bg-black/60 px-4 py-6 backdrop-blur-sm">
+      <div className="max-h-[calc(100dvh-var(--fd-banner-height)-var(--fd-header-height)-2rem)] w-full max-w-3xl overflow-auto rounded-xl border border-neutral-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-5 py-4">
           <h2 className="text-lg font-semibold leading-none tracking-tight text-neutral-950">{title}</h2>
           <button type="button" onClick={onClose} className="grid size-8 place-items-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-950" aria-label={closeLabel}>

@@ -23,6 +23,7 @@ import {
 import type { MonicaCreatorCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
 import { SubmitImageDialog, type SubmitImageTarget } from './submit-image-dialog';
+import { ImagePreviewDialog, type PreviewImage } from './image-preview-dialog';
 import { isRegistrationRequired, readMonicaApiError } from './api-error';
 import { useMonicaSignUp } from './use-monica-sign-up';
 
@@ -271,6 +272,7 @@ export function MonicaCreator({
   const [deletedImageIds, setDeletedImageIds] = useState<Set<string>>(() => new Set());
   const [submittedImageIds, setSubmittedImageIds] = useState<Set<string>>(() => new Set());
   const [submitTarget, setSubmitTarget] = useState<SubmitImageTarget | null>(null);
+  const [preview, setPreview] = useState<{ images: PreviewImage[]; imageId: string } | null>(null);
   const [deletingImageIds, setDeletingImageIds] = useState<Set<string>>(() => new Set());
   const [downloadingImageIds, setDownloadingImageIds] = useState<Set<string>>(() => new Set());
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -967,7 +969,7 @@ export function MonicaCreator({
 
         <div className={cn(
           creatorWidthClassName,
-          'grid gap-2 transition-[max-width,transform] duration-200',
+          'relative z-20 grid gap-2 transition-[max-width,transform] duration-200',
           assistantOpen ? 'xl:max-w-[880px] xl:-translate-x-20 2xl:max-w-[960px] 2xl:-translate-x-24' : '',
         )}>
           <div className="flex flex-wrap gap-2 px-3">
@@ -1119,6 +1121,7 @@ export function MonicaCreator({
               downloadingImageIds={downloadingImageIds}
               onDeleteImage={handleRequestDeleteImage}
               onDownloadImage={(image) => void handleDownloadImage(image)}
+              onPreviewImage={(images, imageId) => setPreview({ images, imageId })}
               onSubmitImage={(target) => {
                 if (!isSignedIn) {
                   void openMonicaSignUp();
@@ -1140,6 +1143,35 @@ export function MonicaCreator({
           copy={copy.submitDialog}
           onClose={() => setSubmitTarget(null)}
           onSubmitted={() => setSubmittedImageIds((current) => new Set(current).add(submitTarget.imageId))}
+        />
+      ) : null}
+
+      {preview ? (
+        <ImagePreviewDialog
+          open
+          images={preview.images}
+          initialImageId={preview.imageId}
+          onOpenChange={(open) => {
+            if (!open) setPreview(null);
+          }}
+          renderActions={(image) => (
+            <>
+              <PreviewActionButton label={submittedImageIds.has(image.imageId) ? 'Submitted' : copy.actions.submit} disabled={submittedImageIds.has(image.imageId)} onClick={() => {
+                setSubmitTarget({ imageId: image.imageId, imageUrl: image.imageUrl, defaultThemeId: themeId?.toString() ?? null });
+              }}>
+                <Send className="size-4" />
+              </PreviewActionButton>
+              <PreviewActionButton label={copy.actions.download} disabled={downloadingImageIds.has(image.imageId)} onClick={() => void handleDownloadImage(image)}>
+                {downloadingImageIds.has(image.imageId) ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              </PreviewActionButton>
+              <PreviewActionButton label={copy.actions.delete} disabled={deletingImageIds.has(image.imageId) || submittedImageIds.has(image.imageId)} onClick={() => {
+                setPreview(null);
+                handleRequestDeleteImage(image.imageId);
+              }}>
+                {deletingImageIds.has(image.imageId) ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              </PreviewActionButton>
+            </>
+          )}
         />
       ) : null}
 
@@ -1209,7 +1241,7 @@ function ImageSettingsDropdown({
       {open ? (
         <div
           id="creator-image-settings-menu"
-          className="absolute left-0 top-[calc(100%+6px)] z-20 w-[260px] max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-white p-1.5 shadow-xl shadow-black/15"
+          className="absolute left-0 top-[calc(100%+6px)] z-30 w-[260px] max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-white p-1.5 shadow-xl shadow-black/15"
         >
           <div className="grid gap-1.5">
             <div className="rounded-md bg-neutral-50 p-2">
@@ -1301,7 +1333,7 @@ function ControlDropdown({
       {open ? (
         <div
           id={`creator-${id}-menu`}
-          className="absolute left-0 top-[calc(100%+6px)] z-20 grid min-w-full gap-1 rounded-md border border-border bg-white p-1 shadow-xl shadow-black/15"
+          className="absolute left-0 top-[calc(100%+6px)] z-30 grid min-w-full gap-1 rounded-md border border-border bg-white p-1 shadow-xl shadow-black/15"
         >
           <span className="sr-only">{label}</span>
         {options.map((option) => (
@@ -1599,6 +1631,21 @@ function SmallActionButton({ children, onClick, disabled = false }: { children: 
   );
 }
 
+function PreviewActionButton({ children, label, onClick, disabled = false }: { children: ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="grid size-10 place-items-center rounded-full bg-black/60 text-white transition hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
 function ResultPanel({
   batches,
   copy,
@@ -1608,6 +1655,7 @@ function ResultPanel({
   downloadingImageIds,
   onDeleteImage,
   onDownloadImage,
+  onPreviewImage,
   onSubmitImage,
   submittedImageIds,
   defaultThemeId,
@@ -1620,6 +1668,7 @@ function ResultPanel({
   downloadingImageIds: Set<string>;
   onDeleteImage: (imageId: string) => void;
   onDownloadImage: (image: GeneratedImageView) => void;
+  onPreviewImage: (images: PreviewImage[], imageId: string) => void;
   onSubmitImage: (target: SubmitImageTarget) => void;
   submittedImageIds: Set<string>;
   defaultThemeId?: string | number | bigint | null;
@@ -1681,20 +1730,27 @@ function ResultPanel({
                     <figure key={image.imageId} className="group relative">
                       <div className={cn('relative overflow-hidden rounded-lg bg-black/5 shadow-sm', getRatioClassName(batch.ratio))}>
                         {image.imageUrl ? (
-                          <Image
-                            src={image.imageUrl}
-                            alt=""
-                            width={1024}
-                            height={1024}
-                            unoptimized
-                            className="h-full w-full object-cover"
-                          />
+                          <button
+                            type="button"
+                            className="block h-full w-full cursor-zoom-in"
+                            aria-label="Open image preview"
+                            onClick={() => onPreviewImage(visibleImages, image.imageId)}
+                          >
+                            <Image
+                              src={image.imageUrl}
+                              alt=""
+                              width={1024}
+                              height={1024}
+                              unoptimized
+                              className="h-full w-full object-cover"
+                            />
+                          </button>
                         ) : (
                           <div className="grid h-full w-full place-items-center text-muted-foreground">
                             <ImagePlus className="size-8" />
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-transparent opacity-0 transition group-hover:opacity-100 md:opacity-0" />
+                        <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-transparent opacity-0 transition group-hover:opacity-100 md:opacity-0" />
                         <div className="absolute right-2 top-2 flex gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100 z-10">
                           <ImageActionButton
                             label={submittedImageIds.has(image.imageId) ? 'Submitted' : copy.actions.submit}

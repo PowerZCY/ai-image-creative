@@ -15,6 +15,7 @@ import {
 } from './list-components';
 import { UnderlineFilterTabs } from './themes-index-client';
 import { DialogShell, SubmitImageDialog } from './submit-image-dialog';
+import { ImagePreviewDialog } from './image-preview-dialog';
 import { useMonicaSignUp } from './use-monica-sign-up';
 
 type StudioImage = {
@@ -166,6 +167,7 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
     enabled: isSignedIn,
   });
   const [submitTarget, setSubmitTarget] = useState<StudioImage | null>(null);
+  const [preview, setPreview] = useState<{ images: StudioImage[]; imageId: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [themes, setThemes] = useState<StudioThemeOption[]>([]);
   const [themesLoading, setThemesLoading] = useState(false);
@@ -366,6 +368,7 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
                         actionLabels={creatorCopy.actions}
                         onDownload={(image) => void handleDownloadImage(image)}
                         onDelete={(image) => void handleDeleteImage(image)}
+                        onPreview={(images, imageId) => setPreview({ images, imageId })}
                         onSubmit={(image) => {
                           if (!isSignedIn) {
                             void openMonicaSignUp();
@@ -400,6 +403,43 @@ export function StudioClient({ copy, creatorCopy }: { copy: MonicaStudioCopy; cr
           copy={copy.submitDialog}
           onClose={() => setSubmitTarget(null)}
           onSubmitted={() => list.reload()}
+        />
+      ) : null}
+
+      {preview ? (
+        <ImagePreviewDialog
+          open
+          images={preview.images}
+          initialImageId={preview.imageId}
+          onOpenChange={(open) => {
+            if (!open) setPreview(null);
+          }}
+          renderActions={(image) => {
+            const target = preview.images.find((item) => item.imageId === image.imageId);
+            if (!target) return null;
+            const latestSubmission = target.submissions?.[0];
+            const status = latestSubmission?.status ?? target.status;
+            const canSubmit = !target.isLocked && (target.status === 'generated' || target.status === 'rejected');
+            const canDelete = !target.isLocked && (target.status === 'generated' || target.status === 'rejected');
+            return (
+              <>
+                <PreviewActionButton label={canSubmit ? copy.submitImage : 'Submitted'} disabled={!canSubmit} active={!canSubmit && status !== 'generated'} onClick={() => {
+                  setSubmitTarget(target);
+                }}>
+                  <Send className="size-4" />
+                </PreviewActionButton>
+                <PreviewActionButton label={creatorCopy.actions.download} disabled={downloadingImageIds.has(target.imageId)} onClick={() => void handleDownloadImage(target)}>
+                  {downloadingImageIds.has(target.imageId) ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                </PreviewActionButton>
+                <PreviewActionButton label={creatorCopy.actions.delete} disabled={!canDelete || deletingImageIds.has(target.imageId)} onClick={() => {
+                  setPreview(null);
+                  void handleDeleteImage(target);
+                }}>
+                  {deletingImageIds.has(target.imageId) ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                </PreviewActionButton>
+              </>
+            );
+          }}
         />
       ) : null}
 
@@ -501,6 +541,7 @@ function StudioImageBatchRow({
   deletingImageIds,
   onDownload,
   onDelete,
+  onPreview,
   onSubmit,
 }: {
   batch: StudioImageBatch;
@@ -510,6 +551,7 @@ function StudioImageBatchRow({
   deletingImageIds: Set<string>;
   onDownload: (image: StudioImage) => void;
   onDelete: (image: StudioImage) => void;
+  onPreview: (images: StudioImage[], imageId: string) => void;
   onSubmit: (image: StudioImage) => void;
 }) {
   const metaList = [batch.model, batch.ratio, batch.style].filter(Boolean);
@@ -546,6 +588,7 @@ function StudioImageBatchRow({
             onDownload={() => onDownload(image)}
             onDelete={() => onDelete(image)}
             onSubmit={() => onSubmit(image)}
+            onPreview={() => onPreview(batch.images, image.imageId)}
           />
         ))}
       </div>
@@ -563,6 +606,7 @@ function StudioImageTile({
   onDownload,
   onDelete,
   onSubmit,
+  onPreview,
 }: {
   image: StudioImage;
   copy: MonicaStudioCopy;
@@ -573,6 +617,7 @@ function StudioImageTile({
   onDownload: () => void;
   onDelete: () => void;
   onSubmit: () => void;
+  onPreview: () => void;
 }) {
   const latestSubmission = image.submissions?.[0];
   const status = latestSubmission?.status ?? image.status;
@@ -584,14 +629,16 @@ function StudioImageTile({
     <figure className={cn('group relative min-w-0 rounded-lg bg-muted shadow-sm', getRatioClassName(ratio))}>
       <div className="h-full w-full overflow-hidden rounded-lg">
         {image.imageUrl ? (
-          <Image
-            src={image.imageUrl}
-            alt=""
-            width={imageDimensions(image).width}
-            height={imageDimensions(image).height}
-            unoptimized
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-          />
+          <button type="button" className="block h-full w-full cursor-zoom-in" aria-label="Open image preview" onClick={onPreview}>
+            <Image
+              src={image.imageUrl}
+              alt=""
+              width={imageDimensions(image).width}
+              height={imageDimensions(image).height}
+              unoptimized
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+            />
+          </button>
         ) : (
           <div className="grid h-full w-full place-items-center text-muted-foreground">
             <ImagePlus className="size-8" />
@@ -650,6 +697,36 @@ function StudioImageActionButton({
       <span className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-30 whitespace-nowrap rounded-md bg-black px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition group-hover/action:opacity-100">
         {label}
       </span>
+    </button>
+  );
+}
+
+function PreviewActionButton({
+  children,
+  label,
+  onClick,
+  active = false,
+  disabled = false,
+}: {
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'grid size-10 place-items-center rounded-full bg-black/60 text-white transition hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50',
+        active ? 'bg-rose-600 hover:bg-rose-600' : '',
+      )}
+    >
+      {children}
     </button>
   );
 }
