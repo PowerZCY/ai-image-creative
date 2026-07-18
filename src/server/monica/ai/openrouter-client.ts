@@ -1,5 +1,10 @@
 import { OpenRouter } from '@openrouter/sdk';
-import type { ChatRequest, ChatResult } from '@openrouter/sdk/models';
+import type {
+  ChatRequest,
+  ChatResult,
+  ImageGenerationRequest,
+  ImageGenerationResponse,
+} from '@openrouter/sdk/models';
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 
@@ -65,20 +70,48 @@ function normalizeOpenRouterError(error: unknown) {
   return String(error);
 }
 
-export async function sendOpenRouterChatCompletion(chatRequest: ChatRequest): Promise<ChatResult> {
+export async function sendOpenRouterChatCompletion(
+  chatRequest: Omit<ChatRequest, 'stream'>,
+): Promise<ChatResult> {
   try {
     const request = {
       chatRequest: {
         ...chatRequest,
-        stream: false as const,
+        stream: false,
       },
     };
-    return await getOpenRouterClient().chat.send(request, {
+    const result = await getOpenRouterClient().chat.send(request, {
       timeoutMs: readTimeoutMs(),
       retryCodes: ['5XX', '429'],
     });
+    if (!('choices' in result)) {
+      throw new Error('OpenRouter returned a streaming response for a non-streaming request');
+    }
+    return result;
   } catch (error) {
     throw new Error(`OpenRouter request failed: ${normalizeOpenRouterError(error)}`);
+  }
+}
+
+export async function sendOpenRouterImageGeneration(
+  imageGenerationRequest: Omit<ImageGenerationRequest, 'stream'>,
+): Promise<ImageGenerationResponse> {
+  try {
+    const result = await getOpenRouterClient().images.generate({
+      imageGenerationRequest: {
+        ...imageGenerationRequest,
+        stream: false,
+      },
+    }, {
+      timeoutMs: readTimeoutMs(),
+      retryCodes: ['5XX', '429'],
+    });
+    if (!('data' in result)) {
+      throw new Error('OpenRouter returned a streaming response for a non-streaming image request');
+    }
+    return result;
+  } catch (error) {
+    throw new Error(`OpenRouter image request failed: ${normalizeOpenRouterError(error)}`);
   }
 }
 

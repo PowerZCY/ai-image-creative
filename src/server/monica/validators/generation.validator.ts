@@ -1,10 +1,14 @@
-import { GENERATION_TYPE, type GenerationType } from '../constants/generation';
+import {
+  GENERATION_TYPE,
+  getMaximumGenerationImageCount,
+  MAX_GENERATION_IMAGE_COUNT,
+  type GenerationType,
+} from '../constants/generation';
 import type { CreateGenerationJobInput } from '../types/generation';
 import { isOpenRouterMockEnabled } from '../ai/openrouter-mock';
 
 const DEFAULT_MODEL = 'mock-image-model';
 const DEFAULT_IMAGE_COUNT = 1;
-const MAX_IMAGE_COUNT = 4;
 const MAX_REFERENCE_IMAGE_COUNT = 4;
 const MAX_PROMPT_LENGTH = 4000;
 const SOURCE_PAGES = new Set([
@@ -89,12 +93,15 @@ export function parseCreateGenerationJobInput(payload: unknown): CreateGeneratio
     throw new Error(`prompt must be ${MAX_PROMPT_LENGTH} characters or less`);
   }
 
-  const rawImageCount = typeof body.imageCount === 'number' ? body.imageCount : DEFAULT_IMAGE_COUNT;
-  const imageCount = Math.min(Math.max(Math.trunc(rawImageCount), 1), MAX_IMAGE_COUNT);
   const model = readOptionalString(body.model);
   if (!model && !isOpenRouterMockEnabled()) {
     throw new Error('model is required');
   }
+  const rawImageCount = typeof body.imageCount === 'number' ? body.imageCount : DEFAULT_IMAGE_COUNT;
+  const maximumImageCount = model
+    ? getMaximumGenerationImageCount(model)
+    : MAX_GENERATION_IMAGE_COUNT;
+  const imageCount = Math.min(Math.max(Math.trunc(rawImageCount), 1), maximumImageCount);
 
   return {
     prompt,

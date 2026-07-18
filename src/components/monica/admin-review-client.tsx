@@ -188,7 +188,6 @@ const adminUploadModelOptions = [
   { value: 'nano-banana-2', label: 'Nano Banana 2' },
   { value: 'nano-banana-pro', label: 'Nano Banana Pro' },
   { value: 'seedream-4.5', label: 'Seedream 4.5' },
-  { value: 'reve-2.0', label: 'Reve 2.0' },
 ];
 
 // ─── Side nav button ──────────────────────────────────────────────────────────

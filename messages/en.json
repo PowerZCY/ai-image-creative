@@ -91,10 +91,10 @@
         },
         {
           "key": "onetime",
-          "name": "One-Time",
-          "unit": "Credit Pack",
-          "discountText": "Credit Pack",
-          "subTitle": "Pay Once"
+          "name": "One-Time Credits",
+          "unit": " ",
+          "discountText": "No Subscription",
+          "subTitle": "Pay once. No auto-renewal."
         }
       ],
       "defaultKey": "yearly"
@@ -167,43 +167,42 @@
       "plans": [
         {
           "key": "F1",
-          "title": "Starter",
+          "title": "Starter Pack",
           "animeTone": "mono",
-          "subtitle": "25 Credits",
+          "subtitle": "",
           "showBillingSubTitle": true,
           "features": [
-            { "description": "525AI generations" },
-            { "description": "Perfect for trying out" },
-            { "description": "No expiration" },
-            { "description": "Instant activation" }
+            { "description": "200 credits - up to 200 images" },
+            { "description": "Credits valid for 1 year." },
+            { "description": "Commercial license included" },
+            { "description": "Standard support" }
           ]
         },
         {
           "key": "P2",
-          "title": "Popular",
+          "title": "Creator Pack",
           "animeTone": "theme",
-          "subtitle": "150 Credits",
+          "subtitle": "",
           "showBillingSubTitle": true,
-          "titleTags": ["Preferred"],
           "features": [
-            { "description": "150 AI generations" },
-            { "description": "Great for regular use" },
-            { "description": "No expiration" },
-            { "description": "Instant activation" },
-            { "description": "Support batch processing" }
+            { "description": "800 credits - up to 800 images" },
+            { "description": "Credits valid for 1 year." },
+            { "description": "Commercial license included" },
+            { "description": "Priority support" }
           ]
         },
         {
           "key": "U3",
-          "title": "Power",
+          "title": "Ultimate Pack",
           "animeTone": "rainbow",
-          "subtitle": "350 Credits",
+          "subtitle": "",
           "showBillingSubTitle": true,
+          "titleTags": ["Most Popular"],
           "features": [
-            { "description": "350 AI generations" },
-            { "description": "Perfect for heavy users" },
-            { "description": "No expiration" },
-            { "description": "Instant activation" }
+            { "description": "1,600 credits - up to 1,600 images" },
+            { "description": "Credits valid for 1 year." },
+            { "description": "Commercial license included" },
+            { "description": "Priority support" }
           ]
         }
       ]

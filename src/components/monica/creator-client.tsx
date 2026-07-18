@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { createR2Client } from '@/lib/r2-explorer-sdk';
 import {
   estimateGenerationCredits,
+  getMaximumGenerationImageCount,
 } from '@/server/monica/constants/generation';
 import type { MonicaCreatorCopy } from './copy';
 import { monicaContentWidthClass } from './layout';
@@ -251,7 +252,6 @@ export function MonicaCreator({
   const { isSignedIn, openMonicaSignUp } = useMonicaSignUp();
   const modelOptions = useMemo(() => {
     return [
-      { value: 'reve-2.0', label: copy.modelOptions.reve20 },
       { value: 'gpt-image-2', label: copy.modelOptions.gptImage2 },
       { value: 'nano-banana-2', label: copy.modelOptions.nanoBanana2 },
       { value: 'nano-banana-pro', label: copy.modelOptions.nanoBananaPro },
@@ -306,6 +306,12 @@ export function MonicaCreator({
     () => estimateGenerationCredits(model, imageCount),
     [imageCount, model],
   );
+  const maximumImageCount = getMaximumGenerationImageCount(model);
+
+  function handleModelChange(nextModel: string) {
+    setModel(nextModel);
+    setImageCount((current) => Math.min(current, getMaximumGenerationImageCount(nextModel)));
+  }
 
   useEffect(() => {
     if (!openSelectKey) return;
@@ -1051,13 +1057,14 @@ export function MonicaCreator({
                   open={openSelectKey === 'model'}
                   onToggle={() => setOpenSelectKey((key) => key === 'model' ? null : 'model')}
                   onClose={() => setOpenSelectKey(null)}
-                  onChange={setModel}
+                  onChange={handleModelChange}
                 />
                 <ImageSettingsDropdown
                   ratioLabel={copy.ratioLabel}
                   imagesLabel={copy.imagesLabel}
                   ratio={ratio}
                   imageCount={imageCount}
+                  maximumImageCount={maximumImageCount}
                   open={openSelectKey === 'image-settings'}
                   onToggle={() => setOpenSelectKey((key) => key === 'image-settings' ? null : 'image-settings')}
                   onRatioChange={setRatio}
@@ -1207,6 +1214,7 @@ function ImageSettingsDropdown({
   imagesLabel,
   ratio,
   imageCount,
+  maximumImageCount,
   open,
   onToggle,
   onRatioChange,
@@ -1216,6 +1224,7 @@ function ImageSettingsDropdown({
   imagesLabel: string;
   ratio: string;
   imageCount: number;
+  maximumImageCount: number;
   open: boolean;
   onToggle: () => void;
   onRatioChange: (value: string) => void;
@@ -1269,7 +1278,7 @@ function ImageSettingsDropdown({
             <div className="rounded-md bg-neutral-50 p-2">
               <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">{imagesLabel}</div>
               <div className="grid grid-cols-4 gap-1">
-                {countOptions.map((count) => (
+                {countOptions.filter((count) => count <= maximumImageCount).map((count) => (
                   <button
                     key={count}
                     type="button"

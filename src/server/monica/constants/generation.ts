@@ -23,8 +23,17 @@ export const GENERATION_CREDITS_PER_IMAGE_BY_MODEL = {
   'nano-banana-2': 2,
   'nano-banana-pro': 2,
   'seedream-4.5': 1,
-  'reve-2.0': 1,
 } as const;
+
+export const MAX_GENERATION_IMAGE_COUNT = 4;
+const SINGLE_IMAGE_GENERATION_MODELS = new Set([
+  'nano-banana-2',
+  'nano-banana-pro',
+]);
+
+export function getMaximumGenerationImageCount(model: string) {
+  return SINGLE_IMAGE_GENERATION_MODELS.has(model) ? 1 : MAX_GENERATION_IMAGE_COUNT;
+}
 
 export function getGenerationCreditsPerImage(model: string) {
   return GENERATION_CREDITS_PER_IMAGE_BY_MODEL[
