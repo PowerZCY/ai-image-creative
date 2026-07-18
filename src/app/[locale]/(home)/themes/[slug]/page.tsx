@@ -4,12 +4,15 @@ import { notFound } from 'next/navigation';
 import { createLocalizedPageMetadata, createLocalizedSiteMetadata } from '@windrun-huaiin/third-ui/lib/seo-metadata';
 import { MonicaCreator } from '@/components/monica/creator-client';
 import { getMonicaCreatorCopy, getMonicaGalleryCopy, getMonicaThemeCopy } from '@/components/monica/copy-server';
+import { MonicaPricingModalProvider } from '@/components/monica/monica-pricing-modal-provider';
 import { monicaContentWidthClass } from '@/components/monica/layout';
 import { GalleryClient } from '@/components/monica/gallery-client';
 import { appConfig } from '@/lib/appConfig';
 import { themeService } from '@/server/monica/services/theme.service';
 import { galleryService } from '@/server/monica/services/gallery.service';
 import { ArrowLeft } from 'lucide-react';
+import { moneyPriceConfig } from '@windrun-huaiin/backend-core/config/money-price';
+import { buildMoneyPriceData } from '@windrun-huaiin/third-ui/main/money-price/server';
 
 export const revalidate = 14400;
 
@@ -82,10 +85,15 @@ export default async function ThemeDetailPage({
   params: Promise<{ locale: string; slug: string }>;
 }) {
   const { locale, slug } = await params;
-  const [creatorCopy, themeCopy, galleryCopy] = await Promise.all([
+  const [creatorCopy, themeCopy, galleryCopy, pricingData] = await Promise.all([
     getMonicaCreatorCopy(locale),
     getMonicaThemeCopy(locale),
     getMonicaGalleryCopy(locale),
+    buildMoneyPriceData({
+      locale,
+      currency: moneyPriceConfig.display.currency,
+      enabledBillingTypes: ['onetime'],
+    }),
   ]);
   const dbTheme = await themeService.findPublicThemeBySlug(slug);
 
@@ -136,15 +144,17 @@ export default async function ThemeDetailPage({
         </div>
       </section>
 
-      <MonicaCreator
-        copy={creatorCopy}
-        themeId={dbTheme.id}
-        themeLabel={dbTheme.title}
-        themeNote={dbTheme.description}
-        sourcePage="theme_detail"
-        mode="theme_detail"
-        starterIdeas={starterIdeas}
-      />
+      <MonicaPricingModalProvider data={pricingData} config={moneyPriceConfig}>
+        <MonicaCreator
+          copy={creatorCopy}
+          themeId={dbTheme.id}
+          themeLabel={dbTheme.title}
+          themeNote={dbTheme.description}
+          sourcePage="theme_detail"
+          mode="theme_detail"
+          starterIdeas={starterIdeas}
+        />
+      </MonicaPricingModalProvider>
 
       <section className="px-4 pt-16 pb-24 md:px-8">
         <div className={monicaContentWidthClass}>

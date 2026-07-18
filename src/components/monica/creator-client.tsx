@@ -12,6 +12,7 @@ import {
 import { cn } from '@windrun-huaiin/lib/utils';
 import { dispatchCreditOverviewRefresh } from '@windrun-huaiin/third-ui/main/credit';
 import { createFingerprintHeaders } from '@windrun-huaiin/third-ui/fingerprint';
+import { usePricingModal } from '@windrun-huaiin/third-ui/main/money-price';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -250,6 +251,7 @@ export function MonicaCreator({
   onGenerationUpdated?: () => void;
 }) {
   const { isSignedIn, openMonicaSignUp } = useMonicaSignUp();
+  const { openPricingModal } = usePricingModal();
   const modelOptions = useMemo(() => {
     return [
       { value: 'gpt-image-2', label: copy.modelOptions.gptImage2 },
@@ -547,6 +549,11 @@ export function MonicaCreator({
         if (isRegistrationRequired(apiError.code)) {
           setGenerating(false);
           void openMonicaSignUp();
+          return;
+        }
+        if (response.status === 402 && apiError.code === 'INSUFFICIENT_CREDITS') {
+          setGenerating(false);
+          openPricingModal({ billingType: 'onetime' });
           return;
         }
         throw new Error(apiError.error || 'Unable to generate an image right now.');
